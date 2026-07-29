@@ -53,6 +53,9 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
 
     // --- Test ---
+    // Spring Boot 4의 dependency-management는 Testcontainers 버전을 관리하지 않으므로 BOM을 직접 지정한다.
+    // 2.x는 모듈 좌표(postgresql/rabbitmq/junit-jupiter)가 개편되어 1.21.x 계열로 고정한다.
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.21.4"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.springframework.security:spring-security-test")
