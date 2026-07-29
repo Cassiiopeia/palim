@@ -23,6 +23,16 @@ dist/
 build/
 *.egg-info/
 target/
+out/
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Spring Initializr
+HELP.md
+*.zip
 
 # 로그
 logs/
