@@ -1,3 +1,39 @@
 spring:
   application:
     name: palim
+  profiles:
+    default: local
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # 스키마는 Flyway가 관리한다. 애플리케이션은 검증만 수행한다 (설계서 1장)
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          # 전 계층 Instant / timestamptz 사용 (설계서 4.3)
+          time_zone: UTC
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    kr.suhsaechan.palim: DEBUG

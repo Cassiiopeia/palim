@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/palim
+    username: palim
+    password: palim
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: palim
+    password: palim
+
+  jpa:
+    properties:
+      hibernate:
+        show_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
