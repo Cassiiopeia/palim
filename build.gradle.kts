@@ -5,6 +5,9 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7" apply false
     // 화면 스타일(Tailwind CSS 4 + daisyUI 5) 빌드용. palim-web 에서만 적용한다.
     id("com.github.node-gradle.node") version "7.1.0" apply false
+    // SBOM 산출 (09-SECURITY). 루트에 적용하면 전 서브모듈 의존성이 하나의 BOM 으로 집계된다.
+    // `./gradlew cyclonedxBom` → build/reports/bom.json
+    id("org.cyclonedx.bom") version "2.3.1"
 }
 
 allprojects {

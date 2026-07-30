@@ -93,6 +93,18 @@ jobs:
       - name: 실행 가능 jar 생성
         run: ./gradlew :palim-app:bootJar
 
+      # SBOM (09-SECURITY) — 배포 시점의 전체 의존성 목록. 취약점 공지가 나왔을 때
+      # "우리가 그 버전을 쓰는가"를 빌드 재현 없이 답할 수 있게 한다.
+      - name: SBOM 생성
+        run: ./gradlew cyclonedxBom
+
+      - name: SBOM 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: build/reports/bom.json
+          retention-days: 90
+
       - name: GHCR 로그인
         uses: docker/login-action@v3
         with:

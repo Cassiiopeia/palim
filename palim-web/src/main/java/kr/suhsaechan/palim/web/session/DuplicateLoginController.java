@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
 /**
- * 중복 로그인 확인 (Redmine #208170 · #208171).
+ * 중복 로그인 확인.
  *
  * <p>기존 접속이 있는 계정으로 로그인하면 여기로 온다. 확인하면 기존 접속을 끊고 로그인하고,
  * 취소하면 로그인하지 않는다.

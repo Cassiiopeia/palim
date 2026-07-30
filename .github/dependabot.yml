@@ -1,0 +1,39 @@
+# 취약 의존성 자동 감지 (09-SECURITY).
+#
+# 1인 유지보수라 취약점을 사람이 취합하는 프로세스는 성립하지 않는다 — PR 이 자동으로 오고
+# CI 가 검증하는 구조여야 한다. 보안 패치 PR 은 우선 머지한다.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    # 메이저 업그레이드는 수동으로 판단한다. Boot 4 전환에서 겪었듯 관례가 깨진다.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /palim-web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

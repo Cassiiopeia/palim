@@ -1,6 +1,6 @@
 # 09. 보안 설계
 
-사내 보안 제품(CM · DLPCenter, CC 인증 브랜치 포함)의 보안 요소를 전수 검토해 Palim 에 맞게
+레거시 관리자 시스템(보안 인증 대상 브랜치 포함)의 보안 요소를 전수 검토해 Palim 에 맞게
 재설계한 결과다. **개념은 가져오되 레거시 구현은 이식하지 않는다** — 레거시가 그 방식을 쓰는
 이유(HTTP 내부망, 2010년대 JDK)가 Palim 에는 없기 때문이다.
 
@@ -22,9 +22,9 @@ Palim 이 지켜야 하는 것과 공격면:
 
 ## 전송 계층 암호화 — 레거시 RSA 를 거부한다
 
-**거부** — CM 의 로그인 비밀번호 RSA 암호화 (`Encrypt.initRSABySession`, `decryptToRSA`)
+**거부** — 레거시 관리자 시스템의 로그인 비밀번호 RSA 암호화 (세션별 RSA 키쌍 + JS 암호화)
 
-CM 은 로그인 폼에서 비밀번호를 JavaScript RSA 로 암호화해 전송한다. 내부망 HTTP 운영이라
+레거시 관리자 시스템은 로그인 폼에서 비밀번호를 JavaScript RSA 로 암호화해 전송한다. 내부망 HTTP 운영이라
 TLS 가 없어서 생긴 보완책인데, 두 가지 문제가 있다:
 
 1. `Cipher.getInstance("RSA")` 는 PKCS#1 v1.5 패딩이다 — 패딩 오라클 공격에 취약하다
@@ -36,7 +36,7 @@ includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층
 
 ## 저장 암호화 — 레거시 알고리즘을 대체한다
 
-**대체** — DLPCenter 의 `CryptoDES`(DES), `Encrypt`(AES/CBC + 하드코딩 키, MD5·SHA-1)
+**대체** — 레거시 관리자 시스템의 DES 유틸, AES/CBC + 하드코딩 키, MD5·SHA-1
 
 | 레거시 | 문제 | Palim |
 |---|---|---|
@@ -52,11 +52,11 @@ includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층
 
 | 요소 | 출처 개념 | Palim 구현 |
 |---|---|---|
-| 동시 접속 제한(중복 로그인) | CM `AuthManager` | 확인 화면 + `SessionRegistry.expireNow()` + SSE 통보 (07-DECISIONS 019) |
-| 로그인 실패 잠금 | DLPCenter `cntPasswdErr` | 연속 N회 → 시각 기반 잠금(배치 불필요, 자동 해제) |
+| 동시 접속 제한(중복 로그인) | 레거시 세션 관리자 | 확인 화면 + `SessionRegistry.expireNow()` + SSE 통보 (07-DECISIONS 019) |
+| 로그인 실패 잠금 | 레거시 실패 카운터 | 연속 N회 → 시각 기반 잠금(배치 불필요, 자동 해제) |
 | 계정 존재 비노출 | — (레거시는 구분 메시지를 준다) | 없는 아이디·비번 틀림·잠김 모두 같은 실패 메시지 |
 | 세션 고정 방지 | — | `migrateSession` + 중복 확인 후 세션 재발급 |
-| 감사 로그 | DLPCenter `AuditTrail` | DB 불변 기록, JSON 스냅샷, IP·UA 수집 (07-DECISIONS 018) |
+| 감사 로그 | 레거시 감사추적 | DB 불변 기록, JSON 스냅샷, IP·UA 수집 (07-DECISIONS 018) |
 | 클라이언트 IP | — (레거시는 `getRemoteAddr` 뿐) | `ForwardedHeaderFilter` 위임, 기본 비신뢰 (07-DECISIONS 020) |
 
 ## 웹 계층 방어 (구현 완료 — #19)
@@ -70,12 +70,44 @@ includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층
 | 세션 쿠키 | `HttpOnly`, `SameSite=Lax`, 유휴 2시간 만료 |
 | 출력 이스케이프 | Thymeleaf `th:text` 만 사용. `th:utext` 금지 — 감사 스냅샷 XSS 방어의 마지막 단 |
 
+## 입력 필터를 거부한다 — 바인딩과 출력 이스케이프가 정석이다
+
+**거부** — 레거시 공통 보안 모듈의 SQL 인젝션 필터·XSS 필터 (요청 파라미터를 정규식으로 훼손)
+
+레거시는 서블릿 필터에서 모든 요청 파라미터를 검사해 `SELECT`·`--`·`;`·`'`·`@` 같은 패턴을
+**제거**한다. 두 가지 이유로 가져오지 않는다:
+
+1. **정상 데이터를 조용히 파괴한다.** 상품명에 "OR" 이 들어가면 지워지고, 메모의 세미콜론이
+   사라진다. 어떤 입력이 훼손됐는지 아무도 모른다 — 재고 시스템에서 데이터 훼손은 그 자체가
+   장애다.
+2. **우회 가능한 블랙리스트다.** 인코딩 변형·주석 삽입으로 뚫리며, 진짜 방어가 아니라 스캐너
+   통과용이다.
+
+Palim 의 방어는 구조적이다:
+
+| 공격 | 방어 | 강제 수단 |
+|---|---|---|
+| SQL 인젝션 | **모든 SQL 은 파라미터 바인딩** — JPA, `JdbcClient` 이름 바인딩. 문자열 조립 금지 | 코드 리뷰. `"... " + value` 형태의 SQL 조립이 보이면 그 자체로 결함이다 |
+| LIKE 와일드카드 주입 | 검색어의 `%`·`_` 이스케이프 | `AuditLogSpecifications.escapeLike` 패턴 재사용 |
+| XSS | 출력 이스케이프(`th:text` 만, `th:utext` 금지) + CSP `script-src 'self'` | 템플릿 리뷰 |
+
+## 파일 입출력 규칙 (향후 엑셀 기능의 전제)
+
+레거시의 User-Agent 분기 파일명 인코딩과 `"../" 문자열 치환`을 현대 방식으로 대체한다.
+엑셀 내보내기(F-07)·업로드 구현 시 이 절을 따른다:
+
+| 작업 | 규칙 |
+|---|---|
+| 다운로드 파일명 | Spring `ContentDisposition.builder("attachment").filename(name, UTF_8)` — RFC 6266 `filename*` 을 만들어 주므로 브라우저 분기가 필요 없다. 헤더 문자열 직접 조립 금지(CRLF 주입) |
+| 경로 검증 | `basePath.resolve(input).normalize()` 후 `startsWith(basePath)` 확인. 문자열 치환("../" 제거)은 `....//` 로 우회된다 |
+| 업로드 검증 | 확장자 화이트리스트 + 매직 바이트 확인 + 크기 상한. 확장자만 믿지 않는다 |
+
 ## 데이터 최소화 — 개인정보를 애초에 저장하지 않는다
 
 **Palim 은 구매자 개인정보를 수집하지 않는다.** `OrderLine` 에는 채널 주문번호·상품·수량·금액만
 있고 수취인 이름·연락처·주소 컬럼이 없다. 재고 계산에 필요 없기 때문이다.
 
-이것이 DLPCenter 의 개인정보 마스킹(`PrivacyiCode`)보다 앞선 지점이다 — **마스킹은 저장한 것을
+이것이 레거시 관리자 시스템의 개인정보 마스킹보다 앞선 지점이다 — **마스킹은 저장한 것을
 가리는 기술이고, 저장하지 않으면 가릴 것도 유출될 것도 없다.** 개인정보보호법상 처리 대상도
 줄어든다.
 
@@ -84,7 +116,7 @@ includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층
 
 ## 로그 마스킹 (구현 필요 — 후속)
 
-**채택(변형)** — DLPCenter 는 개인정보 마스킹, Palim 은 **비밀값 마스킹**이 대상이다.
+**채택(변형)** — 레거시 관리자 시스템은 개인정보 마스킹, Palim 은 **비밀값 마스킹**이 대상이다.
 
 저장하는 개인정보가 없으므로 로그에 새어나갈 개인정보도 없다. 대신 새어나갈 수 있는 것:
 
@@ -100,7 +132,7 @@ includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층
 
 ## 공급망 · 정적 분석 (구현 필요 — 후속)
 
-사내 프로세스(SBOM 취합, Sparrow 정적 분석, 취약점 취합)를 GitHub 네이티브 도구로 대응한다.
+사내 프로세스(SBOM 취합, 사내 정적 분석, 취약점 취합)를 GitHub 네이티브 도구로 대응한다.
 Palim 은 1인 유지보수라 **결과를 사람이 취합하는 프로세스가 아니라 자동으로 PR·알림이 오는
 구조**여야 한다.
 
@@ -108,7 +140,7 @@ Palim 은 1인 유지보수라 **결과를 사람이 취합하는 프로세스�
 |---|---|---|
 | SBOM 산출 | **CycloneDX Gradle 플러그인** | 빌드 시 `bom.json` 생성, 릴리스 아티팩트에 포함 |
 | 취약 의존성 취합 | **Dependabot** | `.github/dependabot.yml` — 주간 스캔, 취약점 PR 자동 생성 |
-| Sparrow 정적 분석 | **CodeQL** | GitHub Actions 워크플로, PR 마다 실행 |
+| 사내 정적 분석 | **CodeQL** | GitHub Actions 워크플로, PR 마다 실행 |
 | 시크릿 유출 점검 | **GitHub secret scanning + push protection** | 저장소 설정 활성화 |
 
 주의: 이 저장소는 **PUBLIC** 이다. 사내 참고 자료(`docs/somansa/`)는 gitignore 로 차단되어
@@ -116,7 +148,7 @@ Palim 은 1인 유지보수라 **결과를 사람이 취합하는 프로세스�
 
 ## 접속 허용 IP 범위 (구현 보류)
 
-**보류** — DLPCenter `Admin.userIPFrom/To` 개념.
+**보류** — 레거시의 관리자별 IP 범위 개념.
 
 Cloudflare Tunnel 뒤에서는 애플리케이션보다 **Cloudflare Access 정책**(국가·IP 제한)이 맞는
 자리다. 애플리케이션에 구현하면 `X-Forwarded-For` 신뢰 문제를 다시 떠안는다. 발주자가 고정
@@ -124,7 +156,7 @@ IP 를 쓰는지 확인된 뒤(P-02 인증정보 전달 시점) Cloudflare 설�
 
 ## 비밀번호 정책 (구현 필요 — 후속)
 
-**채택(축소)** — DLPCenter `AdminPasswordValidator` 개념.
+**채택(축소)** — 레거시 비밀번호 검증기 개념.
 
 레거시는 검사 11종(키보드 배열 연속 입력까지)이지만, NIST SP 800-63B 는 복잡성 규칙보다
 **길이와 유출 목록 차단**을 권한다. Palim 채택:
@@ -144,7 +176,9 @@ IP 를 쓰는지 확인된 뒤(P-02 인증정보 전달 시점) Cloudflare 설�
 | 저장 암호화(AES-GCM)·bcrypt | 완료 |
 | 감사 로그·중복 로그인·잠금·IP 수집 | 완료 (#20) |
 | 데이터 최소화 | 완료 (설계 자체) |
-| 로그 마스킹 | **후속 이슈** |
-| SBOM·Dependabot·CodeQL·secret scanning | **후속 이슈** |
-| 비밀번호 정책 + 변경 화면 | **후속 이슈** |
+| 로그 마스킹 (`SecretMaskingConverter`) | 완료 (#22) |
+| SBOM·Dependabot·CodeQL·secret scanning·push protection | 완료 (#22) |
+| 커밋 AI 흔적·사내 자료 CI 차단 (`guard` 잡) | 완료 (#22) |
+| 입력 필터 거부 · 파일 입출력 규칙 | 문서화 완료 — 엑셀 기능(F-07) 구현 시 적용 |
+| 비밀번호 정책 + 변경 화면 | **후속 — #22 잔여** |
 | 접속 IP 제한 | 보류 — Cloudflare Access 로, P-02 이후 |

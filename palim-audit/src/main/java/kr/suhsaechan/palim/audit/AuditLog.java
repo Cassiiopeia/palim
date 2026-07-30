@@ -73,7 +73,7 @@ public class AuditLog {
     /**
      * 변경 전 상태 (JSON 문자열).
      *
-     * <p>HTML 을 넣지 않는다. 사내 DLPCenter 는 감사 상세를 HTML 로 저장하는데, 그 순간 DB 가
+     * <p>HTML 을 넣지 않는다. 레거시 관리자 시스템은 감사 상세를 HTML 로 저장하는데, 그 순간 DB 가
      * 저장형 XSS 창고가 된다. JSON 으로 담고 화면에서 이스케이프해 렌더링한다.
      */
     @Column(name = "before_snapshot", columnDefinition = "text")
