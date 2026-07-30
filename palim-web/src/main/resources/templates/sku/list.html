@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!-- SKU 등록 -->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-base">SKU 등록</h2>
+            <p class="text-sm text-base-content/60">
+                초기 재고는 실물을 실사한 수량을 입력하세요. 도입 시 1회성 작업입니다.
+            </p>
+            <form th:action="@{/skus}" method="post"
+                  class="grid gap-2 mt-2 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="code">SKU 코드</label>
+                    <input id="code" name="code" type="text" required maxlength="50"
+                           placeholder="SKU-001" class="input input-bordered input-sm w-full">
+                </fieldset>
+                <fieldset class="fieldset lg:col-span-2">
+                    <label class="label text-xs" for="name">상품명</label>
+                    <input id="name" name="name" type="text" required maxlength="200"
+                           class="input input-bordered input-sm w-full">
+                </fieldset>
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="initialQuantity">초기 재고</label>
+                    <input id="initialQuantity" name="initialQuantity" type="number" min="0" required
+                           value="0" class="input input-bordered input-sm w-full">
+                </fieldset>
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="safetyThreshold">안전재고</label>
+                    <input id="safetyThreshold" name="safetyThreshold" type="number" min="0" required
+                           value="5" class="input input-bordered input-sm w-full">
+                </fieldset>
+                <button type="submit" class="btn btn-sm btn-primary lg:col-span-5 lg:w-32">등록</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                SKU 목록
+                <span class="badge badge-ghost" th:text="${#lists.size(skus)}">0</span>
+            </h2>
+
+            <div th:if="${#lists.isEmpty(skus)}" class="alert alert-info mt-2">
+                <span>등록된 SKU 가 없습니다. 위에서 등록하세요.</span>
+            </div>
+
+            <div th:unless="${#lists.isEmpty(skus)}" class="overflow-x-auto mt-2">
+                <table class="table table-zebra">
+                    <thead>
+                    <tr>
+                        <th>코드</th>
+                        <th>상품명</th>
+                        <th class="text-right">재고</th>
+                        <th class="text-right">안전재고</th>
+                        <th class="text-right">일평균 판매</th>
+                        <th>상태</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="sku : ${skus}">
+                        <td class="font-mono text-sm" th:text="${sku.code}">SKU-001</td>
+                        <td th:text="${sku.name}">상품명</td>
+
+                        <!--/* 음수 재고를 즉시 알아볼 수 있어야 한다. 이미 판매됐는데 출고할 물건이 없는 상태다. */-->
+                        <td class="text-right font-semibold"
+                            th:classappend="${sku.oversold} ? 'text-error'
+                                            : (${sku.outOfStock} ? 'text-error'
+                                            : (${sku.belowThreshold} ? 'text-warning' : ''))"
+                            th:text="${sku.quantity}">0</td>
+
+                        <td class="text-right text-sm" th:text="${sku.safetyThreshold}">5</td>
+                        <td class="text-right text-sm"
+                            th:text="${#numbers.formatDecimal(sku.averageDailySales, 1, 1)}">0.0</td>
+
+                        <td>
+                            <span th:if="${sku.oversold}" class="badge badge-error">초과판매</span>
+                            <span th:if="${!sku.oversold and sku.outOfStock}" class="badge badge-error">품절</span>
+                            <span th:if="${!sku.outOfStock and sku.belowThreshold}"
+                                  class="badge badge-warning">부족</span>
+                            <span th:if="${!sku.belowThreshold and !sku.outOfStock}"
+                                  class="badge badge-success">정상</span>
+                            <span th:unless="${sku.consistent}" class="badge badge-error ml-1"
+                                  title="재고 수량과 변동 이력이 어긋났습니다">불일치</span>
+                        </td>
+
+                        <td class="text-right">
+                            <a th:href="@{/skus/{id}(id=${sku.id})}" class="btn btn-ghost btn-xs">
+                                상세
+                            </a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

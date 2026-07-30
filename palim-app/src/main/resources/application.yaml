@@ -93,6 +93,16 @@ palim:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:}
 
+server:
+  servlet:
+    session:
+      # 유휴 세션 만료. 관리자가 화면을 열어둔 채 자리를 떠도 무한정 유지되지 않게 한다.
+      # 이 화면은 재고 수정과 채널 인증정보 등록을 수행하므로 세션 탈취가 매출에 직결된다.
+      timeout: 2h
+      cookie:
+        http-only: true
+        same-site: lax
+
 management:
   endpoints:
     web:

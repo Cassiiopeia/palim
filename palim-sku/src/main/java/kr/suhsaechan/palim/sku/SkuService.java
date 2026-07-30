@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.sku;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
@@ -151,6 +152,20 @@ public class SkuService {
     @Transactional(readOnly = true)
     public List<Sku> findAllActive() {
         return skuRepository.findAllByActiveTrueOrderByCodeAsc();
+    }
+
+    /**
+     * 식별자 목록으로 한 번에 조회한다.
+     *
+     * <p>SKU 를 값 참조로만 들고 있는 다른 도메인(매핑·주문)의 목록 화면이 건별로 조회해
+     * N+1 을 내지 않도록 제공한다. 단종된 SKU 도 포함한다 — 과거 데이터가 참조하기 때문이다.
+     */
+    @Transactional(readOnly = true)
+    public List<Sku> findAllByIds(Collection<UUID> skuIds) {
+        if (skuIds.isEmpty()) {
+            return List.of();
+        }
+        return skuRepository.findAllById(skuIds);
     }
 
     /** 안전재고 미달 목록 (F-05). */

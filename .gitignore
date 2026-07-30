@@ -13,6 +13,10 @@ config.local.*
 
 # 의존성
 node_modules/
+# package-lock.json 은 커밋한다 — 없으면 CI 가 매번 최신 버전을 받아 빌드가 불안정해진다.
+
+# 빌드 산출 CSS — Gradle 이 생성한다. 커밋하지 않는다.
+palim-web/src/main/resources/static/css/
 __pycache__/
 *.py[cod]
 .venv/
@@ -68,3 +72,6 @@ coverage/
 .coverage
 .pytest_cache/
 htmlcov/
+
+# 사내 Redmine·pad 참고 자료 (내부 캡처 포함) — PUBLIC 레포이므로 절대 커밋하지 않는다
+docs/somansa/

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!-- 연결 상태 -->
+    <div th:if="${!setting.telegramConnected}" class="alert alert-warning mb-6">
+        <div>
+            <p class="font-medium">텔레그램이 연결되지 않았습니다.</p>
+            <p class="text-sm mt-1">
+                알림이 발송되지 않고 대기 중입니다. 유실되지는 않으며 연결하면 곧 전송됩니다.
+                현재 대기 <span class="font-semibold" th:text="${pendingCount}">0</span>건.
+            </p>
+        </div>
+    </div>
+    <div th:if="${setting.telegramConnected}" class="alert alert-success mb-6">
+        <span>텔레그램이 연결되어 있습니다.</span>
+    </div>
+
+    <div class="grid gap-4 mb-6 sm:grid-cols-2">
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">발송 대기</div>
+            <div class="stat-value text-primary" th:text="${pendingCount}">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">발송 실패</div>
+            <div class="stat-value" th:classappend="${failedCount > 0} ? 'text-error' : ''"
+                 th:text="${failedCount}">0</div>
+            <div class="stat-desc">재시도 한도를 넘긴 건</div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+
+        <!-- 텔레그램 연결 -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-base">텔레그램 연결</h2>
+                <p class="text-sm text-base-content/60">
+                    봇과 대화를 시작한 뒤 chat_id 를 입력하세요.
+                </p>
+                <form th:action="@{/settings/notification/telegram}" method="post"
+                      class="flex flex-wrap items-end gap-2 mt-2">
+                    <fieldset class="fieldset grow">
+                        <label class="label text-xs" for="telegramChatId">chat_id</label>
+                        <input id="telegramChatId" name="telegramChatId" type="text" required
+                               th:value="${setting.telegramChatId}"
+                               class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm btn-primary">저장</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 주문 알림 발송 방식 -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-base">주문 알림 발송 방식</h2>
+                <p class="text-sm text-base-content/60">
+                    주문이 많으면 묶음 발송이 유용합니다. 알림이 과다하면 오히려 확인하지 않게 됩니다.
+                </p>
+                <form th:action="@{/settings/notification/alert-mode}" method="post"
+                      class="flex flex-wrap items-end gap-2 mt-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="mode">방식</label>
+                        <select id="mode" name="mode" class="select select-bordered select-sm">
+                            <option value="IMMEDIATE"
+                                    th:selected="${setting.orderAlertMode.name() == 'IMMEDIATE'}">
+                                건별 즉시
+                            </option>
+                            <option value="BATCHED"
+                                    th:selected="${setting.orderAlertMode.name() == 'BATCHED'}">
+                                묶음 발송
+                            </option>
+                        </select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="batchIntervalMinutes">묶음 주기 (분)</label>
+                        <input id="batchIntervalMinutes" name="batchIntervalMinutes" type="number"
+                               min="1" max="1440" required
+                               th:value="${setting.batchIntervalMinutes}"
+                               class="input input-bordered input-sm w-24">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">변경</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 야간 발송 보류 -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-base">야간 발송 보류</h2>
+                <div class="alert alert-info mt-1">
+                    <span class="text-sm">
+                        오버셀링·품절·수집 실패 같은 긴급 알림은 이 설정과 무관하게 즉시 발송됩니다.
+                        매출 손실로 직결되는 사안은 아침까지 기다릴 수 없습니다.
+                    </span>
+                </div>
+                <form th:action="@{/settings/notification/quiet-hours}" method="post"
+                      class="flex flex-wrap items-end gap-2 mt-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="quietStart">시작</label>
+                        <input id="quietStart" name="start" type="time"
+                               th:value="${setting.quietHoursStart}"
+                               class="input input-bordered input-sm">
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="quietEnd">종료</label>
+                        <input id="quietEnd" name="end" type="time"
+                               th:value="${setting.quietHoursEnd}"
+                               class="input input-bordered input-sm">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">저장</button>
+                    <span class="text-xs text-base-content/60 self-center">
+                        비우면 사용하지 않습니다
+                    </span>
+                </form>
+            </div>
+        </div>
+
+        <!-- 일일 리포트 -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-base">일일 리포트</h2>
+                <form th:action="@{/settings/notification/daily-report}" method="post"
+                      class="flex flex-wrap items-end gap-3 mt-2">
+                    <fieldset class="fieldset">
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" name="enabled" value="true"
+                                   th:checked="${setting.dailyReportEnabled}"
+                                   class="toggle toggle-primary">
+                            <span class="text-sm">사용</span>
+                        </label>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="reportTime">발송 시각</label>
+                        <input id="reportTime" name="time" type="time" required
+                               th:value="${setting.dailyReportTime}"
+                               class="input input-bordered input-sm">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">저장</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 재고 부족 재알림 -->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-base">재고 부족 재알림 주기</h2>
+                <p class="text-sm text-base-content/60">
+                    재고 부족은 입고될 때까지 계속되므로, 이 주기 안에는 같은 상품으로
+                    다시 알리지 않습니다.
+                </p>
+                <form th:action="@{/settings/notification/low-stock-repeat}" method="post"
+                      class="flex flex-wrap items-end gap-2 mt-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="repeatHours">주기 (시간)</label>
+                        <input id="repeatHours" name="hours" type="number" min="1" max="168" required
+                               th:value="${setting.lowStockRepeatHours}"
+                               class="input input-bordered input-sm w-24">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">변경</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+</th:block>
+</body>
+</html>
