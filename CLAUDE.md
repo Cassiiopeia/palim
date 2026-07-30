@@ -85,7 +85,22 @@ throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
 
 ### 8. 커밋에 AI 흔적을 남기지 않는다
 
-`Co-Authored-By`, `Generated with`, 🤖 등 일절 금지.
+`Co-Authored-By`, `Generated with`, 🤖, `noreply@anthropic.com` 등 일절 금지. **CI `guard` 잡이
+커밋 메시지를 검사해 위반 시 빌드를 실패시킨다** — 걸리면 해당 커밋을 reword 한다.
+
+### 9. 이 저장소는 PUBLIC 이다 — 커밋 전 민감정보를 확인한다
+
+커밋되는 모든 것이 인터넷에 공개된다. 예외 없이 지킨다:
+
+| 대상 | 규칙 |
+|---|---|
+| 비밀값(키·토큰·비밀번호) | 어떤 파일에도 리터럴 금지. 항상 `${환경변수}` 로만 |
+| `application-prod.yaml` | gitignore 대상. `-f` 로도 커밋하지 않는다. 형태는 `.example` 에만 |
+| `docs/somansa/` (사내 자료) | gitignore + CI 가 차단. Redmine 캡처·사내 코드 조각 포함 금지 |
+| 사내 레거시 코드 (CM·DLPCenter·AI DLP) | **코드 이식 금지. 개념만 가져와 새로 작성한다** (07-DECISIONS 021). 클래스명·주석·문자열 그대로 복사도 금지 — 사내 자산이다 |
+| 사내 호스트명·내부 IP·이슈 본문 | 커밋 메시지·코드 주석에 쓰지 않는다. Redmine 번호 언급은 허용 |
+
+보안 관련 코드를 만지기 전에 `docs/09-SECURITY.md` 를 읽는다.
 
 ---
 

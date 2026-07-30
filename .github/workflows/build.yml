@@ -11,8 +11,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  guard:
+    name: 커밋 검사
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 커밋 메시지에 AI 관여 흔적이 들어가면 실패시킨다 (CLAUDE.md 금지사항 8).
+      # 규칙 문서만으로는 강제되지 않으므로 CI 가 게이트다.
+      - name: AI 흔적 차단
+        run: |
+          RANGE="${{ github.event.pull_request.base.sha || github.event.before }}..${{ github.sha }}"
+          if ! git rev-list "$RANGE" >/dev/null 2>&1; then
+            RANGE="${{ github.sha }} -1"
+          fi
+          BAD=$(git log --format='%H %B%x00' $RANGE 2>/dev/null \
+            | grep -iaE 'co-authored-by:.*(claude|anthropic)|generated with.*(claude|ai)|noreply@anthropic\.com|🤖' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::커밋 메시지에 AI 흔적이 있습니다. 해당 커밋을 reword 하십시오."
+            echo "$BAD"
+            exit 1
+          fi
+
+      # 사내 참고 자료는 어떤 경로로도 공개 저장소에 들어가면 안 된다.
+      - name: 사내 자료 차단
+        run: |
+          if git ls-files | grep -E '^docs/somansa/|somansa.*redmine|redmine.*attachments'; then
+            echo "::error::사내 참고 자료가 추적되고 있습니다. 즉시 제거하십시오."
+            exit 1
+          fi
+
   build:
     name: Gradle 빌드
+    needs: guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
