@@ -1,7 +1,5 @@
 package kr.suhsaechan.palim.notification;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -11,6 +9,8 @@ import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 알림 Outbox 서비스 (설계서 7장).
@@ -95,11 +95,16 @@ public class OutboxService {
                 .orElseThrow(() -> NotFoundException.of("알림", outboxId));
     }
 
-    /** payload 를 원하는 타입으로 역직렬화한다. 발송 워커가 메시지를 구성할 때 쓴다. */
+    /**
+     * payload 를 원하는 타입으로 역직렬화한다. 발송 워커가 메시지를 구성할 때 쓴다.
+     *
+     * <p>Spring Boot 4 는 Jackson 3(`tools.jackson`)을 쓴다. Jackson 3 에서는 모든 예외가
+     * unchecked 이므로 {@code JacksonException} 을 명시적으로 잡아 문맥을 붙인다.
+     */
     public <T> T readPayload(NotificationOutbox outbox, Class<T> type) {
         try {
             return objectMapper.readValue(outbox.getPayload(), type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(
                     "알림 payload 를 해석할 수 없습니다: " + outbox.getId(), e);
         }
@@ -111,7 +116,7 @@ public class OutboxService {
         }
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("알림 payload 직렬화에 실패했습니다", e);
         }
     }
