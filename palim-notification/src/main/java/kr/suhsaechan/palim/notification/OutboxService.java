@@ -1,7 +1,9 @@
 package kr.suhsaechan.palim.notification;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
@@ -44,6 +46,31 @@ public class OutboxService {
     public NotificationOutbox enqueue(NotificationType type, Object payload) {
         return notificationOutboxRepository.save(
                 NotificationOutbox.enqueue(type, serialize(payload)));
+    }
+
+    /**
+     * 최근에 같은 알림을 보내지 않았을 때만 등록한다.
+     *
+     * <p>감시 배치는 주기적으로 같은 상태를 발견한다. 재고가 계속 부족하면 매 주기마다 알림을
+     * 등록하게 되는데, 그러면 <b>발주자가 알림을 아예 보지 않게 되어</b> 이 시스템의 존재 이유가
+     * 무너진다. F-05 가 재알림 주기를 설정 항목으로 둔 이유다.
+     *
+     * @param dedupeKey 억제 키. {@code {알림종류}:{대상식별자}} 형식
+     * @param within    이 기간 안에 같은 키로 등록된 알림이 있으면 건너뛴다
+     * @return 등록했으면 해당 Outbox, 억제되었으면 빈 값
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<NotificationOutbox> enqueueIfNotRecent(NotificationType type, String dedupeKey,
+                                                           Duration within, Object payload) {
+        if (dedupeKey == null || dedupeKey.isBlank()) {
+            throw new IllegalArgumentException("억제 키가 없으면 enqueue 를 쓴다");
+        }
+        Instant threshold = Instant.now().minus(within);
+        if (notificationOutboxRepository.existsByDedupeKeyAndCreatedAtAfter(dedupeKey, threshold)) {
+            return Optional.empty();
+        }
+        return Optional.of(notificationOutboxRepository.save(
+                NotificationOutbox.enqueue(type, serialize(payload), dedupeKey)));
     }
 
     /**

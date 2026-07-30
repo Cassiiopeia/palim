@@ -52,6 +52,16 @@ palim:
   notification:
     relay-delay: 30000
 
+  monitor:
+    # 재고 정합성 대조. 본 시스템은 스스로를 재고의 유일한 기준으로 정의하므로
+    # 자기 검산이 없으면 틀어진 상태로 장기간 운영된다.
+    stock-consistency-delay: 24h
+    low-stock-delay: 30m
+    # 발송 시각은 설정값(dailyReportTime)이라 cron 을 쓸 수 없다. 주기적으로 확인한다.
+    daily-report-delay: 5m
+    mismatch-alert-interval: 24h
+    top-sku-limit: 3
+
   collect:
     # 조회 구간 겹침 여유. 채널 API 는 주문 시각이 지연 반영되므로 구간을 정확히 이어붙이면
     # 경계에서 주문이 누락된다. 중복은 유니크 제약이 막지만 누락은 감지되지 않는다.

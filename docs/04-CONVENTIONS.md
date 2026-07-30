@@ -112,7 +112,7 @@ public boolean decreaseForSale(UUID skuId, int quantity, UUID orderLineId) { ...
 public Sku getById(UUID skuId) { ... }
 ```
 
-트랜잭션을 여는 곳은 **`palim-collector`(수집)와 `palim-web`(화면 조작)뿐**이다.
+트랜잭션을 여는 곳은 **조율 계층 셋(`palim-collector`·`palim-monitor`·`palim-web`)뿐**이다.
 
 > 애너테이션을 그냥 생략하면 호출자가 트랜잭션을 잊었을 때 재고 변경과 이력 기록이 **각각 커밋**되어, 중간 실패 시 정합성이 깨진 채 조용히 넘어간다. MANDATORY 는 그 실수를 즉시 예외로 드러낸다. 컴파일 단계에서 막을 수는 없지만 첫 실행에서 반드시 드러나며, 조용히 잘못 동작하는 것보다 낫다.
 

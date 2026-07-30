@@ -175,6 +175,17 @@ public class SkuService {
         return stockMovementRepository.sumDeltaBySkuId(skuId) == sku.getQuantity();
     }
 
+    /**
+     * 이력 누적합.
+     *
+     * <p>정합성 대조 배치가 불일치를 보고할 때 실제 값을 함께 담기 위해 쓴다.
+     * 단순 일치 여부만 필요하면 {@link #isConsistent} 를 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public int sumMovementDelta(UUID skuId) {
+        return stockMovementRepository.sumDeltaBySkuId(skuId);
+    }
+
     /** 최근 N일 평균 판매량. 소진 예상일 계산에 쓴다 (F-05). */
     @Transactional(readOnly = true)
     public double averageDailySales(UUID skuId, int days) {

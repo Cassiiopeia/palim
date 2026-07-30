@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(project(":palim-collector"))
+    implementation(project(":palim-monitor"))
     implementation(project(":palim-web"))
 
     // @EnableJpaAuditing 을 이 모듈이 선언하므로 컴파일 시점에 필요하다.
@@ -33,4 +34,5 @@ dependencies {
     testImplementation(project(":palim-notification"))
     testImplementation(project(":palim-order"))
     testImplementation(project(":palim-sku"))
+    testImplementation(project(":palim-monitor"))
 }

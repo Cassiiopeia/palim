@@ -49,6 +49,17 @@ public class NotificationOutbox extends BaseTimeEntity {
     @Column(nullable = false)
     private int attemptCount;
 
+    /**
+     * 재발송 억제 키. 형식은 {@code {알림종류}:{대상식별자}} 다.
+     *
+     * <p>감시 배치가 매 주기마다 같은 알림을 등록하면 스팸이 되어 <b>발주자가 알림을 아예 보지
+     * 않게 된다.</b> 그러면 이 시스템의 존재 이유가 무너지므로, 최근 발송 여부를 이 키로 확인한다.
+     *
+     * <p>억제가 필요 없는 종류(신규 주문 등)는 null 이다.
+     */
+    @Column(length = 200)
+    private String dedupeKey;
+
     @Column(length = 1000)
     private String lastError;
 
@@ -57,16 +68,22 @@ public class NotificationOutbox extends BaseTimeEntity {
     @Version
     private Long version;
 
-    private NotificationOutbox(NotificationType type, String payload) {
+    private NotificationOutbox(NotificationType type, String payload, String dedupeKey) {
         this.id = UuidV7.generate();
         this.type = type;
         this.payload = payload;
+        this.dedupeKey = dedupeKey;
         this.status = OutboxStatus.PENDING;
         this.attemptCount = 0;
     }
 
     public static NotificationOutbox enqueue(NotificationType type, String payload) {
-        return new NotificationOutbox(type, payload);
+        return new NotificationOutbox(type, payload, null);
+    }
+
+    /** 재발송 억제 키를 갖는 알림. 감시 배치가 쓴다. */
+    public static NotificationOutbox enqueue(NotificationType type, String payload, String dedupeKey) {
+        return new NotificationOutbox(type, payload, dedupeKey);
     }
 
     public void markSent(Instant sentAt) {

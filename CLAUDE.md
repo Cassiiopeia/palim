@@ -29,7 +29,7 @@ private UUID skuId;              // O — 값 참조
 // private Sku sku;              // X — palim-sku 의존이 생긴다
 ```
 
-도메인 간 협력이 필요하면 `palim-collector` 나 `palim-web` 이 조율한다.
+도메인 간 협력이 필요하면 조율 계층(`palim-collector`·`palim-monitor`·`palim-web`)이 처리한다.
 → `docs/02-ARCHITECTURE.md`
 
 ### 2. 도메인 서비스에 `@Transactional` 을 그냥 붙이지 않는다
