@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * 감사 로그 화면 (Redmine #208170 감사로그 캡처 대응).
+ * 감사 로그 화면.
  *
  * <h2>필터·페이징은 쿼리스트링 기반 서버 렌더링이다</h2>
  *

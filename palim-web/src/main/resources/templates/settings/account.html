@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="card bg-base-100 shadow-sm max-w-lg">
+        <div class="card-body">
+            <h2 class="card-title text-base">비밀번호 변경</h2>
+            <p class="text-sm text-base-content/60">
+                계정: <span class="font-mono" th:text="${username}">admin</span>
+            </p>
+
+            <!--/*
+              autocomplete 속성이 중요하다. new-password 를 지정해야 브라우저 비밀번호 관리자가
+              새 비밀번호를 저장·생성 제안하고, 현재 비밀번호 칸에 자동완성을 넣지 않는다.
+            */-->
+            <form th:action="@{/settings/account/password}" method="post" class="space-y-3 mt-2">
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="currentPassword">현재 비밀번호</label>
+                    <input id="currentPassword" name="currentPassword" type="password" required
+                           autocomplete="current-password" class="input input-bordered w-full">
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="newPassword">새 비밀번호</label>
+                    <input id="newPassword" name="newPassword" type="password" required
+                           th:minlength="${minLength}" autocomplete="new-password"
+                           class="input input-bordered w-full">
+                    <p class="text-xs text-base-content/60 mt-1"
+                       th:text="'최소 ' + ${minLength} + '자. 길이가 강도를 만듭니다 — 문장형 비밀번호를 권합니다.'"></p>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="newPasswordConfirm">새 비밀번호 확인</label>
+                    <input id="newPasswordConfirm" name="newPasswordConfirm" type="password" required
+                           th:minlength="${minLength}" autocomplete="new-password"
+                           class="input input-bordered w-full">
+                </fieldset>
+
+                <button type="submit" class="btn btn-primary w-full">변경</button>
+            </form>
+
+            <p class="text-xs text-base-content/60 mt-3">
+                변경 성공·실패 모두 감사 로그에 기록됩니다. 본인이 시도하지 않은 변경 실패가
+                보이면 즉시 비밀번호를 바꾸세요.
+            </p>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

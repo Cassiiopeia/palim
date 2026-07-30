@@ -36,6 +36,18 @@ git push → GitHub Actions 빌드 → GHCR 이미지 push (태그 = 커밋 SHA)
 
 **계정이 이미 있으면 `ADMIN_PASSWORD` 로 비밀번호를 덮어쓰지 않는다.** 재기동마다 발주자가 바꾼 비밀번호가 초기값으로 되돌아가면 안 된다.
 
+### 운영 설정 파일 정책 — 이 저장소는 PUBLIC 이다
+
+| 파일 | 커밋 | 내용 |
+|---|---|---|
+| `application.yaml` | O | 공통 설정. 민감값은 전부 `${환경변수}` 플레이스홀더 |
+| `application-local.yaml` | O | localhost 개발용. 실 비밀값 금지 (`palim/palim` 은 로컬 Docker 전용) |
+| `application-prod.yaml` | **X — gitignore** | 운영 설정. 배포 시 GitHub Secrets 값으로 생성·주입 |
+| `application-prod.yaml.example` | O | prod 의 형태 문서. 플레이스홀더만 |
+
+**민감값을 어느 yaml 에도 리터럴로 쓰지 않는다.** prod 파일이 gitignore 라도 마찬가지다 —
+실수로 `-f` 커밋되는 순간 공개된다. 값은 항상 환경변수(GitHub Secrets → env)로만 흐른다.
+
 ## 백업
 
 `pg_dump` 를 일 1회 수행해 NAS 별도 볼륨에 보관하고, 성공·실패를 텔레그램으로 통보한다.

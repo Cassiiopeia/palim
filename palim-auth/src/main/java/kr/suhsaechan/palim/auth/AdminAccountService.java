@@ -41,6 +41,24 @@ public class AdminAccountService {
         getByUsername(username).changePassword(passwordEncoder.encode(rawPassword));
     }
 
+    /**
+     * 현재 비밀번호를 확인하고 새 비밀번호로 바꾼다. 화면 변경 경로는 이 메서드만 쓴다.
+     *
+     * <p>현재 비밀번호 재확인이 없으면, 잠금 해제된 세션을 잡은 공격자가 비밀번호를 바꿔
+     * <b>발주자를 자기 시스템에서 쫓아낼 수 있다.</b> 정책 검증은 {@link PasswordPolicy} 가
+     * 수행한다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void changePasswordVerified(String username, String currentRawPassword,
+                                       String newRawPassword) {
+        AdminAccount account = getByUsername(username);
+        if (!passwordEncoder.matches(currentRawPassword, account.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PASSWORD_MISMATCH);
+        }
+        PasswordPolicy.validate(newRawPassword, username);
+        account.changePassword(passwordEncoder.encode(newRawPassword));
+    }
+
     @Transactional(readOnly = true)
     public AdminAccount getByUsername(String username) {
         return adminAccountRepository.findByUsername(username)

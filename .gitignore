@@ -75,3 +75,8 @@ htmlcov/
 
 # 사내 Redmine·pad 참고 자료 (내부 캡처 포함) — PUBLIC 레포이므로 절대 커밋하지 않는다
 docs/somansa/
+
+# 운영 설정 — 실제 값은 GitHub Secrets 로 빌드 시 주입한다. 공개 레포에 커밋하지 않는다.
+# 형태는 application-prod.yaml.example 참조.
+application-prod.yaml
+application-prod.yml

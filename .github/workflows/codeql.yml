@@ -1,0 +1,46 @@
+# 정적 분석 (09-SECURITY — 사내 정적 분석 프로세스의 자동화 대응).
+#
+# PR 마다 실행되어 SQL 인젝션·경로 순회·하드코딩 시크릿류를 잡는다. 결과는 저장소
+# Security 탭에 쌓인다.
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 주 1회 전체 스캔 — 코드가 안 바뀌어도 새로 공개된 취약점 패턴으로 재검사한다.
+    - cron: "0 20 * * 0"   # KST 월요일 05:00
+
+jobs:
+  analyze:
+    name: CodeQL 분석
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: CodeQL 초기화
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          build-mode: manual
+
+      - name: Gradle 설정
+        uses: gradle/actions/setup-gradle@v4
+
+      # 테스트는 build.yml 이 돌린다. 여기서는 컴파일만 있으면 분석이 가능하다.
+      - name: 컴파일
+        run: ./gradlew classes -x test
+
+      - name: 분석 실행
+        uses: github/codeql-action/analyze@v3
