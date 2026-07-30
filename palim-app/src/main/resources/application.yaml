@@ -25,6 +25,17 @@ spring:
     virtual:
       enabled: true
 
+palim:
+  crypto:
+    # 채널 API 인증정보 AES-GCM 마스터키 (설계서 6.2)
+    # 없으면 기동에 실패한다. 암호화 없이 인증정보를 저장하는 상태로 뜨지 않게 하기 위함이다.
+    # 생성 — openssl rand -base64 32
+    master-key: ${PALIM_CRYPTO_MASTER_KEY}
+  admin:
+    # 계정이 없을 때만 사용된다. 이미 있으면 비밀번호를 덮어쓰지 않는다.
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:}
+
 management:
   endpoints:
     web:
