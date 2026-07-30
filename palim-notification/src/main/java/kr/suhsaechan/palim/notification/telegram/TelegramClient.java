@@ -61,7 +61,7 @@ public class TelegramClient {
                             "disable_web_page_preview", true))
                     .retrieve()
                     .toBodilessEntity();
-            return TelegramSendResult.success();
+            return TelegramSendResult.sent();
 
         } catch (org.springframework.web.client.HttpClientErrorException exception) {
             String reason = "%s %s".formatted(exception.getStatusCode(), exception.getResponseBodyAsString());

@@ -18,10 +18,16 @@ public record TelegramSendResult(
         String errorMessage
 ) {
 
-    private static final TelegramSendResult SUCCESS = new TelegramSendResult(true, false, null);
+    private static final TelegramSendResult SENT = new TelegramSendResult(true, false, null);
 
-    public static TelegramSendResult success() {
-        return SUCCESS;
+    /**
+     * 발송 성공.
+     *
+     * <p>이름이 {@code success()} 가 아닌 이유는, record 컴포넌트 {@code success} 와 이름이
+     * 겹치면 컴파일러가 accessor 로 취급해 반환 타입이 {@code boolean} 이어야 하기 때문이다.
+     */
+    public static TelegramSendResult sent() {
+        return SENT;
     }
 
     /**
