@@ -88,6 +88,18 @@ public class NotificationOutbox extends BaseTimeEntity {
         }
     }
 
+    /**
+     * 재시도해도 성공하지 않는 실패. 즉시 포기한다.
+     *
+     * <p>잘못된 chat_id, 봇 차단, 토큰 무효 같은 경우다. 재시도 한도까지 시도하면 호출 제한만
+     * 소모하고 로그를 오염시킨다.
+     */
+    public void markPermanentlyFailed(String error) {
+        this.attemptCount++;
+        this.lastError = error;
+        this.status = OutboxStatus.FAILED;
+    }
+
     public boolean isPending() {
         return status == OutboxStatus.PENDING;
     }
