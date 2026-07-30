@@ -31,23 +31,33 @@ palim-common          UuidV7 · BaseTimeEntity · ErrorCode · BusinessException
 ├─ palim-mapping      채널 상품코드 ↔ SKU 매핑
 └─ palim-notification Outbox · 알림 설정 · 텔레그램 발송
 
-palim-collector       수집 스케줄러 · 수집 조율 트랜잭션
+palim-collector       수집 스케줄러 · 수집 조율 트랜잭션      외부 -> 내부
+palim-monitor         정합성 대조 · 안전재고 감시 · 일일 리포트  내부 -> 알림
 palim-web             Thymeleaf 화면 · Security · 화면용 조회
 palim-app             진입점 · 설정 조립 · Flyway
 ```
+
+조율 계층이 셋이다. 방향과 실패 대응이 달라 분리했다.
+
+| 계층 | 책임 | 방향 | 실패 시 |
+|---|---|---|---|
+| `palim-collector` | 채널 주문을 내부 상태에 반영 | 외부 → 내부 | 커서를 되돌려 재시도 |
+| `palim-monitor` | 내부 상태를 점검해 알림 | 내부 → 알림 | 다음 주기에 다시 본다 |
+| `palim-web` | 사용자 조작을 상태에 반영 | 사용자 → 내부 | 오류 응답 |
 
 ## 의존 규칙
 
 ```
 palim-app
    ├──→ palim-collector ──→ 도메인 모듈들
+   ├──→ palim-monitor   ──→ 도메인 모듈들
    └──→ palim-web       ──→ 도메인 모듈들
 
 모든 도메인 모듈 ──→ palim-common
 도메인 모듈 ──X──→ 다른 도메인 모듈        (금지)
 ```
 
-`palim-app` 이 최상위인 이유는 진입점이 여기 있어 하위 모듈의 빈을 스캔해야 하기 때문이다. `collector` 와 `web` 은 목적이 달라 서로를 의존하지 않는다.
+`palim-app` 이 최상위인 이유는 진입점이 여기 있어 하위 모듈의 빈을 스캔해야 하기 때문이다. `collector`·`monitor`·`web` 은 목적이 달라 서로를 의존하지 않는다.
 
 부트 jar 는 `palim-app` 에서만 만든다. 나머지는 라이브러리 jar 다.
 
@@ -67,7 +77,7 @@ DB 외래키는 정상 부여한다. **모듈 독립성은 코드 차원이고 �
 
 ## 규칙 2 — 트랜잭션은 조율 계층이 연다
 
-트랜잭션을 여는 곳은 **`palim-collector`(수집)와 `palim-web`(화면 조작)뿐**이다. 도메인 서비스의 변경 메서드는 `Propagation.MANDATORY` 로 참여만 한다.
+트랜잭션을 여는 곳은 **조율 계층 셋(`collector`·`monitor`·`web`)뿐**이다. 도메인 서비스의 변경 메서드는 `Propagation.MANDATORY` 로 참여만 한다.
 
 ```java
 // palim-collector

@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.notification;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
@@ -19,4 +20,12 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
     long countByStatus(OutboxStatus status);
 
     List<NotificationOutbox> findByStatusAndTypeOrderByCreatedAtAsc(OutboxStatus status, NotificationType type);
+
+    /**
+     * 같은 억제 키로 지정 시각 이후에 등록된 알림이 있는지.
+     *
+     * <p>감시 배치가 재알림 주기를 지키는 근거다. 발송 성공 여부와 무관하게 <b>등록 시각</b>을
+     * 기준으로 판단한다 — 발송이 실패해 재시도 중인 알림이 있는데 또 등록하면 중복이 쌓인다.
+     */
+    boolean existsByDedupeKeyAndCreatedAtAfter(String dedupeKey, Instant after);
 }

@@ -29,7 +29,7 @@ private UUID skuId;              // O — 값 참조
 // private Sku sku;              // X — palim-sku 의존이 생긴다
 ```
 
-도메인 간 협력이 필요하면 `palim-collector` 나 `palim-web` 이 조율한다.
+도메인 간 협력이 필요하면 조율 계층(`palim-collector`·`palim-monitor`·`palim-web`)이 처리한다.
 → `docs/02-ARCHITECTURE.md`
 
 ### 2. 도메인 서비스에 `@Transactional` 을 그냥 붙이지 않는다
@@ -103,6 +103,12 @@ throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
 ### record 컴포넌트와 같은 이름의 정적 팩토리는 만들 수 없다
 
 컴포넌트 `boolean success` 가 있으면 `success()` 는 accessor 로 취급되어 `boolean` 을 반환해야 한다. `of()`·`from()`·`sent()` 처럼 겹치지 않는 이름을 쓴다.
+
+### `JdbcClient` 에는 `Instant` 를 바인딩할 수 없다
+
+Hibernate 는 처리하지만 순수 JDBC 는 타입 추론에 실패한다. `timestamptz` 컬럼에는 **`OffsetDateTime`** 을 넘긴다.
+
+PostgreSQL 의 `count`·`sum` 은 `bigint` 이므로 `record` 컴포넌트가 `int` 면 `count(*)::int` 로 캐스팅한다.
 
 ### `implementation` 은 테스트 컴파일 classpath 로도 전이되지 않는다
 
