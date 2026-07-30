@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.session.SessionFixationProtectionStrategy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
@@ -24,9 +23,6 @@ import org.springframework.security.web.header.writers.XXssProtectionHeaderWrite
  */
 @Configuration
 public class SecurityConfig {
-
-    /** 유휴 세션 만료. 관리자가 화면을 열어둔 채 자리를 떠도 무한정 유지되지 않게 한다. */
-    private static final Duration SESSION_TIMEOUT = Duration.ofHours(2);
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -55,11 +51,13 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         // 로그인 시 세션 ID 를 교체한다. 공격자가 미리 심어둔 세션으로
                         // 로그인 후 권한을 물려받는 고정 공격을 막는다.
-                        .sessionFixation(SessionFixationProtectionStrategy::migrateSession)
+                        .sessionFixation(fixation -> fixation.migrateSession())
                         // 관리자 1명이므로 동시 세션을 1개로 제한한다. 두 곳에서 동시에
                         // 재고를 조작하는 상황 자체를 만들지 않는다.
-                        .maximumSessions(1)
-                        .maxSessionsPreventsLogin(false))
+                        // 유휴 만료는 server.servlet.session.timeout 으로 둔다.
+                        .sessionConcurrency(concurrency -> concurrency
+                                .maximumSessions(1)
+                                .maxSessionsPreventsLogin(false)))
 
                 .headers(headers -> headers
                         // 클릭재킹 차단. 이 화면이 다른 사이트에 iframe 으로 박히면 안 된다.
@@ -85,12 +83,5 @@ public class SecurityConfig {
                                         + "frame-ancestors 'none'; "
                                         + "base-uri 'self'")))
                 .build();
-    }
-
-    /** 유휴 세션 만료 시간을 적용한다. */
-    @Bean
-    org.springframework.boot.web.servlet.ServletContextInitializer sessionTimeoutInitializer() {
-        return servletContext ->
-                servletContext.setSessionTimeout((int) SESSION_TIMEOUT.toMinutes());
     }
 }
