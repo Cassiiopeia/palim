@@ -65,18 +65,31 @@ public class NotificationSetting extends BaseTimeEntity {
     @Version
     private Long version;
 
-    private NotificationSetting() {
+    /**
+     * 파라미터를 받는 생성자만 둔다.
+     *
+     * <p>{@code @NoArgsConstructor(PROTECTED)}가 이미 파라미터 없는 생성자를 만들기 때문에,
+     * 값을 채우는 생성자도 파라미터를 받아야 시그니처가 충돌하지 않는다.
+     */
+    private NotificationSetting(OrderAlertMode orderAlertMode, int batchIntervalMinutes,
+                                boolean dailyReportEnabled, LocalTime dailyReportTime,
+                                int lowStockRepeatHours) {
         this.id = UuidV7.generate();
-        this.orderAlertMode = OrderAlertMode.IMMEDIATE;
-        this.batchIntervalMinutes = DEFAULT_BATCH_INTERVAL_MINUTES;
-        this.dailyReportEnabled = true;
-        this.dailyReportTime = DEFAULT_DAILY_REPORT_TIME;
-        this.lowStockRepeatHours = DEFAULT_LOW_STOCK_REPEAT_HOURS;
+        this.orderAlertMode = orderAlertMode;
+        this.batchIntervalMinutes = batchIntervalMinutes;
+        this.dailyReportEnabled = dailyReportEnabled;
+        this.dailyReportTime = dailyReportTime;
+        this.lowStockRepeatHours = lowStockRepeatHours;
     }
 
     /** 기능 명세서가 정의한 기본값으로 초기화한다. */
     public static NotificationSetting createDefault() {
-        return new NotificationSetting();
+        return new NotificationSetting(
+                OrderAlertMode.IMMEDIATE,
+                DEFAULT_BATCH_INTERVAL_MINUTES,
+                true,
+                DEFAULT_DAILY_REPORT_TIME,
+                DEFAULT_LOW_STOCK_REPEAT_HOURS);
     }
 
     public void connectTelegram(String telegramChatId) {
