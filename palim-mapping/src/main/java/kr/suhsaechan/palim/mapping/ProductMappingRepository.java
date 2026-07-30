@@ -28,6 +28,24 @@ public interface ProductMappingRepository extends JpaRepository<ProductMapping, 
                                           @Param("channelProductNo") String channelProductNo,
                                           @Param("channelOptionNo") String channelOptionNo);
 
+    /**
+     * 비활성 매핑까지 포함해 조회한다.
+     *
+     * <p>유니크 인덱스 {@code uk_product_mapping_channel_product} 에는 {@code active} 가 없다.
+     * 즉 <b>해제된 매핑도 행으로 남아 같은 채널 상품의 재등록을 막는다.</b> {@link #findActiveBy}
+     * 만으로 중복을 판단하면 해제 후 재등록 시 DB 유니크 위반이 터진다.
+     */
+    @Query("""
+            select m from ProductMapping m
+            where m.channelCode = :channelCode
+              and m.channelProductNo = :channelProductNo
+              and ((:channelOptionNo is null and m.channelOptionNo is null)
+                   or m.channelOptionNo = :channelOptionNo)
+            """)
+    Optional<ProductMapping> findAnyBy(@Param("channelCode") ChannelCode channelCode,
+                                       @Param("channelProductNo") String channelProductNo,
+                                       @Param("channelOptionNo") String channelOptionNo);
+
     List<ProductMapping> findByChannelCodeOrderByChannelProductNoAsc(ChannelCode channelCode);
 
     List<ProductMapping> findBySkuId(UUID skuId);

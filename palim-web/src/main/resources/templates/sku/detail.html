@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <a th:href="@{/skus}" class="btn btn-ghost btn-sm mb-4">← 목록</a>
+
+    <!--/* 초과판매는 가장 시급한 상태다. 이미 판매됐는데 출고할 물건이 없다. */-->
+    <div th:if="${sku.oversold}" class="alert alert-error mb-4">
+        <div>
+            <p class="font-medium">초과판매 상태입니다.</p>
+            <p class="text-sm mt-1">
+                재고가 <span th:text="${sku.quantity}">-1</span>개입니다.
+                출고 가능 수량을 초과해 판매되었으므로 재고 확보나 주문 취소가 필요합니다.
+            </p>
+        </div>
+    </div>
+
+    <div th:unless="${sku.consistent}" class="alert alert-error mb-4">
+        <div>
+            <p class="font-medium">재고 수량과 변동 이력이 어긋났습니다.</p>
+            <p class="text-sm mt-1">
+                아래 이력을 확인해 원인을 찾아야 합니다. 재고 기준값이 틀어진 상태입니다.
+            </p>
+        </div>
+    </div>
+
+    <!-- 현황 -->
+    <div class="grid gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">현재 재고</div>
+            <div class="stat-value"
+                 th:classappend="${sku.oversold or sku.outOfStock} ? 'text-error'
+                                 : (${sku.belowThreshold} ? 'text-warning' : '')"
+                 th:text="${sku.quantity}">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">안전재고</div>
+            <div class="stat-value text-base" th:text="${sku.safetyThreshold}">5</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">최근 7일 일평균</div>
+            <div class="stat-value text-base"
+                 th:text="${#numbers.formatDecimal(sku.averageDailySales, 1, 1)}">0.0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-box shadow-sm">
+            <div class="stat-title">예상 소진</div>
+            <div class="stat-value text-base"
+                 th:text="${sku.expectedDaysLeft() != null}
+                          ? ${#numbers.formatDecimal(sku.expectedDaysLeft(), 1, 1)} + '일'
+                          : '-'">-</div>
+            <div class="stat-desc" th:if="${sku.expectedDaysLeft() == null}">판매 없음</div>
+        </div>
+    </div>
+
+    <!-- 재고 조정 -->
+    <div class="grid gap-4 mb-6 lg:grid-cols-3">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title text-sm">입고</h3>
+                <form th:action="@{/skus/{id}/restock(id=${sku.id})}" method="post" class="space-y-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="restockQty">수량</label>
+                        <input id="restockQty" name="quantity" type="number" min="1" required
+                               class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="restockMemo">사유</label>
+                        <input id="restockMemo" name="memo" type="text" maxlength="500"
+                               placeholder="정기 입고" class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm btn-primary w-full">입고 처리</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title text-sm">폐기 · 분실</h3>
+                <form th:action="@{/skus/{id}/dispose(id=${sku.id})}" method="post" class="space-y-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="disposeQty">수량</label>
+                        <input id="disposeQty" name="quantity" type="number" min="1" required
+                               class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="disposeMemo">사유</label>
+                        <input id="disposeMemo" name="memo" type="text" maxlength="500"
+                               placeholder="파손" class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm w-full">차감 처리</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title text-sm">실사 조정</h3>
+                <p class="text-xs text-base-content/60">실제 확인한 수량으로 덮어씁니다.</p>
+                <form th:action="@{/skus/{id}/adjust(id=${sku.id})}" method="post" class="space-y-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="adjustQty">조정 후 수량</label>
+                        <input id="adjustQty" name="newQuantity" type="number" min="0" required
+                               th:value="${sku.quantity}" class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="adjustMemo">사유</label>
+                        <input id="adjustMemo" name="memo" type="text" maxlength="500"
+                               placeholder="월말 실사" class="input input-bordered input-sm w-full">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm btn-warning w-full">조정</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 설정 -->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body">
+            <h3 class="card-title text-sm">설정</h3>
+            <div class="flex flex-wrap items-end gap-4">
+                <form th:action="@{/skus/{id}/threshold(id=${sku.id})}" method="post"
+                      class="flex items-end gap-2">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" for="threshold">안전재고 임계치</label>
+                        <input id="threshold" name="threshold" type="number" min="0" required
+                               th:value="${sku.safetyThreshold}"
+                               class="input input-bordered input-sm w-24">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">변경</button>
+                </form>
+
+                <form th:action="@{/skus/{id}/discontinue(id=${sku.id})}" method="post">
+                    <button type="submit" class="btn btn-sm btn-outline btn-error">단종 처리</button>
+                </form>
+            </div>
+            <p class="text-xs text-base-content/60 mt-2">
+                단종은 삭제가 아닙니다. 재고 이력이 참조하므로 데이터는 보존됩니다.
+            </p>
+        </div>
+    </div>
+
+    <!-- 변동 이력 -->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h3 class="card-title text-sm">
+                재고 변동 이력
+                <span class="badge badge-ghost" th:text="${#lists.size(movements)}">0</span>
+            </h3>
+
+            <div class="overflow-x-auto mt-2">
+                <table class="table table-sm table-zebra">
+                    <thead>
+                    <tr>
+                        <th>시각</th>
+                        <th>사유</th>
+                        <th class="text-right">변동</th>
+                        <th class="text-right">변동 후</th>
+                        <th>메모</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="movement : ${movements}">
+                        <td class="text-xs" th:text="${movement.createdAt}">-</td>
+                        <td>
+                            <span class="badge badge-sm"
+                                  th:text="${movement.reason.displayName()}">사유</span>
+                        </td>
+                        <td class="text-right font-mono"
+                            th:classappend="${movement.delta < 0} ? 'text-error' : 'text-success'"
+                            th:text="${movement.delta > 0} ? '+' + ${movement.delta} : ${movement.delta}">0</td>
+                        <td class="text-right font-mono" th:text="${movement.quantityAfter}">0</td>
+                        <td class="text-xs" th:text="${movement.memo}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

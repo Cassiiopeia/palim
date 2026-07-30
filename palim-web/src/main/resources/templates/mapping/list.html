@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!--/*
+        미매핑 주문을 위에 둔다. 매핑되지 않은 주문은 재고에 반영되지 않은 상태이므로
+        여기가 가장 시급한 작업 목록이다.
+    */-->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                미매핑 주문
+                <span class="badge"
+                      th:classappend="${#lists.isEmpty(unmappedLines)} ? 'badge-ghost' : 'badge-error'"
+                      th:text="${#lists.size(unmappedLines)}">0</span>
+            </h2>
+            <p class="text-sm text-base-content/60">
+                매핑되지 않은 주문은 재고에서 차감되지 않았습니다. SKU 를 연결하면 즉시 소급 반영합니다.
+            </p>
+
+            <div th:if="${#lists.isEmpty(unmappedLines)}" class="alert alert-success mt-2">
+                <span>미매핑 주문이 없습니다.</span>
+            </div>
+
+            <div th:if="${#lists.isEmpty(skus)}" class="alert alert-warning mt-2">
+                <span>등록된 SKU 가 없어 매핑할 수 없습니다. 먼저 재고 관리에서 SKU 를 등록하세요.</span>
+            </div>
+
+            <div th:if="${!#lists.isEmpty(unmappedLines) and !#lists.isEmpty(skus)}"
+                 class="overflow-x-auto mt-2">
+                <table class="table table-zebra">
+                    <thead>
+                    <tr>
+                        <th>채널</th>
+                        <th>주문번호</th>
+                        <th>채널 상품</th>
+                        <th class="text-right">수량</th>
+                        <th>연결할 SKU</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="line, stat : ${unmappedLines}">
+                        <td>
+                            <span class="badge badge-ghost badge-sm" th:text="${line.channelName}">채널</span>
+                        </td>
+                        <td class="font-mono text-xs" th:text="${line.channelOrderNo}">-</td>
+                        <td>
+                            <div class="text-sm" th:text="${line.channelProductName}">상품명</div>
+                            <div class="text-xs text-base-content/60 font-mono">
+                                <span th:text="${line.channelProductNo}">P-1</span>
+                                <span th:if="${line.hasOption()}"
+                                      th:text="' / ' + ${line.channelOptionNo}"> / O-1</span>
+                            </div>
+                        </td>
+                        <td class="text-right" th:text="${line.quantity}">1</td>
+                        <td>
+                            <!--/*
+                                채널 상품코드는 hidden 으로 넘긴다. 발주자가 직접 입력하게 만들면
+                                오타가 나고, 오타 난 매핑은 영원히 매칭되지 않는다.
+                            */-->
+                            <form th:action="@{/mappings}" method="post" class="flex items-center gap-2">
+                                <input type="hidden" name="channelCode" th:value="${line.channelCode}">
+                                <input type="hidden" name="channelProductNo" th:value="${line.channelProductNo}">
+                                <input type="hidden" name="channelOptionNo" th:value="${line.channelOptionNo}">
+                                <input type="hidden" name="channelProductName" th:value="${line.channelProductName}">
+
+                                <select name="skuId" required
+                                        class="select select-bordered select-sm w-64"
+                                        th:aria-label="'SKU 선택 — ' + ${line.channelProductName}">
+                                    <option value="" selected disabled>SKU 선택</option>
+                                    <option th:each="sku : ${skus}"
+                                            th:value="${sku.id}"
+                                            th:text="${sku.code} + ' — ' + ${sku.name}
+                                                     + ' (재고 ' + ${sku.quantity} + ')'">SKU</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-primary">연결</button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 채널별 매핑 목록 -->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title text-base">등록된 매핑</h2>
+
+            <div role="tablist" class="tabs tabs-box mt-2">
+                <a th:each="channel : ${channels}"
+                   role="tab"
+                   class="tab"
+                   th:classappend="${channel == selectedChannel} ? 'tab-active' : ''"
+                   th:href="@{/mappings(channel=${channel})}"
+                   th:text="${channel.displayName()}">채널</a>
+            </div>
+
+            <div th:if="${#lists.isEmpty(mappings)}" class="alert alert-info mt-4">
+                <span th:text="${selectedChannel.displayName()} + ' 에 등록된 매핑이 없습니다.'">없음</span>
+            </div>
+
+            <div th:unless="${#lists.isEmpty(mappings)}" class="overflow-x-auto mt-4">
+                <table class="table table-zebra">
+                    <thead>
+                    <tr>
+                        <th>채널 상품코드</th>
+                        <th>채널 상품명</th>
+                        <th>연결된 SKU</th>
+                        <th>상태</th>
+                        <th class="text-right">작업</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="mapping : ${mappings}"
+                        th:classappend="${!mapping.active} ? 'opacity-50' : ''">
+                        <td class="font-mono text-xs">
+                            <span th:text="${mapping.channelProductNo}">P-1</span>
+                            <span th:if="${mapping.hasOption()}"
+                                  th:text="' / ' + ${mapping.channelOptionNo}"> / O-1</span>
+                        </td>
+                        <td class="text-sm" th:text="${mapping.channelProductName}">상품명</td>
+                        <td>
+                            <div class="font-mono text-sm" th:text="${mapping.skuCode}">SKU-001</div>
+                            <div class="text-xs text-base-content/60" th:text="${mapping.skuName}">상품명</div>
+                        </td>
+                        <td>
+                            <span th:if="${mapping.active}" class="badge badge-success badge-sm">사용</span>
+                            <span th:unless="${mapping.active}" class="badge badge-ghost badge-sm">해제</span>
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-2">
+                                <form th:action="@{/mappings/{id}/reconnect(id=${mapping.id})}" method="post"
+                                      class="flex items-center gap-1">
+                                    <select name="skuId" required
+                                            class="select select-bordered select-xs w-52"
+                                            th:aria-label="'SKU 변경 — ' + ${mapping.channelProductName}">
+                                        <option th:each="sku : ${skus}"
+                                                th:value="${sku.id}"
+                                                th:selected="${sku.id == mapping.skuId}"
+                                                th:text="${sku.code} + ' — ' + ${sku.name}">SKU</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-xs">변경</button>
+                                </form>
+
+                                <form th:if="${mapping.active}"
+                                      th:action="@{/mappings/{id}/deactivate(id=${mapping.id})}" method="post">
+                                    <button type="submit" class="btn btn-xs btn-outline btn-error">해제</button>
+                                </form>
+                                <form th:unless="${mapping.active}"
+                                      th:action="@{/mappings/{id}/activate(id=${mapping.id})}" method="post">
+                                    <button type="submit" class="btn btn-xs btn-outline">다시 사용</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="text-xs text-base-content/60 mt-3">
+                해제하면 이후 수집되는 주문은 미매핑으로 저장됩니다. 이미 반영된 재고는 되돌리지 않습니다.
+            </p>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

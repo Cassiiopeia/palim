@@ -72,3 +72,6 @@ coverage/
 .coverage
 .pytest_cache/
 htmlcov/
+
+# 사내 Redmine·pad 참고 자료 (내부 캡처 포함) — PUBLIC 레포이므로 절대 커밋하지 않는다
+docs/somansa/
