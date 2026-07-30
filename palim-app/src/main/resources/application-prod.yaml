@@ -4,11 +4,11 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
 
-  rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER}
-    password: ${RABBITMQ_PASSWORD}
+server:
+  # Cloudflare Tunnel 이 HTTPS 를 종단하고 X-Forwarded-* 를 붙인다. 이 설정이 있어야 감사
+  # 로그의 IP 가 프록시 주소가 아닌 실제 클라이언트 IP 로 남는다 (07-DECISIONS 020).
+  # 프록시 없이 직접 노출하는 환경에서는 켜면 안 된다 — 클라이언트가 IP 를 위조할 수 있다.
+  forward-headers-strategy: framework
 
 logging:
   level:

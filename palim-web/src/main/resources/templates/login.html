@@ -20,11 +20,21 @@
             <p class="text-sm text-base-content/60">다채널 판매 알림·재고 관리</p>
         </div>
 
+        <!--/*
+          실패 메시지는 원인을 구분하지 않는다 — 없는 아이디·비밀번호 틀림·잠긴 계정을 구분해
+          보여주면 응답 차이로 유효한 아이디가 새어나간다. 구분은 감사 로그에만 남는다.
+        */-->
         <div th:if="${param.error}" class="alert alert-error" role="alert">
-            <span>아이디 또는 비밀번호가 올바르지 않습니다.</span>
+            <span>로그인에 실패했습니다. 입력 정보를 확인하세요.</span>
         </div>
         <div th:if="${param.logout}" class="alert alert-info" role="status">
             <span>로그아웃되었습니다.</span>
+        </div>
+        <div th:if="${param.expired}" class="alert alert-warning" role="alert">
+            <span>다른 곳에서 로그인되어 접속이 종료됐습니다. 본인이 아니라면 비밀번호를 변경하세요.</span>
+        </div>
+        <div th:if="${param.cancelled}" class="alert alert-info" role="status">
+            <span>로그인을 취소했습니다. 기존 접속은 유지됩니다.</span>
         </div>
 
         <!--/* Thymeleaf 가 CSRF 토큰을 자동으로 넣는다. */-->

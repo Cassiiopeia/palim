@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--/*
+  중복 로그인 확인 (Redmine #208170 알림창 대응).
+
+  로그인 화면과 같은 독립 레이아웃 — 아직 인증되지 않은 상태라 사이드바 레이아웃을 쓰지 않는다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palim · 중복 로그인</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+
+<div class="card bg-base-100 shadow-lg w-full max-w-md">
+    <div class="card-body">
+        <h1 class="card-title text-lg">현재 다른 곳에서 로그인돼 있습니다</h1>
+
+        <div class="alert alert-warning mt-2">
+            <div>
+                <p>기존 접속을 종료하고 새로 로그인하시겠습니까?</p>
+                <p class="font-mono text-sm mt-1">
+                    IP: <span th:text="${existingIp}">0.0.0.0</span>
+                </p>
+                <p th:if="${existingSessions > 1}" class="text-sm mt-1"
+                   th:text="'접속 ' + ${existingSessions} + '건이 모두 종료됩니다.'"></p>
+            </div>
+        </div>
+
+        <p class="text-sm text-base-content/60 mt-2">
+            본인의 접속이 아니라면 비밀번호가 유출됐을 수 있습니다.
+            로그인 후 감사 로그를 확인하고 비밀번호를 변경하세요.
+        </p>
+
+        <div class="card-actions justify-end mt-4 gap-2">
+            <form th:action="@{/login/duplicate/cancel}" method="post">
+                <button type="submit" class="btn btn-ghost">취소</button>
+            </form>
+            <form th:action="@{/login/duplicate}" method="post">
+                <button type="submit" class="btn btn-primary">기존 접속 종료 후 로그인</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

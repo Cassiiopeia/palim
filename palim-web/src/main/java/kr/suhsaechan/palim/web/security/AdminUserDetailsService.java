@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.web.security;
 
+import java.time.Instant;
 import kr.suhsaechan.palim.auth.AdminAccount;
 import kr.suhsaechan.palim.auth.AdminAccountService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,10 @@ public class AdminUserDetailsService implements UserDetailsService {
         return User.withUsername(account.getUsername())
                 .password(account.getPasswordHash())
                 .disabled(!account.isEnabled())
+                // 잠금을 여기서 반영해야 실제로 로그인이 막힌다. 실패 횟수만 세고 이 플래그를
+                // 빠뜨리면 카운트는 올라가는데 비밀번호가 맞으면 그대로 들어와, 잠금 기능이
+                // 있는 줄 알면서 아무 것도 막지 못하는 상태가 된다.
+                .accountLocked(account.isLocked(Instant.now()))
                 .authorities(ROLE_ADMIN)
                 .build();
     }

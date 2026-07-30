@@ -93,6 +93,17 @@ palim:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:}
 
+  auth:
+    # 연속 로그인 실패가 이 횟수에 도달하면 계정을 잠근다. 성공하면 카운트가 초기화된다.
+    max-login-failure: 5
+    lock-duration: 10m
+    # 중복 로그인 확인 대기 유효시간. 확인창을 띄워둔 채 방치하면 만료된다.
+    pending-login-timeout: 2m
+
+  audit:
+    # 감사 로그 보존 일수. 조회 기록까지 남으므로 정리하지 않으면 디스크가 먼저 찬다.
+    retention-days: 365
+
 server:
   servlet:
     session:
