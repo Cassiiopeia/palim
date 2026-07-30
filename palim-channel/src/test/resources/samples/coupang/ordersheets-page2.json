@@ -1,0 +1,27 @@
+{
+  "code": 200,
+  "message": "OK",
+  "nextToken": "",
+  "data": [
+    {
+      "orderId": 4000000003,
+      "orderedAt": "2026-07-29T16:20:45",
+      "ordererName": "박구매",
+      "totalPaidAmount": 12000,
+      "status": "ACCEPT",
+      "unknownFutureField": "쿠팡이 필드를 추가해도 파싱이 깨지지 않아야 한다",
+      "orderItems": [
+        {
+          "vendorItemPackageId": 900000004,
+          "productId": 700000004,
+          "vendorItemId": 800000004,
+          "vendorItemName": "마지막 페이지 상품",
+          "shippingCount": 1,
+          "salesPrice": 12000,
+          "orderPrice": 12000,
+          "anotherUnknownField": 12345
+        }
+      ]
+    }
+  ]
+}

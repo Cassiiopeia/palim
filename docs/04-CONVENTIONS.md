@@ -51,6 +51,15 @@ OffsetDateTime from = targetDate.atStartOfDay(BUSINESS_ZONE).toOffsetDateTime();
 
 여러 도메인에 걸친 조회는 전부 `JdbcClient` 를 쓰므로(02-ARCHITECTURE 규칙 3) **화면용 조회에서도 같은 문제를 만난다.**
 
+### Jackson 3 은 패키지를 부분만 옮겼다
+
+| 대상 | 패키지 |
+|---|---|
+| `ObjectMapper`, `JacksonException` | **`tools.jackson.databind` / `tools.jackson.core`** |
+| 애노테이션 (`@JsonIgnoreProperties` 등) | `com.fasterxml.jackson.annotation` (**그대로**) |
+
+애노테이션까지 `tools.jackson` 으로 바꾸면 컴파일이 깨진다. 예외는 unchecked 이므로 `JacksonException` 을 잡는다.
+
 ### PostgreSQL 의 `count`·`sum` 은 `bigint` 다
 
 `record` 컴포넌트가 `int` 면 매핑이 실패한다. SQL 에서 명시 캐스팅한다.
