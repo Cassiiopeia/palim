@@ -1,3 +1,12 @@
+# 운영 설정 템플릿.
+#
+# 실제 application-prod.yaml 은 gitignore 대상이다 — 이 저장소는 PUBLIC 이다.
+# 배포 시 이 파일을 복사해 application-prod.yaml 을 만들고, 값은 환경변수로 주입한다
+# (GitHub Actions 에서는 Secrets → env). 여기에는 플레이스홀더 외 실제 값을 절대 쓰지 않는다.
+#
+# 필요한 환경변수: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
+#                  PALIM_CRYPTO_MASTER_KEY, ADMIN_USERNAME, ADMIN_PASSWORD, TELEGRAM_BOT_TOKEN
+
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}

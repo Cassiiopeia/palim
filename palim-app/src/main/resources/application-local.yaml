@@ -4,12 +4,6 @@ spring:
     username: palim
     password: palim
 
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: palim
-    password: palim
-
   jpa:
     properties:
       hibernate:
