@@ -1,0 +1,150 @@
+# 09. 보안 설계
+
+사내 보안 제품(CM · DLPCenter, CC 인증 브랜치 포함)의 보안 요소를 전수 검토해 Palim 에 맞게
+재설계한 결과다. **개념은 가져오되 레거시 구현은 이식하지 않는다** — 레거시가 그 방식을 쓰는
+이유(HTTP 내부망, 2010년대 JDK)가 Palim 에는 없기 때문이다.
+
+각 항목은 `채택 / 대체 / 거부` 로 판정하고 근거를 남긴다. 판정을 바꾸면 이 문서를 먼저 고친다.
+
+## 위협 모델
+
+Palim 이 지켜야 하는 것과 공격면:
+
+| 자산 | 뚫리면 |
+|---|---|
+| 채널 API 인증정보 | 공격자가 발주자의 판매 채널을 통제한다 — 최악 |
+| 관리자 세션 | 재고 조작 → 오버셀·품절 위장, 인증정보 교체 |
+| 재고·주문 데이터 | 매출 정보 유출, 재고 신뢰 상실 |
+| 텔레그램 chat_id·봇 토큰 | 가짜 알림 주입, 알림 가로채기 |
+
+공격면: Cloudflare Tunnel 로 **인터넷에 노출된 관리자 화면** 하나. DB·내부 포트는 노출하지
+않는다(06-OPERATIONS).
+
+## 전송 계층 암호화 — 레거시 RSA 를 거부한다
+
+**거부** — CM 의 로그인 비밀번호 RSA 암호화 (`Encrypt.initRSABySession`, `decryptToRSA`)
+
+CM 은 로그인 폼에서 비밀번호를 JavaScript RSA 로 암호화해 전송한다. 내부망 HTTP 운영이라
+TLS 가 없어서 생긴 보완책인데, 두 가지 문제가 있다:
+
+1. `Cipher.getInstance("RSA")` 는 PKCS#1 v1.5 패딩이다 — 패딩 오라클 공격에 취약하다
+2. 비밀번호만 암호화될 뿐 세션 쿠키·CSRF 토큰·나머지 전부가 평문으로 흐른다
+
+**Palim 은 TLS 가 전 구간을 덮는다.** Cloudflare Tunnel 이 HTTPS 를 종단하고, HSTS(1년,
+includeSubDomains)로 다운그레이드를 막는다. 애플리케이션 계층 암호화를 중복 구현하지 않는다
+— 잘못 구현한 암호화는 없는 것보다 위험하다.
+
+## 저장 암호화 — 레거시 알고리즘을 대체한다
+
+**대체** — DLPCenter 의 `CryptoDES`(DES), `Encrypt`(AES/CBC + 하드코딩 키, MD5·SHA-1)
+
+| 레거시 | 문제 | Palim |
+|---|---|---|
+| DES | 56비트 키. 1998년에 이미 깨졌다 | 사용 안 함 |
+| AES/CBC/PKCS5 | 패딩 오라클, 무결성 없음 | **AES-256-GCM** — 인증 암호화(변조 감지 내장) |
+| 소스에 하드코딩된 키 | 저장소 접근 = 키 유출 | 마스터키는 환경변수. 없으면 기동 실패 |
+| 고정 IV | 같은 평문 → 같은 암호문 | **암호화마다 새 nonce** 생성 |
+| MD5 · SHA-1 · SHA-512 단순 해시 비밀번호 | GPU 로 초당 수십억 회 대입 | **bcrypt** (`DelegatingPasswordEncoder` — 알고리즘 교체 가능) |
+
+구현: `ChannelCredentialService` (07-DECISIONS 014), `PasswordEncoderConfig`.
+
+## 인증 · 세션 (구현 완료 — #20)
+
+| 요소 | 출처 개념 | Palim 구현 |
+|---|---|---|
+| 동시 접속 제한(중복 로그인) | CM `AuthManager` | 확인 화면 + `SessionRegistry.expireNow()` + SSE 통보 (07-DECISIONS 019) |
+| 로그인 실패 잠금 | DLPCenter `cntPasswdErr` | 연속 N회 → 시각 기반 잠금(배치 불필요, 자동 해제) |
+| 계정 존재 비노출 | — (레거시는 구분 메시지를 준다) | 없는 아이디·비번 틀림·잠김 모두 같은 실패 메시지 |
+| 세션 고정 방지 | — | `migrateSession` + 중복 확인 후 세션 재발급 |
+| 감사 로그 | DLPCenter `AuditTrail` | DB 불변 기록, JSON 스냅샷, IP·UA 수집 (07-DECISIONS 018) |
+| 클라이언트 IP | — (레거시는 `getRemoteAddr` 뿐) | `ForwardedHeaderFilter` 위임, 기본 비신뢰 (07-DECISIONS 020) |
+
+## 웹 계층 방어 (구현 완료 — #19)
+
+| 방어 | 설정 |
+|---|---|
+| CSP | `default-src 'self'` — 인라인 스크립트·외부 CDN 없음. 빌드 산출물을 jar 에 포함하는 이유 |
+| CSRF | Spring Security 기본 활성. 모든 상태 변경은 POST |
+| 클릭재킹 | `frameOptions.deny()` + `frame-ancestors 'none'` |
+| MIME 스니핑 | `X-Content-Type-Options: nosniff` |
+| 세션 쿠키 | `HttpOnly`, `SameSite=Lax`, 유휴 2시간 만료 |
+| 출력 이스케이프 | Thymeleaf `th:text` 만 사용. `th:utext` 금지 — 감사 스냅샷 XSS 방어의 마지막 단 |
+
+## 데이터 최소화 — 개인정보를 애초에 저장하지 않는다
+
+**Palim 은 구매자 개인정보를 수집하지 않는다.** `OrderLine` 에는 채널 주문번호·상품·수량·금액만
+있고 수취인 이름·연락처·주소 컬럼이 없다. 재고 계산에 필요 없기 때문이다.
+
+이것이 DLPCenter 의 개인정보 마스킹(`PrivacyiCode`)보다 앞선 지점이다 — **마스킹은 저장한 것을
+가리는 기술이고, 저장하지 않으면 가릴 것도 유출될 것도 없다.** 개인정보보호법상 처리 대상도
+줄어든다.
+
+**이 원칙을 지켜라**: 채널 API 응답에 수취인 정보가 있어도 `ChannelOrder` 로 옮기지 않는다.
+배송 관리 기능이 요구되면 그때 별도 설계로 다룬다 — 암호화·보존기간·파기 절차가 함께 필요하다.
+
+## 로그 마스킹 (구현 필요 — 후속)
+
+**채택(변형)** — DLPCenter 는 개인정보 마스킹, Palim 은 **비밀값 마스킹**이 대상이다.
+
+저장하는 개인정보가 없으므로 로그에 새어나갈 개인정보도 없다. 대신 새어나갈 수 있는 것:
+
+| 유출 경로 | 방어 |
+|---|---|
+| 예외 스택트레이스에 API 키·토큰 포함 | logback 마스킹 컨버터 — `accessKey=***` 패턴 치환 |
+| HTTP 클라이언트 디버그 로그에 요청 헤더 | 운영 로그 레벨 INFO 고정, 헤더 로깅 금지 |
+| 감사 스냅샷에 비밀값 | `AuditSnapshots` 키 이름 기반 마스킹 (구현 완료) |
+| 텔레그램 봇 토큰이 URL 에 포함된 로그 | 봇 API 호출 실패 로그에서 URL 을 남기지 않는다 (`TelegramProperties` 사용처 점검) |
+
+설계: logback `MessageConverter` 확장 하나로 패턴(`(?i)(token|key|secret|password)=\S+`)을
+치환한다. `ChannelCredentialService` 경계 규칙(CLAUDE.md 7)의 로그 계층 버전이다.
+
+## 공급망 · 정적 분석 (구현 필요 — 후속)
+
+사내 프로세스(SBOM 취합, Sparrow 정적 분석, 취약점 취합)를 GitHub 네이티브 도구로 대응한다.
+Palim 은 1인 유지보수라 **결과를 사람이 취합하는 프로세스가 아니라 자동으로 PR·알림이 오는
+구조**여야 한다.
+
+| 사내 프로세스 | Palim 대응 | 방식 |
+|---|---|---|
+| SBOM 산출 | **CycloneDX Gradle 플러그인** | 빌드 시 `bom.json` 생성, 릴리스 아티팩트에 포함 |
+| 취약 의존성 취합 | **Dependabot** | `.github/dependabot.yml` — 주간 스캔, 취약점 PR 자동 생성 |
+| Sparrow 정적 분석 | **CodeQL** | GitHub Actions 워크플로, PR 마다 실행 |
+| 시크릿 유출 점검 | **GitHub secret scanning + push protection** | 저장소 설정 활성화 |
+
+주의: 이 저장소는 **PUBLIC** 이다. 사내 참고 자료(`docs/somansa/`)는 gitignore 로 차단되어
+있고, 커밋 전 시크릿 유출은 push protection 이 마지막 방어선이다.
+
+## 접속 허용 IP 범위 (구현 보류)
+
+**보류** — DLPCenter `Admin.userIPFrom/To` 개념.
+
+Cloudflare Tunnel 뒤에서는 애플리케이션보다 **Cloudflare Access 정책**(국가·IP 제한)이 맞는
+자리다. 애플리케이션에 구현하면 `X-Forwarded-For` 신뢰 문제를 다시 떠안는다. 발주자가 고정
+IP 를 쓰는지 확인된 뒤(P-02 인증정보 전달 시점) Cloudflare 설정으로 처리한다.
+
+## 비밀번호 정책 (구현 필요 — 후속)
+
+**채택(축소)** — DLPCenter `AdminPasswordValidator` 개념.
+
+레거시는 검사 11종(키보드 배열 연속 입력까지)이지만, NIST SP 800-63B 는 복잡성 규칙보다
+**길이와 유출 목록 차단**을 권한다. Palim 채택:
+
+1. 최소 12자 (레거시식 "대문자+소문자+숫자+특수문자 각 1개" 강제는 하지 않는다)
+2. 아이디 포함 금지
+3. 동일 문자 4회 이상 반복 금지
+4. 변경 시 현재 비밀번호 재확인
+
+비밀번호 변경 화면(현재 미구현)과 함께 구현한다. 변경은 감사 로그 대상이다.
+
+## 구현 현황 요약
+
+| 영역 | 상태 |
+|---|---|
+| TLS·HSTS·CSP·CSRF·세션 방어 | 완료 (#19) |
+| 저장 암호화(AES-GCM)·bcrypt | 완료 |
+| 감사 로그·중복 로그인·잠금·IP 수집 | 완료 (#20) |
+| 데이터 최소화 | 완료 (설계 자체) |
+| 로그 마스킹 | **후속 이슈** |
+| SBOM·Dependabot·CodeQL·secret scanning | **후속 이슈** |
+| 비밀번호 정책 + 변경 화면 | **후속 이슈** |
+| 접속 IP 제한 | 보류 — Cloudflare Access 로, P-02 이후 |

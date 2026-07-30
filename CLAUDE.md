@@ -14,6 +14,7 @@
 | 배포·설정·보안 | `docs/06-OPERATIONS.md` |
 | **"왜 이렇게 되어 있나"** | `docs/07-DECISIONS.md` |
 | 다음에 할 일 | `docs/08-ROADMAP.md` |
+| 인증·암호화·감사·공급망 보안 | `docs/09-SECURITY.md` |
 
 ---
 
