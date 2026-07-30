@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
-import kr.suhsaechan.palim.common.exception.DuplicateException;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
-import kr.suhsaechan.palim.sku.InsufficientStockException;
 import kr.suhsaechan.palim.sku.Sku;
 import kr.suhsaechan.palim.sku.SkuService;
 import kr.suhsaechan.palim.sku.StockChangeReason;
@@ -86,13 +86,20 @@ class SkuServiceIntegrationTest extends IntegrationTest {
         assertThat(skuService.findMovements(sku.getId())).hasSize(6);
     }
 
+    /**
+     * 판매 차감은 오버셀링을 허용한다. 음수 재고 상태에서도 대조가 성립해야 한다 —
+     * 성립하지 않으면 오버셀링이 발생할 때마다 대조 배치가 거짓 경고를 낸다.
+     */
     @Test
-    @DisplayName("재고보다 많이 차감하면 거부되고 이력도 남지 않는다")
-    void 재고_부족_시_거부된다() {
+    @DisplayName("오버셀링이 발생해도 대조가 일치한다")
+    void 오버셀링_후에도_대조가_일치한다() {
         Sku sku = 등록("SVC-SKU-4", 2, 5);
 
-        assertThatThrownBy(() -> skuService.decreaseForSale(sku.getId(), 3, UuidV7.generate()))
-                .isInstanceOf(InsufficientStockException.class);
+        boolean oversold = skuService.decreaseForSale(sku.getId(), 3, UuidV7.generate());
+
+        assertThat(oversold).isTrue();
+        assertThat(skuService.getById(sku.getId()).getQuantity()).isEqualTo(-1);
+        assertThat(skuService.isConsistent(sku.getId())).isTrue();
     }
 
     @Test
@@ -101,7 +108,9 @@ class SkuServiceIntegrationTest extends IntegrationTest {
         등록("SVC-SKU-5", 10, 5);
 
         assertThatThrownBy(() -> 등록("SVC-SKU-5", 20, 5))
-                .isInstanceOf(DuplicateException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.SKU_CODE_DUPLICATE);
     }
 
     @Test

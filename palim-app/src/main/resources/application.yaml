@@ -25,6 +25,21 @@ spring:
     virtual:
       enabled: true
 
+  messages:
+    # 에러 메시지는 errors.properties(한국어) / errors_en.properties(영문) 두 파일에 모은다.
+    # 새 ErrorCode 를 추가하면 두 파일에 한 줄씩 더하면 되고, 이 설정은 손대지 않는다.
+    basename: errors
+    encoding: UTF-8
+    # 키가 없으면 예외 대신 키를 반환한다. 누락은 ErrorCodeIntegrationTest 가 잡는다.
+    use-code-as-default-message: true
+    # 반드시 false 여야 한다.
+    #
+    # MessageSource 는 "요청 로케일 → 시스템 로케일 → 기본 번들" 순으로 찾는다. 이 값이 true 면
+    # ko 요청에 errors_ko.properties 가 없을 때 시스템 로케일로 넘어가는데, 서버 로케일이 en 이면
+    # 한국어를 요청했는데 영문이 나간다. 즉 배포 환경의 OS 설정이 사용자에게 보이는 언어를 바꾼다.
+    # false 로 두면 시스템 로케일을 건너뛰고 기본 번들(한국어)로 떨어진다.
+    fallback-to-system-locale: false
+
 palim:
   crypto:
     # 채널 API 인증정보 AES-GCM 마스터키 (설계서 6.2)

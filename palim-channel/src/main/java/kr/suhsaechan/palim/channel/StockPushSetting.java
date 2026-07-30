@@ -8,6 +8,8 @@ import jakarta.persistence.Version;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -82,7 +84,7 @@ public class StockPushSetting extends BaseTimeEntity {
 
     public void changeMaxDeltaPerPush(int maxDelta) {
         if (maxDelta <= 0) {
-            throw new IllegalArgumentException("변동량 상한은 1 이상이어야 합니다: " + maxDelta);
+            throw new BusinessException(ErrorCode.INVALID_MAX_DELTA, maxDelta);
         }
         this.maxDeltaPerPush = maxDelta;
     }

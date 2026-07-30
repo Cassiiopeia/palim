@@ -12,6 +12,8 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -84,7 +86,7 @@ public class Channel extends BaseTimeEntity {
      */
     public static Channel register(ChannelCode code, int collectIntervalSeconds) {
         if (collectIntervalSeconds <= 0) {
-            throw new IllegalArgumentException("수집 주기는 1초 이상이어야 합니다: " + collectIntervalSeconds);
+            throw new BusinessException(ErrorCode.INVALID_COLLECT_INTERVAL, collectIntervalSeconds);
         }
         return new Channel(code, code.displayName(), collectIntervalSeconds);
     }
@@ -99,7 +101,7 @@ public class Channel extends BaseTimeEntity {
 
     public void changeCollectInterval(int seconds) {
         if (seconds <= 0) {
-            throw new IllegalArgumentException("수집 주기는 1초 이상이어야 합니다: " + seconds);
+            throw new BusinessException(ErrorCode.INVALID_COLLECT_INTERVAL, seconds);
         }
         this.collectIntervalSeconds = seconds;
     }

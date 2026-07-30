@@ -1,6 +1,7 @@
 package kr.suhsaechan.palim.channel;
 
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -31,8 +32,8 @@ public class StockPushSettingService {
     @Transactional(readOnly = true)
     public StockPushSetting get() {
         return stockPushSettingRepository.findFirstByOrderByCreatedAtAsc()
-                .orElseThrow(() -> new NotFoundException(
-                        "재고 전송 설정이 초기화되지 않았습니다. 부트스트랩 초기화를 확인하세요."));
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.STOCK_PUSH_SETTING_NOT_INITIALIZED));
     }
 
     /** 전체 중단 스위치. 사고 발생 시 가장 먼저 눌러야 하는 스위치다. */

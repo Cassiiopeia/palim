@@ -1,5 +1,7 @@
 package kr.suhsaechan.palim.auth;
 
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -44,10 +46,7 @@ public class AdminAccountBootstrap implements ApplicationRunner {
         }
 
         if (rawPassword == null || rawPassword.isBlank()) {
-            throw new IllegalStateException(
-                    "관리자 계정 '%s' 이 없고 초기 비밀번호도 지정되지 않았습니다. "
-                            .formatted(username)
-                            + "환경변수 ADMIN_PASSWORD 를 지정하고 다시 기동하세요.");
+            throw new BusinessException(ErrorCode.ADMIN_PASSWORD_REQUIRED, username);
         }
 
         adminAccountService.createIfAbsent(username, rawPassword);

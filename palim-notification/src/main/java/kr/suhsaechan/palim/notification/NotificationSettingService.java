@@ -1,7 +1,8 @@
 package kr.suhsaechan.palim.notification;
 
 import java.time.LocalTime;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,8 +30,8 @@ public class NotificationSettingService {
     @Transactional(readOnly = true)
     public NotificationSetting get() {
         return notificationSettingRepository.findFirstByOrderByCreatedAtAsc()
-                .orElseThrow(() -> new NotFoundException(
-                        "알림 설정이 초기화되지 않았습니다. 부트스트랩 초기화를 확인하세요."));
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOTIFICATION_SETTING_NOT_INITIALIZED));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

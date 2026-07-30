@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import java.util.Base64;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,7 +59,9 @@ class CredentialCipherTest {
         CredentialCipher otherCipher = new CredentialCipher(OTHER_KEY);
 
         assertThatThrownBy(() -> otherCipher.decrypt(encrypted))
-                .isInstanceOf(CredentialCipherException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CREDENTIAL_DECRYPT_FAILED);
     }
 
     @Test
@@ -69,7 +73,9 @@ class CredentialCipherTest {
         String tampered = Base64.getEncoder().encodeToString(raw);
 
         assertThatThrownBy(() -> cipher.decrypt(tampered))
-                .isInstanceOf(CredentialCipherException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CREDENTIAL_DECRYPT_FAILED);
     }
 
     @Test
@@ -97,6 +103,6 @@ class CredentialCipherTest {
         String tooShort = Base64.getEncoder().encodeToString(new byte[8]);
 
         assertThatThrownBy(() -> cipher.decrypt(tooShort))
-                .isInstanceOf(CredentialCipherException.class);
+                .isInstanceOf(BusinessException.class);
     }
 }

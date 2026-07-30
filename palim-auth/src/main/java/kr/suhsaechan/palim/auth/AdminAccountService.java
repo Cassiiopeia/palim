@@ -1,7 +1,8 @@
 package kr.suhsaechan.palim.auth;
 
 import java.util.Optional;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,7 @@ public class AdminAccountService {
     @Transactional(readOnly = true)
     public AdminAccount getByUsername(String username) {
         return adminAccountRepository.findByUsername(username)
-                .orElseThrow(() -> NotFoundException.of("관리자 계정", username));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ADMIN_ACCOUNT_NOT_FOUND, username));
     }
 
     @Transactional(readOnly = true)
