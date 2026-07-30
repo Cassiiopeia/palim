@@ -25,6 +25,21 @@ spring:
     virtual:
       enabled: true
 
+  messages:
+    # 에러 메시지는 각 도메인 모듈이 소유한다. 새 도메인을 추가하면 여기에 한 줄만 더한다.
+    # 파일명이 달라 classpath 병합 시 충돌하지 않는다.
+    basename: >-
+      errors/common,
+      errors/sku,
+      errors/order,
+      errors/mapping,
+      errors/channel,
+      errors/notification,
+      errors/auth
+    encoding: UTF-8
+    # 키가 없으면 예외 대신 ErrorCode 이름을 반환한다. 누락은 검증 테스트가 잡는다.
+    use-code-as-default-message: true
+
 palim:
   crypto:
     # 채널 API 인증정보 AES-GCM 마스터키 (설계서 6.2)

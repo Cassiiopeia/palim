@@ -11,6 +11,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -109,7 +110,7 @@ public class OrderLine extends BaseTimeEntity {
                                     String channelProductName, UUID skuId,
                                     int quantity, long unitPrice, long amount) {
         if (quantity <= 0) {
-            throw new IllegalArgumentException("주문 수량은 1 이상이어야 합니다: " + quantity);
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_QUANTITY, quantity);
         }
         return OrderLine.builder()
                 .orderId(orderId)
@@ -139,7 +140,7 @@ public class OrderLine extends BaseTimeEntity {
     /** 매핑 완료 후 SKU를 연결한다 (F-04 소급 반영). */
     public void assignSku(UUID skuId) {
         if (skuId == null) {
-            throw new IllegalArgumentException("연결할 SKU 식별자가 없습니다");
+            throw new BusinessException(OrderErrorCode.SKU_ID_REQUIRED);
         }
         this.skuId = skuId;
     }

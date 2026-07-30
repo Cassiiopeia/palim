@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -55,8 +55,8 @@ public class ChannelCredentialService {
     @Transactional(readOnly = true)
     public String get(ChannelCode channelCode, String credentialKey) {
         return find(channelCode, credentialKey)
-                .orElseThrow(() -> NotFoundException.of(
-                        "채널 인증정보", "%s / %s".formatted(channelCode, credentialKey)));
+                .orElseThrow(() -> new BusinessException(
+                        ChannelErrorCode.CHANNEL_CREDENTIAL_NOT_FOUND, channelCode, credentialKey));
     }
 
     /** 해당 채널의 전체 인증정보를 평문 맵으로 반환한다. */
@@ -80,7 +80,7 @@ public class ChannelCredentialService {
 
     private UUID channelIdOf(ChannelCode channelCode) {
         return channelRepository.findByCode(channelCode)
-                .orElseThrow(() -> NotFoundException.of("채널", channelCode))
+                .orElseThrow(() -> new BusinessException(ChannelErrorCode.CHANNEL_NOT_FOUND, channelCode))
                 .getId();
     }
 }

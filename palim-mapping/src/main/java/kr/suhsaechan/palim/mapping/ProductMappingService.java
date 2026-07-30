@@ -4,8 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
-import kr.suhsaechan.palim.common.exception.DuplicateException;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -44,7 +43,7 @@ public class ProductMappingService {
                                   String channelOptionNo, String channelProductName, UUID skuId) {
         productMappingRepository.findActiveBy(channelCode, channelProductNo, channelOptionNo)
                 .ifPresent(existing -> {
-                    throw DuplicateException.of("상품 매핑",
+                    throw new BusinessException(MappingErrorCode.PRODUCT_MAPPING_DUPLICATE,
                             "%s / %s".formatted(channelCode, channelProductNo));
                 });
         return productMappingRepository.save(ProductMapping.connect(
@@ -75,7 +74,7 @@ public class ProductMappingService {
     @Transactional(readOnly = true)
     public ProductMapping get(UUID mappingId) {
         return productMappingRepository.findById(mappingId)
-                .orElseThrow(() -> NotFoundException.of("상품 매핑", mappingId));
+                .orElseThrow(() -> new BusinessException(MappingErrorCode.PRODUCT_MAPPING_NOT_FOUND, mappingId));
     }
 
     @Transactional(readOnly = true)

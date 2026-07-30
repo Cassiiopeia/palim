@@ -8,6 +8,7 @@ import jakarta.persistence.Version;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -52,17 +53,17 @@ public class AdminAccount extends BaseTimeEntity {
 
     public static AdminAccount create(String username, String encodedPassword) {
         if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("사용자명이 비어 있습니다");
+            throw new BusinessException(AuthErrorCode.INVALID_USERNAME);
         }
         if (encodedPassword == null || encodedPassword.isBlank()) {
-            throw new IllegalArgumentException("인코딩된 비밀번호가 비어 있습니다");
+            throw new BusinessException(AuthErrorCode.INVALID_PASSWORD);
         }
         return new AdminAccount(username, encodedPassword);
     }
 
     public void changePassword(String encodedPassword) {
         if (encodedPassword == null || encodedPassword.isBlank()) {
-            throw new IllegalArgumentException("인코딩된 비밀번호가 비어 있습니다");
+            throw new BusinessException(AuthErrorCode.INVALID_PASSWORD);
         }
         this.passwordHash = encodedPassword;
     }

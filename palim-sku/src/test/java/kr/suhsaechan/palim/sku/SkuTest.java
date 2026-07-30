@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.sku;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import kr.suhsaechan.palim.common.error.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,17 @@ class SkuTest {
         @Test
         void 초기_재고가_음수면_거부한다() {
             assertThatThrownBy(() -> Sku.register("SKU-001", "상품", -1, 5))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(SkuErrorCode.INVALID_STOCK_AMOUNT);
         }
 
         @Test
         void 안전재고_임계치가_음수면_거부한다() {
             assertThatThrownBy(() -> Sku.register("SKU-001", "상품", 10, -1))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(SkuErrorCode.INVALID_SAFETY_THRESHOLD);
         }
 
         @Test
@@ -52,11 +57,29 @@ class SkuTest {
         }
 
         @Test
-        void 재고보다_많이_차감하면_거부한다() {
+        void 수동_차감은_재고보다_많으면_거부한다() {
             Sku sku = sku(2, 5);
 
             assertThatThrownBy(() -> sku.decrease(3))
-                    .isInstanceOf(InsufficientStockException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(SkuErrorCode.INSUFFICIENT_STOCK);
+        }
+
+        /**
+         * 판매 차감은 음수를 허용한다. 주문 저장을 실패시키면 데이터가 유실되고,
+         * 재고를 반영하지 않으면 소급 반영 대상으로 무한 재시도되기 때문이다.
+         */
+        @Test
+        void 판매_차감은_음수_재고를_허용한다() {
+            Sku sku = sku(2, 5);
+
+            boolean oversold = sku.decreaseForSale(3);
+
+            assertThat(oversold).isTrue();
+            assertThat(sku.getQuantity()).isEqualTo(-1);
+            assertThat(sku.isOversold()).isTrue();
+            assertThat(sku.isOutOfStock()).isTrue();
         }
 
         @Test
@@ -73,8 +96,9 @@ class SkuTest {
         void 차감_수량이_0_이하면_거부한다() {
             Sku sku = sku(10, 5);
 
-            assertThatThrownBy(() -> sku.decrease(0)).isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> sku.decrease(-1)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> sku.decrease(0)).isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> sku.decrease(-1)).isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> sku.decreaseForSale(0)).isInstanceOf(BusinessException.class);
         }
     }
 
@@ -110,7 +134,7 @@ class SkuTest {
         void 음수로_조정하면_거부한다() {
             Sku sku = sku(10, 5);
 
-            assertThatThrownBy(() -> sku.adjustTo(-1)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> sku.adjustTo(-1)).isInstanceOf(BusinessException.class);
         }
     }
 }

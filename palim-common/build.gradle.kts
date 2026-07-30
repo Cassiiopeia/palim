@@ -8,6 +8,10 @@ dependencies {
     // BaseTimeEntity 가 JPA 애너테이션을 사용하므로 하위 모듈에 전파한다.
     api("org.springframework.boot:spring-boot-starter-data-jpa")
 
+    // ErrorCode 가 HttpStatus 를 표현한다. 도메인이 자기 실패의 HTTP 의미를 아는 편이
+    // 화면 계층에서 예외마다 상태 코드를 판단하는 것보다 낫다.
+    api("org.springframework:spring-web")
+
     // UUIDv7 (설계서 4.1)
     api("com.fasterxml.uuid:java-uuid-generator:5.2.0")
 

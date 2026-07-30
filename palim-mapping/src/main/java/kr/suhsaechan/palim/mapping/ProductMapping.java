@@ -11,6 +11,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -74,7 +75,7 @@ public class ProductMapping extends BaseTimeEntity {
     public static ProductMapping connect(ChannelCode channelCode, String channelProductNo,
                                          String channelOptionNo, String channelProductName, UUID skuId) {
         if (skuId == null) {
-            throw new IllegalArgumentException("연결할 SKU 식별자가 없습니다");
+            throw new BusinessException(MappingErrorCode.SKU_ID_REQUIRED);
         }
         return ProductMapping.builder()
                 .channelCode(channelCode)
@@ -88,7 +89,7 @@ public class ProductMapping extends BaseTimeEntity {
     /** 다른 SKU로 다시 연결한다. */
     public void reconnect(UUID skuId) {
         if (skuId == null) {
-            throw new IllegalArgumentException("연결할 SKU 식별자가 없습니다");
+            throw new BusinessException(MappingErrorCode.SKU_ID_REQUIRED);
         }
         this.skuId = skuId;
     }

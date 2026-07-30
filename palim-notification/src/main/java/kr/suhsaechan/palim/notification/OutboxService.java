@@ -3,7 +3,7 @@ package kr.suhsaechan.palim.notification;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -92,7 +92,7 @@ public class OutboxService {
     @Transactional(readOnly = true)
     public NotificationOutbox get(UUID outboxId) {
         return notificationOutboxRepository.findById(outboxId)
-                .orElseThrow(() -> NotFoundException.of("알림", outboxId));
+                .orElseThrow(() -> new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND, outboxId));
     }
 
     /**
@@ -105,8 +105,8 @@ public class OutboxService {
         try {
             return objectMapper.readValue(outbox.getPayload(), type);
         } catch (JacksonException e) {
-            throw new IllegalStateException(
-                    "알림 payload 를 해석할 수 없습니다: " + outbox.getId(), e);
+            throw new BusinessException(
+                    NotificationErrorCode.PAYLOAD_DESERIALIZE_FAILED, e, outbox.getId());
         }
     }
 
@@ -117,7 +117,7 @@ public class OutboxService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JacksonException e) {
-            throw new IllegalArgumentException("알림 payload 직렬화에 실패했습니다", e);
+            throw new BusinessException(NotificationErrorCode.PAYLOAD_SERIALIZE_FAILED, e);
         }
     }
 }

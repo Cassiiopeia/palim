@@ -4,8 +4,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
-import kr.suhsaechan.palim.common.exception.DuplicateException;
-import kr.suhsaechan.palim.common.exception.NotFoundException;
+import kr.suhsaechan.palim.common.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -48,7 +47,7 @@ public class SkuService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Sku register(String code, String name, int initialQuantity, int safetyThreshold) {
         if (skuRepository.existsByCode(code)) {
-            throw DuplicateException.of("SKU", code);
+            throw new BusinessException(SkuErrorCode.SKU_CODE_DUPLICATE, code);
         }
         Sku sku = skuRepository.save(Sku.register(code, name, initialQuantity, safetyThreshold));
         stockMovementRepository.save(StockMovement.ofInitialStock(sku.getId(), initialQuantity));
@@ -79,13 +78,18 @@ public class SkuService {
     // 재고 변동 — 이력이 함께 기록된다
     // ------------------------------------------------------------------
 
-    /** 판매에 따른 차감. 재고가 부족하면 {@link InsufficientStockException} 이 발생한다. */
+    /**
+     * 판매에 따른 차감. 오버셀링 시 음수 재고를 허용한다.
+     *
+     * @return 이 차감으로 재고가 음수가 되었는지 여부. true 면 오버셀링 알림 대상이다
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void decreaseForSale(UUID skuId, int quantity, UUID orderLineId) {
+    public boolean decreaseForSale(UUID skuId, int quantity, UUID orderLineId) {
         Sku sku = lock(skuId);
-        sku.decrease(quantity);
+        boolean oversold = sku.decreaseForSale(quantity);
         stockMovementRepository.save(
                 StockMovement.ofSale(skuId, quantity, sku.getQuantity(), orderLineId));
+        return oversold;
     }
 
     /** 취소·반품에 따른 복원. */
@@ -134,13 +138,13 @@ public class SkuService {
     @Transactional(readOnly = true)
     public Sku getById(UUID skuId) {
         return skuRepository.findById(skuId)
-                .orElseThrow(() -> NotFoundException.of("SKU", skuId));
+                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, skuId));
     }
 
     @Transactional(readOnly = true)
     public Sku getByCode(String code) {
         return skuRepository.findByCode(code)
-                .orElseThrow(() -> NotFoundException.of("SKU", code));
+                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, code));
     }
 
     @Transactional(readOnly = true)
@@ -174,7 +178,7 @@ public class SkuService {
     @Transactional(readOnly = true)
     public double averageDailySales(UUID skuId, int days) {
         if (days <= 0) {
-            throw new IllegalArgumentException("기간은 1일 이상이어야 합니다: " + days);
+            throw new BusinessException(SkuErrorCode.INVALID_STOCK_AMOUNT, days);
         }
         Instant from = Instant.now().minus(days, ChronoUnit.DAYS);
         return (double) stockMovementRepository.sumSoldQuantitySince(skuId, from) / days;
@@ -190,6 +194,6 @@ public class SkuService {
      */
     private Sku lock(UUID skuId) {
         return skuRepository.findForUpdateById(skuId)
-                .orElseThrow(() -> NotFoundException.of("SKU", skuId));
+                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, skuId));
     }
 }
