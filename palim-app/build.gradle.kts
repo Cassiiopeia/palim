@@ -14,6 +14,10 @@ dependencies {
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
+    // Spring Boot 4 는 autoconfigure 를 기술별 모듈로 분리했다. Flyway 는 starter 가 없어서
+    // flyway-core 만 넣으면 자동 구성이 붙지 않고 마이그레이션이 조용히 실행되지 않는다.
+    // (Boot 3 에서는 flyway-core 존재만으로 감지됐다.)
+    implementation("org.springframework.boot:spring-boot-flyway")
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
