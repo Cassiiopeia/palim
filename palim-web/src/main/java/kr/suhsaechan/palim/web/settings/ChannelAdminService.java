@@ -3,10 +3,12 @@ package kr.suhsaechan.palim.web.settings;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import kr.suhsaechan.palim.audit.AuditType;
 import kr.suhsaechan.palim.channel.Channel;
 import kr.suhsaechan.palim.channel.ChannelCredentialService;
 import kr.suhsaechan.palim.channel.ChannelService;
 import kr.suhsaechan.palim.common.ChannelCode;
+import kr.suhsaechan.palim.web.audit.WebAuditRecorder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +41,11 @@ public class ChannelAdminService {
                     ChannelCode.SSG, List.of("apiKey"),
                     ChannelCode.LOTTE_DEPT, List.of()));
 
+    private static final String TARGET_TYPE = "CHANNEL";
+
     private final ChannelService channelService;
     private final ChannelCredentialService channelCredentialService;
+    private final WebAuditRecorder webAuditRecorder;
 
     @Transactional(readOnly = true)
     public List<ChannelSettingView> findAll() {
@@ -60,29 +65,58 @@ public class ChannelAdminService {
      *
      * <p>빈 값은 건너뛴다. 발주자가 일부 키만 갱신할 때 나머지를 지우지 않기 위함이다 —
      * 화면에 기존 값이 표시되지 않으므로 빈 입력란이 "지우기"로 해석되면 안 된다.
+     *
+     * <p>감사 로그에는 <b>바뀐 키 이름만</b> 남긴다. 값은 스냅샷에 넣지 않는다 — 넣더라도
+     * {@code AuditSnapshots} 가 키 이름 기준으로 마스킹하지만, 애초에 전달하지 않는 것이 경계다.
      */
     @Transactional
     public void updateCredentials(ChannelCode code, Map<String, String> plainValues) {
-        plainValues.forEach((key, value) -> {
-            if (value != null && !value.isBlank()) {
-                channelCredentialService.put(code, key, value.trim());
-            }
-        });
+        List<String> updatedKeys = plainValues.entrySet().stream()
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .map(Map.Entry::getKey)
+                .toList();
+
+        updatedKeys.forEach(key ->
+                channelCredentialService.put(code, key, plainValues.get(key).trim()));
+
+        if (!updatedKeys.isEmpty()) {
+            webAuditRecorder.recordChange(AuditType.CHANNEL_CREDENTIAL_UPDATE,
+                    TARGET_TYPE, code.name(),
+                    "%s 인증정보를 변경했습니다. (키: %s)".formatted(
+                            code.displayName(), String.join(", ", updatedKeys)),
+                    null,
+                    Map.of("updatedKeys", String.join(", ", updatedKeys)));
+        }
     }
 
     @Transactional
     public void enable(ChannelCode code) {
         channelService.enable(code);
+        recordToggle(code, true);
     }
 
     @Transactional
     public void disable(ChannelCode code) {
         channelService.disable(code);
+        recordToggle(code, false);
     }
 
     @Transactional
     public void changeCollectInterval(ChannelCode code, int seconds) {
+        int before = channelService.getByCode(code).getCollectIntervalSeconds();
         channelService.changeCollectInterval(code, seconds);
+
+        webAuditRecorder.recordChange(AuditType.CHANNEL_TOGGLE, TARGET_TYPE, code.name(),
+                "%s 수집 주기를 변경했습니다.".formatted(code.displayName()),
+                Map.of("collectIntervalSeconds", before),
+                Map.of("collectIntervalSeconds", seconds));
+    }
+
+    private void recordToggle(ChannelCode code, boolean enabled) {
+        webAuditRecorder.recordChange(AuditType.CHANNEL_TOGGLE, TARGET_TYPE, code.name(),
+                "%s 수집을 %s했습니다.".formatted(code.displayName(), enabled ? "활성화" : "비활성화"),
+                Map.of("enabled", !enabled),
+                Map.of("enabled", enabled));
     }
 
     private ChannelSettingView toView(Channel channel) {

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import kr.suhsaechan.palim.audit.AuditType;
 import kr.suhsaechan.palim.collector.OrderIngestionService;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.mapping.ProductMapping;
@@ -12,6 +13,7 @@ import kr.suhsaechan.palim.order.OrderLine;
 import kr.suhsaechan.palim.order.OrderService;
 import kr.suhsaechan.palim.sku.Sku;
 import kr.suhsaechan.palim.sku.SkuService;
+import kr.suhsaechan.palim.web.audit.WebAuditRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,10 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MappingAdminService {
 
+    private static final String TARGET_TYPE = "PRODUCT_MAPPING";
+
     private final ProductMappingService productMappingService;
     private final OrderService orderService;
     private final SkuService skuService;
     private final OrderIngestionService orderIngestionService;
+    private final WebAuditRecorder webAuditRecorder;
 
     /**
      * 채널별 매핑 목록.
@@ -105,28 +110,61 @@ public class MappingAdminService {
     @Transactional
     public int connect(ChannelCode channelCode, String channelProductNo, String channelOptionNo,
                        String channelProductName, UUID skuId) {
-        skuService.getById(skuId);   // 존재 검증은 조율 계층 책임 (palim-mapping 은 palim-sku 를 모른다)
+        Sku sku = skuService.getById(skuId);   // 존재 검증은 조율 계층 책임 (palim-mapping 은 palim-sku 를 모른다)
 
         productMappingService.connect(channelCode, channelProductNo,
                 blankToNull(channelOptionNo), channelProductName, skuId);
+
+        webAuditRecorder.recordChange(AuditType.MAPPING_CONNECT, TARGET_TYPE,
+                "%s/%s".formatted(channelCode, channelProductNo),
+                "매핑 등록 — %s %s → SKU %s".formatted(
+                        channelCode.displayName(), channelProductNo, sku.getCode()),
+                null,
+                Map.of("channel", channelCode.name(), "channelProductNo", channelProductNo,
+                        "sku", sku.getCode()));
 
         return reconcile(channelCode, channelProductNo, channelOptionNo);
     }
 
     @Transactional
     public void reconnect(UUID mappingId, UUID skuId) {
-        skuService.getById(skuId);
+        Sku sku = skuService.getById(skuId);
+        ProductMapping mapping = productMappingService.get(mappingId);
+        UUID beforeSkuId = mapping.getSkuId();
+
         productMappingService.reconnect(mappingId, skuId);
+
+        webAuditRecorder.recordChange(AuditType.MAPPING_RECONNECT, TARGET_TYPE,
+                "%s/%s".formatted(mapping.getChannelCode(), mapping.getChannelProductNo()),
+                "매핑 대상 변경 — %s %s → SKU %s".formatted(
+                        mapping.getChannelCode().displayName(),
+                        mapping.getChannelProductNo(), sku.getCode()),
+                Map.of("skuId", beforeSkuId.toString()),
+                Map.of("sku", sku.getCode()));
     }
 
     @Transactional
     public void deactivate(UUID mappingId) {
+        ProductMapping mapping = productMappingService.get(mappingId);
         productMappingService.deactivate(mappingId);
+
+        webAuditRecorder.recordChange(AuditType.MAPPING_DEACTIVATE, TARGET_TYPE,
+                "%s/%s".formatted(mapping.getChannelCode(), mapping.getChannelProductNo()),
+                "매핑 해제 — %s %s".formatted(
+                        mapping.getChannelCode().displayName(), mapping.getChannelProductNo()),
+                null, null);
     }
 
     @Transactional
     public void activate(UUID mappingId) {
+        ProductMapping mapping = productMappingService.get(mappingId);
         productMappingService.activate(mappingId);
+
+        webAuditRecorder.recordChange(AuditType.MAPPING_CONNECT, TARGET_TYPE,
+                "%s/%s".formatted(mapping.getChannelCode(), mapping.getChannelProductNo()),
+                "매핑 재사용 — %s %s".formatted(
+                        mapping.getChannelCode().displayName(), mapping.getChannelProductNo()),
+                null, null);
     }
 
     /**

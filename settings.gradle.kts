@@ -4,6 +4,7 @@ rootProject.name = "palim"
 include("palim-common")
 
 // 도메인 — 서로를 의존하지 않는다
+include("palim-audit")
 include("palim-auth")
 include("palim-sku")
 include("palim-order")

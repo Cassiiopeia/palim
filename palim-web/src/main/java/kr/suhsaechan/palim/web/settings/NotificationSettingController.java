@@ -1,11 +1,13 @@
 package kr.suhsaechan.palim.web.settings;
 
 import java.time.LocalTime;
+import kr.suhsaechan.palim.audit.AuditType;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.notification.NotificationSettingService;
 import kr.suhsaechan.palim.notification.OrderAlertMode;
 import kr.suhsaechan.palim.notification.OutboxService;
+import kr.suhsaechan.palim.web.audit.WebAuditRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -33,6 +35,7 @@ public class NotificationSettingController {
     private final NotificationSettingService notificationSettingService;
     private final OutboxService outboxService;
     private final ErrorMessageResolver errorMessageResolver;
+    private final WebAuditRecorder webAuditRecorder;
 
     @GetMapping("/settings/notification")
     public String view(Model model) {
@@ -50,6 +53,9 @@ public class NotificationSettingController {
                                   RedirectAttributes redirectAttributes) {
         try {
             notificationSettingService.connectTelegram(telegramChatId.trim());
+            // chat_id 는 스냅샷에 넣지 않는다 — 알면 봇 메시지를 가로챌 단서가 된다.
+            webAuditRecorder.recordChange(AuditType.NOTIFICATION_SETTING_UPDATE,
+                    "텔레그램 연결을 변경했습니다.", null, null);
             redirectAttributes.addFlashAttribute("flashSuccess",
                     "텔레그램을 연결했습니다. 대기 중인 알림이 곧 발송됩니다.");
         } catch (BusinessException exception) {
@@ -64,6 +70,8 @@ public class NotificationSettingController {
                                  RedirectAttributes redirectAttributes) {
         try {
             notificationSettingService.changeOrderAlertMode(mode, batchIntervalMinutes);
+            webAuditRecorder.recordChange(AuditType.NOTIFICATION_SETTING_UPDATE,
+                    "알림 발송 방식을 %s(으)로 변경했습니다.".formatted(mode), null, null);
             redirectAttributes.addFlashAttribute("flashSuccess", "발송 방식을 변경했습니다.");
         } catch (BusinessException exception) {
             addError(redirectAttributes, exception);
@@ -85,6 +93,10 @@ public class NotificationSettingController {
             LocalTime parsedStart = parseTime(start);
             LocalTime parsedEnd = parseTime(end);
             notificationSettingService.changeQuietHours(parsedStart, parsedEnd);
+            webAuditRecorder.recordChange(AuditType.NOTIFICATION_SETTING_UPDATE,
+                    parsedStart != null
+                            ? "야간 발송 보류를 %s~%s 로 설정했습니다.".formatted(parsedStart, parsedEnd)
+                            : "야간 발송 보류를 해제했습니다.", null, null);
 
             redirectAttributes.addFlashAttribute("flashSuccess", parsedStart != null
                     ? "야간 발송 보류를 설정했습니다."
@@ -101,6 +113,8 @@ public class NotificationSettingController {
                                    RedirectAttributes redirectAttributes) {
         try {
             notificationSettingService.changeDailyReport(enabled, parseTime(time));
+            webAuditRecorder.recordChange(AuditType.NOTIFICATION_SETTING_UPDATE,
+                    "일일 리포트를 %s했습니다.".formatted(enabled ? "활성화" : "비활성화"), null, null);
             redirectAttributes.addFlashAttribute("flashSuccess", "일일 리포트 설정을 변경했습니다.");
         } catch (BusinessException exception) {
             addError(redirectAttributes, exception);
@@ -113,6 +127,8 @@ public class NotificationSettingController {
                                        RedirectAttributes redirectAttributes) {
         try {
             notificationSettingService.changeLowStockRepeatHours(hours);
+            webAuditRecorder.recordChange(AuditType.NOTIFICATION_SETTING_UPDATE,
+                    "재고 부족 재알림 주기를 %d시간으로 변경했습니다.".formatted(hours), null, null);
             redirectAttributes.addFlashAttribute("flashSuccess",
                     "재고 부족 재알림 주기를 %d시간으로 변경했습니다.".formatted(hours));
         } catch (BusinessException exception) {

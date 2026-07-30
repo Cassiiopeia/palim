@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!--/*
+      필터. 전부 GET 쿼리스트링이다 — 조회 조건이 URL 에 남아 북마크·공유·뒤로가기가 동작한다.
+      기본 유형은 인증+변경이다. 조회(VIEW)까지 전부 기록하지만 기본 화면에서는 숨긴다
+      (07-DECISIONS 018).
+    */-->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body">
+            <form th:action="@{/audit}" method="get" class="space-y-3">
+
+                <!-- 날짜 프리셋 -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium w-14">날짜</span>
+                    <div class="join">
+                        <a th:each="p : ${presets}"
+                           th:if="${p.name() != 'CUSTOM'}"
+                           class="btn btn-sm join-item"
+                           th:classappend="${p == selectedPreset} ? 'btn-active' : ''"
+                           th:href="@{/audit(preset=${p})}"
+                           th:text="${p.displayName()}">오늘</a>
+                    </div>
+                    <input type="hidden" name="preset" value="CUSTOM">
+                    <input type="date" name="from" th:value="${fromDate}"
+                           class="input input-bordered input-sm" aria-label="시작일">
+                    <span class="text-base-content/60">~</span>
+                    <input type="date" name="to" th:value="${toDate}"
+                           class="input input-bordered input-sm" aria-label="종료일">
+                </div>
+
+                <!-- 유형 -->
+                <div class="flex flex-wrap items-start gap-2">
+                    <span class="text-sm font-medium w-14 mt-1">유형</span>
+                    <div class="flex flex-wrap gap-1">
+                        <label th:each="type : ${allTypes}"
+                               class="label cursor-pointer gap-1 rounded-lg border border-base-300 px-2 py-1">
+                            <input type="checkbox" name="types" th:value="${type}"
+                                   th:checked="${#sets.contains(selectedTypes, type)}"
+                                   class="checkbox checkbox-xs">
+                            <span class="text-xs"
+                                  th:text="${type.group().displayName()} + ' · ' + ${type.displayName()}">유형</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 조회 조건 -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium w-14">조건</span>
+                    <select name="field" class="select select-bordered select-sm" aria-label="조회 조건">
+                        <option th:each="f : ${fields}" th:value="${f}"
+                                th:selected="${f == selectedField}"
+                                th:text="${f.displayName()}">아이디</option>
+                    </select>
+                    <input type="text" name="keyword" th:value="${keyword}" maxlength="100"
+                           placeholder="검색어" class="input input-bordered input-sm w-64"
+                           aria-label="검색어">
+                    <button type="submit" class="btn btn-sm btn-primary">검색</button>
+                    <a th:href="@{/audit}" class="btn btn-sm btn-ghost">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title text-base">
+                기록
+                <span class="badge badge-ghost" th:text="${logs.totalElements}">0</span>
+            </h2>
+
+            <div th:if="${logs.isEmpty()}" class="alert alert-info mt-2">
+                <span>조건에 맞는 기록이 없습니다.</span>
+            </div>
+
+            <div th:unless="${logs.isEmpty()}" class="overflow-x-auto mt-2">
+                <table class="table table-sm table-zebra">
+                    <thead>
+                    <tr>
+                        <th>발생 일시</th>
+                        <th>아이디</th>
+                        <th>IP</th>
+                        <th>유형</th>
+                        <th>내용</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <!--/*
+                      상세는 tr 을 details 로 감쌀 수 없어(HTML 구조상 불가) 행 2개로 표현한다.
+                      스냅샷은 th:text 로만 출력한다 — 이스케이프가 저장형 XSS 방어의 마지막 단이다.
+                    */-->
+                    <tr th:each="row : ${logs.content}">
+                        <td class="font-mono text-xs whitespace-nowrap" th:text="${row.occurredAt}">-</td>
+                        <td class="text-sm" th:text="${row.actorId}">-</td>
+                        <td class="font-mono text-xs" th:text="${row.clientIp}">-</td>
+                        <td>
+                            <span class="badge badge-sm"
+                                  th:classappend="${row.authFailure} ? 'badge-error'
+                                                  : (${row.groupName == '변경'} ? 'badge-warning' : 'badge-ghost')"
+                                  th:text="${row.typeName}">유형</span>
+                        </td>
+                        <td class="text-sm">
+                            <span th:text="${row.summary}">내용</span>
+                            <details th:if="${row.hasDetail()}" class="mt-1">
+                                <summary class="text-xs text-base-content/60 cursor-pointer">상세</summary>
+                                <div class="text-xs font-mono bg-base-200 rounded p-2 mt-1 space-y-1">
+                                    <p th:if="${row.requestUri != null}">
+                                        <span class="text-base-content/60">요청:</span>
+                                        <span th:text="${row.requestUri}"></span>
+                                    </p>
+                                    <p th:if="${row.beforeSnapshot != null}">
+                                        <span class="text-base-content/60">변경 전:</span>
+                                        <span th:text="${row.beforeSnapshot}"></span>
+                                    </p>
+                                    <p th:if="${row.afterSnapshot != null}">
+                                        <span class="text-base-content/60">변경 후:</span>
+                                        <span th:text="${row.afterSnapshot}"></span>
+                                    </p>
+                                    <p th:if="${row.userAgent != null}">
+                                        <span class="text-base-content/60">브라우저:</span>
+                                        <span th:text="${row.userAgent}"></span>
+                                    </p>
+                                </div>
+                            </details>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 페이징 -->
+            <div th:if="${logs.totalPages > 1}" class="join justify-center mt-4">
+                <a class="join-item btn btn-sm"
+                   th:classappend="${logs.first} ? 'btn-disabled' : ''"
+                   th:href="@{/audit(preset=${selectedPreset}, from=${fromDate}, to=${toDate},
+                            types=${selectedTypes}, field=${selectedField}, keyword=${keyword},
+                            page=${logs.number - 1})}">«</a>
+                <span class="join-item btn btn-sm btn-active"
+                      th:text="${logs.number + 1} + ' / ' + ${logs.totalPages}">1 / 1</span>
+                <a class="join-item btn btn-sm"
+                   th:classappend="${logs.last} ? 'btn-disabled' : ''"
+                   th:href="@{/audit(preset=${selectedPreset}, from=${fromDate}, to=${toDate},
+                            types=${selectedTypes}, field=${selectedField}, keyword=${keyword},
+                            page=${logs.number + 1})}">»</a>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>
