@@ -41,6 +41,26 @@ spring:
     fallback-to-system-locale: false
 
 palim:
+  telegram:
+    # 없으면 알림이 Outbox 에 쌓이기만 한다. 암호화 마스터키와 달리 기동을 막지 않는다 —
+    # 발주자가 나중에 설정하는 항목이고, 대기 중 알림은 유실되지 않기 때문이다.
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    api-base-url: https://api.telegram.org
+    timeout: 10s
+    max-attempts: 5
+
+  notification:
+    relay-delay: 30000
+
+  collect:
+    # 조회 구간 겹침 여유. 채널 API 는 주문 시각이 지연 반영되므로 구간을 정확히 이어붙이면
+    # 경계에서 주문이 누락된다. 중복은 유니크 제약이 막지만 누락은 감지되지 않는다.
+    overlap: 10m
+    initial-lookback: 24h
+    failure-threshold: 3
+    scheduler-delay: 60000
+    reconcile-delay: 300000
+
   crypto:
     # 채널 API 인증정보 AES-GCM 마스터키 (설계서 6.2)
     # 없으면 기동에 실패한다. 암호화 없이 인증정보를 저장하는 상태로 뜨지 않게 하기 위함이다.

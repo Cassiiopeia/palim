@@ -38,5 +38,30 @@ public enum NotificationType {
     STOCK_PUSH_FAILURE,
 
     /** 재고 스냅샷과 이력 누적합 불일치 (설계서 5.3). */
-    STOCK_MISMATCH
+    STOCK_MISMATCH;
+
+    /**
+     * 긴급 알림 여부.
+     *
+     * <p>긴급 알림은 <b>야간 보류와 묶음 발송에서 제외</b>된다. 재고가 음수가 되었거나 수집이
+     * 멈춘 상황은 아침까지 기다릴 수 없다. 발주자가 알림 과다를 우려해 야간 보류를 켰더라도,
+     * 매출 손실로 직결되는 사안은 즉시 알려야 한다.
+     */
+    public boolean isUrgent() {
+        return this == OVERSELL
+                || this == OUT_OF_STOCK
+                || this == COLLECT_FAILURE
+                || this == STOCK_PUSH_FAILURE
+                || this == STOCK_MISMATCH;
+    }
+
+    /**
+     * 묶음 발송 대상 여부.
+     *
+     * <p>주문 알림만 묶는다. 주문량이 많을 때 알림 과다로 아예 확인하지 않게 되는 문제를
+     * 막기 위한 기능이므로(F-02), 빈도가 낮은 다른 알림은 묶을 이유가 없다.
+     */
+    public boolean isBatchable() {
+        return this == NEW_ORDER;
+    }
 }
