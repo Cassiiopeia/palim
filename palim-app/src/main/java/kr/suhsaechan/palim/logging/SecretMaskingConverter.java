@@ -33,9 +33,14 @@ public class SecretMaskingConverter extends MessageConverter {
                     + "|private[-_]?key|credential|authorization|chat[-_]?id)"
                     + "\\s*[=:]\\s*(?:Bearer\\s+)?[^\\s,;&\"']+");
 
-    /** 텔레그램 봇 토큰 형식({@code 123456789:AAF...}). URL 에 포함돼도 잡는다. */
+    /**
+     * 텔레그램 봇 토큰 형식({@code 123456789:AAF...}).
+     *
+     * <p>선행 {@code \b} 를 두지 않는다 — 봇 API URL 은 {@code /bot123456789:...} 형태라
+     * {@code bot} 과 숫자 사이에 단어 경계가 없어, 경계를 요구하면 URL 속 토큰을 놓친다.
+     */
     private static final Pattern TELEGRAM_TOKEN = Pattern.compile(
-            "\\b\\d{8,10}:[A-Za-z0-9_-]{30,}\\b");
+            "\\d{8,10}:[A-Za-z0-9_-]{30,}\\b");
 
     private static final String MASK = "$1=***";
 
