@@ -1,0 +1,52 @@
+{
+  "code": 200,
+  "message": "OK",
+  "nextToken": "TOKEN-PAGE-2",
+  "data": [
+    {
+      "orderId": 4000000001,
+      "orderedAt": "2026-07-29T14:32:11",
+      "ordererName": "김구매",
+      "totalPaidAmount": 39800,
+      "status": "ACCEPT",
+      "orderItems": [
+        {
+          "vendorItemPackageId": 900000001,
+          "productId": 700000001,
+          "vendorItemId": 800000001,
+          "vendorItemName": "테스트 상품 / 블랙 / M",
+          "shippingCount": 2,
+          "salesPrice": 19900,
+          "orderPrice": 39800
+        }
+      ]
+    },
+    {
+      "orderId": 4000000002,
+      "orderedAt": "2026-07-29T15:01:00",
+      "ordererName": "이구매",
+      "totalPaidAmount": 55000,
+      "status": "ACCEPT",
+      "orderItems": [
+        {
+          "vendorItemPackageId": 900000002,
+          "productId": 700000002,
+          "vendorItemId": 800000002,
+          "vendorItemName": "다른 상품 / 화이트 / L",
+          "shippingCount": 1,
+          "salesPrice": 25000,
+          "orderPrice": 25000
+        },
+        {
+          "vendorItemPackageId": 900000003,
+          "productId": 700000003,
+          "vendorItemId": 800000003,
+          "vendorItemName": "세 번째 상품",
+          "shippingCount": 3,
+          "salesPrice": 10000,
+          "orderPrice": 30000
+        }
+      ]
+    }
+  ]
+}

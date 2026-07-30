@@ -62,6 +62,18 @@ palim:
     mismatch-alert-interval: 24h
     top-sku-limit: 3
 
+  channel:
+    coupang:
+      api-base-url: https://api-gateway.coupang.com
+      # 규정은 초당 10회(100ms)지만 지속 초과 시 계정이 영구 차단되므로 여유를 둔다.
+      # 페이징 순회 중에도 이 간격을 지킨다.
+      min-request-interval: 150ms
+      page-size: 50
+      # nextToken 이 예상과 다르게 동작하면 무한 루프가 되고, 그 상태로 호출 제한을
+      # 초과하면 계정이 차단된다.
+      max-pages: 100
+      timeout: 30s
+
   collect:
     # 조회 구간 겹침 여유. 채널 API 는 주문 시각이 지연 반영되므로 구간을 정확히 이어붙이면
     # 경계에서 주문이 누락된다. 중복은 유니크 제약이 막지만 누락은 감지되지 않는다.

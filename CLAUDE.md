@@ -96,9 +96,18 @@ throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
 |---|---|---|
 | Testcontainers | BOM 이 버전 관리 | **관리하지 않는다.** BOM 직접 지정 |
 | Flyway | `flyway-core` 만으로 자동 구성 | **`spring-boot-flyway` 필요** |
-| Jackson | `com.fasterxml.jackson` | **`tools.jackson`** (Jackson 3, 예외도 unchecked) |
+| Jackson | `com.fasterxml.jackson` 전체 | **`databind`·`core` 만 `tools.jackson`** — 아래 참조 |
 
 자동 구성이 필요한 기술을 추가할 때는 `spring-boot-{기술}` 모듈이 별도로 있는지 먼저 확인한다.
+
+**Jackson 3 은 패키지를 부분만 옮겼다.** 애노테이션까지 바꾸면 컴파일이 깨진다.
+
+| 대상 | 패키지 |
+|---|---|
+| `ObjectMapper`, `JacksonException` | **`tools.jackson.databind` / `tools.jackson.core`** |
+| `@JsonIgnoreProperties`, `@JsonProperty` 등 애노테이션 | `com.fasterxml.jackson.annotation` (**그대로**) |
+
+예외는 unchecked 로 바뀌었다 — `JsonProcessingException` 대신 `JacksonException` 을 잡는다.
 
 ### record 컴포넌트와 같은 이름의 정적 팩토리는 만들 수 없다
 
