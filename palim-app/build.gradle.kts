@@ -19,4 +19,14 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation(testFixtures(project(":palim-common")))
+
+    // 스키마·제약 검증은 전체 컨텍스트에서 해야 의미가 있다(ddl-auto=validate 가 모든 엔티티를 본다).
+    // 도메인 모듈은 implementation 으로 연결되어 컴파일 classpath 에 없으므로 테스트에만 추가한다.
+    // 도메인 규칙 자체는 각 모듈에서 Spring 없는 단위 테스트로 검증한다(설계서 8장).
+    testImplementation(project(":palim-auth"))
+    testImplementation(project(":palim-channel"))
+    testImplementation(project(":palim-mapping"))
+    testImplementation(project(":palim-notification"))
+    testImplementation(project(":palim-order"))
+    testImplementation(project(":palim-sku"))
 }
