@@ -1,6 +1,7 @@
 package kr.suhsaechan.palim.auth;
 
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -45,7 +46,7 @@ public class AdminAccountBootstrap implements ApplicationRunner {
         }
 
         if (rawPassword == null || rawPassword.isBlank()) {
-            throw new BusinessException(AuthErrorCode.ADMIN_PASSWORD_REQUIRED, username);
+            throw new BusinessException(ErrorCode.ADMIN_PASSWORD_REQUIRED, username);
         }
 
         adminAccountService.createIfAbsent(username, rawPassword);

@@ -10,7 +10,7 @@ import lombok.Getter;
  * 새로운 실패가 생겨도 <b>예외 클래스는 늘지 않는다.</b>
  *
  * <pre>{@code
- * throw new BusinessException(SkuErrorCode.SKU_NOT_FOUND, skuId);
+ * throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);
  * }</pre>
  *
  * <p>메시지는 이 예외가 갖지 않는다. {@code messageArgs} 만 담고, 실제 문구는

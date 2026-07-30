@@ -9,6 +9,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,17 +54,17 @@ public class AdminAccount extends BaseTimeEntity {
 
     public static AdminAccount create(String username, String encodedPassword) {
         if (username == null || username.isBlank()) {
-            throw new BusinessException(AuthErrorCode.INVALID_USERNAME);
+            throw new BusinessException(ErrorCode.INVALID_USERNAME);
         }
         if (encodedPassword == null || encodedPassword.isBlank()) {
-            throw new BusinessException(AuthErrorCode.INVALID_PASSWORD);
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD);
         }
         return new AdminAccount(username, encodedPassword);
     }
 
     public void changePassword(String encodedPassword) {
         if (encodedPassword == null || encodedPassword.isBlank()) {
-            throw new BusinessException(AuthErrorCode.INVALID_PASSWORD);
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD);
         }
         this.passwordHash = encodedPassword;
     }

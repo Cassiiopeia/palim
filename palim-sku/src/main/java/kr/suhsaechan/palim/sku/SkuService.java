@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -47,7 +48,7 @@ public class SkuService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Sku register(String code, String name, int initialQuantity, int safetyThreshold) {
         if (skuRepository.existsByCode(code)) {
-            throw new BusinessException(SkuErrorCode.SKU_CODE_DUPLICATE, code);
+            throw new BusinessException(ErrorCode.SKU_CODE_DUPLICATE, code);
         }
         Sku sku = skuRepository.save(Sku.register(code, name, initialQuantity, safetyThreshold));
         stockMovementRepository.save(StockMovement.ofInitialStock(sku.getId(), initialQuantity));
@@ -138,13 +139,13 @@ public class SkuService {
     @Transactional(readOnly = true)
     public Sku getById(UUID skuId) {
         return skuRepository.findById(skuId)
-                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, skuId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId));
     }
 
     @Transactional(readOnly = true)
     public Sku getByCode(String code) {
         return skuRepository.findByCode(code)
-                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, code));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND, code));
     }
 
     @Transactional(readOnly = true)
@@ -178,7 +179,7 @@ public class SkuService {
     @Transactional(readOnly = true)
     public double averageDailySales(UUID skuId, int days) {
         if (days <= 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_STOCK_AMOUNT, days);
+            throw new BusinessException(ErrorCode.INVALID_STOCK_AMOUNT, days);
         }
         Instant from = Instant.now().minus(days, ChronoUnit.DAYS);
         return (double) stockMovementRepository.sumSoldQuantitySince(skuId, from) / days;
@@ -194,6 +195,6 @@ public class SkuService {
      */
     private Sku lock(UUID skuId) {
         return skuRepository.findForUpdateById(skuId)
-                .orElseThrow(() -> new BusinessException(SkuErrorCode.SKU_NOT_FOUND, skuId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId));
     }
 }

@@ -6,10 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.sku.Sku;
 import kr.suhsaechan.palim.sku.SkuService;
-import kr.suhsaechan.palim.sku.SkuErrorCode;
 import kr.suhsaechan.palim.sku.StockChangeReason;
 import kr.suhsaechan.palim.sku.StockMovement;
 import org.junit.jupiter.api.DisplayName;
@@ -110,7 +110,7 @@ class SkuServiceIntegrationTest extends IntegrationTest {
         assertThatThrownBy(() -> 등록("SVC-SKU-5", 20, 5))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(SkuErrorCode.SKU_CODE_DUPLICATE);
+                .isEqualTo(ErrorCode.SKU_CODE_DUPLICATE);
     }
 
     @Test

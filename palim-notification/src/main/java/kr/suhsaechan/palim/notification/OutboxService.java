@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -92,7 +93,7 @@ public class OutboxService {
     @Transactional(readOnly = true)
     public NotificationOutbox get(UUID outboxId) {
         return notificationOutboxRepository.findById(outboxId)
-                .orElseThrow(() -> new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND, outboxId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_NOT_FOUND, outboxId));
     }
 
     /**
@@ -106,7 +107,7 @@ public class OutboxService {
             return objectMapper.readValue(outbox.getPayload(), type);
         } catch (JacksonException e) {
             throw new BusinessException(
-                    NotificationErrorCode.PAYLOAD_DESERIALIZE_FAILED, e, outbox.getId());
+                    ErrorCode.PAYLOAD_DESERIALIZE_FAILED, e, outbox.getId());
         }
     }
 
@@ -117,7 +118,7 @@ public class OutboxService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JacksonException e) {
-            throw new BusinessException(NotificationErrorCode.PAYLOAD_SERIALIZE_FAILED, e);
+            throw new BusinessException(ErrorCode.PAYLOAD_SERIALIZE_FAILED, e);
         }
     }
 }

@@ -12,6 +12,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -99,7 +100,7 @@ public class NotificationSetting extends BaseTimeEntity {
 
     public void changeOrderAlertMode(OrderAlertMode mode, int batchIntervalMinutes) {
         if (mode == OrderAlertMode.BATCHED && batchIntervalMinutes <= 0) {
-            throw new BusinessException(NotificationErrorCode.INVALID_BATCH_INTERVAL, batchIntervalMinutes);
+            throw new BusinessException(ErrorCode.INVALID_BATCH_INTERVAL, batchIntervalMinutes);
         }
         this.orderAlertMode = mode;
         this.batchIntervalMinutes = batchIntervalMinutes;
@@ -107,7 +108,7 @@ public class NotificationSetting extends BaseTimeEntity {
 
     public void changeQuietHours(LocalTime start, LocalTime end) {
         if ((start == null) != (end == null)) {
-            throw new BusinessException(NotificationErrorCode.INVALID_QUIET_HOURS);
+            throw new BusinessException(ErrorCode.INVALID_QUIET_HOURS);
         }
         this.quietHoursStart = start;
         this.quietHoursEnd = end;
@@ -122,7 +123,7 @@ public class NotificationSetting extends BaseTimeEntity {
 
     public void changeLowStockRepeatHours(int hours) {
         if (hours <= 0) {
-            throw new BusinessException(NotificationErrorCode.INVALID_REPEAT_HOURS, hours);
+            throw new BusinessException(ErrorCode.INVALID_REPEAT_HOURS, hours);
         }
         this.lowStockRepeatHours = hours;
     }

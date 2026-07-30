@@ -12,6 +12,7 @@ import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -110,7 +111,7 @@ public class OrderLine extends BaseTimeEntity {
                                     String channelProductName, UUID skuId,
                                     int quantity, long unitPrice, long amount) {
         if (quantity <= 0) {
-            throw new BusinessException(OrderErrorCode.INVALID_ORDER_QUANTITY, quantity);
+            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY, quantity);
         }
         return OrderLine.builder()
                 .orderId(orderId)
@@ -140,7 +141,7 @@ public class OrderLine extends BaseTimeEntity {
     /** 매핑 완료 후 SKU를 연결한다 (F-04 소급 반영). */
     public void assignSku(UUID skuId) {
         if (skuId == null) {
-            throw new BusinessException(OrderErrorCode.SKU_ID_REQUIRED);
+            throw new BusinessException(ErrorCode.ORDER_SKU_ID_REQUIRED);
         }
         this.skuId = skuId;
     }

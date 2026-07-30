@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.notification;
 
 import java.time.LocalTime;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -30,7 +31,7 @@ public class NotificationSettingService {
     public NotificationSetting get() {
         return notificationSettingRepository.findFirstByOrderByCreatedAtAsc()
                 .orElseThrow(() -> new BusinessException(
-                        NotificationErrorCode.NOTIFICATION_SETTING_NOT_INITIALIZED));
+                        ErrorCode.NOTIFICATION_SETTING_NOT_INITIALIZED));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

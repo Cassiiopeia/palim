@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import java.util.Base64;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,7 @@ class CredentialCipherTest {
         assertThatThrownBy(() -> otherCipher.decrypt(encrypted))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ChannelErrorCode.CREDENTIAL_DECRYPT_FAILED);
+                .isEqualTo(ErrorCode.CREDENTIAL_DECRYPT_FAILED);
     }
 
     @Test
@@ -74,7 +75,7 @@ class CredentialCipherTest {
         assertThatThrownBy(() -> cipher.decrypt(tampered))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ChannelErrorCode.CREDENTIAL_DECRYPT_FAILED);
+                .isEqualTo(ErrorCode.CREDENTIAL_DECRYPT_FAILED);
     }
 
     @Test

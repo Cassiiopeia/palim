@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ class SkuTest {
             assertThatThrownBy(() -> Sku.register("SKU-001", "상품", -1, 5))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
-                    .isEqualTo(SkuErrorCode.INVALID_STOCK_AMOUNT);
+                    .isEqualTo(ErrorCode.INVALID_STOCK_AMOUNT);
         }
 
         @Test
@@ -34,7 +35,7 @@ class SkuTest {
             assertThatThrownBy(() -> Sku.register("SKU-001", "상품", 10, -1))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
-                    .isEqualTo(SkuErrorCode.INVALID_SAFETY_THRESHOLD);
+                    .isEqualTo(ErrorCode.INVALID_SAFETY_THRESHOLD);
         }
 
         @Test
@@ -63,7 +64,7 @@ class SkuTest {
             assertThatThrownBy(() -> sku.decrease(3))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
-                    .isEqualTo(SkuErrorCode.INSUFFICIENT_STOCK);
+                    .isEqualTo(ErrorCode.INSUFFICIENT_STOCK);
         }
 
         /**

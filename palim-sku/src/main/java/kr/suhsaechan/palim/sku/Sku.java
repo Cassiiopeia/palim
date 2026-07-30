@@ -9,6 +9,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -60,10 +61,10 @@ public class Sku extends BaseTimeEntity {
 
     public static Sku register(String code, String name, int initialQuantity, int safetyThreshold) {
         if (initialQuantity < 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_STOCK_AMOUNT, initialQuantity);
+            throw new BusinessException(ErrorCode.INVALID_STOCK_AMOUNT, initialQuantity);
         }
         if (safetyThreshold < 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_SAFETY_THRESHOLD, safetyThreshold);
+            throw new BusinessException(ErrorCode.INVALID_SAFETY_THRESHOLD, safetyThreshold);
         }
         return new Sku(code, name, initialQuantity, safetyThreshold);
     }
@@ -80,7 +81,7 @@ public class Sku extends BaseTimeEntity {
     public void decrease(int amount) {
         requirePositive(amount);
         if (quantity - amount < 0) {
-            throw new BusinessException(SkuErrorCode.INSUFFICIENT_STOCK, code, quantity, amount);
+            throw new BusinessException(ErrorCode.INSUFFICIENT_STOCK, code, quantity, amount);
         }
         this.quantity -= amount;
     }
@@ -117,14 +118,14 @@ public class Sku extends BaseTimeEntity {
     /** 실사 조정. 차감·증가와 달리 절대값으로 덮어쓴다. */
     public void adjustTo(int newQuantity) {
         if (newQuantity < 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_STOCK_AMOUNT, newQuantity);
+            throw new BusinessException(ErrorCode.INVALID_STOCK_AMOUNT, newQuantity);
         }
         this.quantity = newQuantity;
     }
 
     public void changeSafetyThreshold(int threshold) {
         if (threshold < 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_SAFETY_THRESHOLD, threshold);
+            throw new BusinessException(ErrorCode.INVALID_SAFETY_THRESHOLD, threshold);
         }
         this.safetyThreshold = threshold;
     }
@@ -157,7 +158,7 @@ public class Sku extends BaseTimeEntity {
 
     private static void requirePositive(int amount) {
         if (amount <= 0) {
-            throw new BusinessException(SkuErrorCode.INVALID_STOCK_AMOUNT, amount);
+            throw new BusinessException(ErrorCode.INVALID_STOCK_AMOUNT, amount);
         }
     }
 }

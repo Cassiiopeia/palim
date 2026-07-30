@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -66,7 +67,7 @@ public class CredentialCipher {
             System.arraycopy(ciphertext, 0, combined, nonce.length, ciphertext.length);
             return Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
-            throw new BusinessException(ChannelErrorCode.CREDENTIAL_ENCRYPT_FAILED, e);
+            throw new BusinessException(ErrorCode.CREDENTIAL_ENCRYPT_FAILED, e);
         }
     }
 
@@ -77,7 +78,7 @@ public class CredentialCipher {
         }
         byte[] combined = Base64.getDecoder().decode(encoded);
         if (combined.length <= NONCE_LENGTH_BYTES) {
-            throw new BusinessException(ChannelErrorCode.CREDENTIAL_DECRYPT_FAILED);
+            throw new BusinessException(ErrorCode.CREDENTIAL_DECRYPT_FAILED);
         }
         byte[] nonce = new byte[NONCE_LENGTH_BYTES];
         byte[] ciphertext = new byte[combined.length - NONCE_LENGTH_BYTES];
@@ -89,7 +90,7 @@ public class CredentialCipher {
             cipher.init(Cipher.DECRYPT_MODE, masterKey, new GCMParameterSpec(TAG_LENGTH_BITS, nonce));
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
-            throw new BusinessException(ChannelErrorCode.CREDENTIAL_DECRYPT_FAILED, e);
+            throw new BusinessException(ErrorCode.CREDENTIAL_DECRYPT_FAILED, e);
         }
     }
 

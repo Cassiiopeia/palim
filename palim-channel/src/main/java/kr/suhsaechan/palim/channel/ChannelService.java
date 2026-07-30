@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -59,7 +60,7 @@ public class ChannelService {
     @Transactional(readOnly = true)
     public Channel getByCode(ChannelCode code) {
         return channelRepository.findByCode(code)
-                .orElseThrow(() -> new BusinessException(ChannelErrorCode.CHANNEL_NOT_FOUND, code));
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHANNEL_NOT_FOUND, code));
     }
 
     @Transactional(readOnly = true)

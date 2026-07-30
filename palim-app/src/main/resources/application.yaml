@@ -26,18 +26,11 @@ spring:
       enabled: true
 
   messages:
-    # 에러 메시지는 각 도메인 모듈이 소유한다. 새 도메인을 추가하면 여기에 한 줄만 더한다.
-    # 파일명이 달라 classpath 병합 시 충돌하지 않는다.
-    basename: >-
-      errors/common,
-      errors/sku,
-      errors/order,
-      errors/mapping,
-      errors/channel,
-      errors/notification,
-      errors/auth
+    # 에러 메시지는 errors.properties(한국어) / errors_en.properties(영문) 두 파일에 모은다.
+    # 새 ErrorCode 를 추가하면 두 파일에 한 줄씩 더하면 되고, 이 설정은 손대지 않는다.
+    basename: errors
     encoding: UTF-8
-    # 키가 없으면 예외 대신 ErrorCode 이름을 반환한다. 누락은 검증 테스트가 잡는다.
+    # 키가 없으면 예외 대신 키를 반환한다. 누락은 ErrorCodeIntegrationTest 가 잡는다.
     use-code-as-default-message: true
 
 palim:

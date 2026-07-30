@@ -12,7 +12,7 @@ import kr.suhsaechan.palim.channel.adapter.ChannelOrder;
 import kr.suhsaechan.palim.channel.adapter.ChannelOrderCollector;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.error.BusinessException;
-import kr.suhsaechan.palim.order.OrderErrorCode;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -120,7 +120,7 @@ public class ChannelCollectRunner {
      */
     private void logIngestFailure(ChannelCode channelCode, ChannelOrder order,
                                   BusinessException exception) {
-        if (exception.is(OrderErrorCode.ORDER_LINE_DUPLICATE)) {
+        if (exception.is(ErrorCode.ORDER_LINE_DUPLICATE)) {
             log.debug("중복 수집 경합 — {} {}. 다음 주기에 정상 처리됩니다.",
                     channelCode, order.channelOrderNo());
             return;

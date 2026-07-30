@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.ChannelCode;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 중복 판정의 최종 근거는 <b>데이터베이스 유니크 제약</b>이며, 조회는 1차 필터로만 쓴다.
  * "조회했더니 없어서 삽입한다"만으로는 수집이 중첩되는 순간 뚫린다(설계서 5.1).
  *
- * <p>제약 위반은 {@link OrderErrorCode#ORDER_LINE_DUPLICATE} 로 변환해 전파한다. 이때 트랜잭션은
+ * <p>제약 위반은 {@link ErrorCode#ORDER_LINE_DUPLICATE} 로 변환해 전파한다. 이때 트랜잭션은
  * rollback-only 가 되므로 <b>수집 조율은 주문 1건 단위로 트랜잭션을 열어야 한다.</b>
  */
 @Service
@@ -69,7 +70,7 @@ public class OrderService {
         try {
             return orderLineRepository.saveAndFlush(line);
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(OrderErrorCode.ORDER_LINE_DUPLICATE, e,
+            throw new BusinessException(ErrorCode.ORDER_LINE_DUPLICATE, e,
                     channelCode, channelOrderNo, channelLineNo);
         }
     }
@@ -123,13 +124,13 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Order getOrder(UUID orderId) {
         return orderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND, orderId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND, orderId));
     }
 
     @Transactional(readOnly = true)
     public OrderLine getOrderLine(UUID orderLineId) {
         return orderLineRepository.findById(orderLineId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_LINE_NOT_FOUND, orderLineId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_LINE_NOT_FOUND, orderLineId));
     }
 
     @Transactional(readOnly = true)

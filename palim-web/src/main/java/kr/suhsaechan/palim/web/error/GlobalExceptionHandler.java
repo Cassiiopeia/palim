@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import kr.suhsaechan.palim.common.error.BusinessException;
-import kr.suhsaechan.palim.common.error.CommonErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +64,7 @@ public class GlobalExceptionHandler {
             fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
-        ErrorCode errorCode = CommonErrorCode.VALIDATION_FAILED;
+        ErrorCode errorCode = ErrorCode.VALIDATION_FAILED;
         log.debug("입력 검증 실패 — {} {} 필드 {}", request.getMethod(), request.getRequestURI(), fieldErrors);
 
         return ResponseEntity.status(errorCode.httpStatus())
@@ -77,7 +76,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccessDenied(
             AccessDeniedException exception, HttpServletRequest request) {
 
-        ErrorCode errorCode = CommonErrorCode.ACCESS_DENIED;
+        ErrorCode errorCode = ErrorCode.ACCESS_DENIED;
         log.warn("접근 거부 — {} {}", request.getMethod(), request.getRequestURI());
 
         return ResponseEntity.status(errorCode.httpStatus())
@@ -96,7 +95,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalTransactionState(
             IllegalTransactionStateException exception, HttpServletRequest request) {
 
-        ErrorCode errorCode = CommonErrorCode.TRANSACTION_REQUIRED;
+        ErrorCode errorCode = ErrorCode.TRANSACTION_REQUIRED;
         log.error("트랜잭션 경계 위반 — {} {}. 호출 경로에 트랜잭션이 없습니다.",
                 request.getMethod(), request.getRequestURI(), exception);
 
@@ -115,7 +114,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnexpectedException(
             Exception exception, HttpServletRequest request) {
 
-        ErrorCode errorCode = CommonErrorCode.INTERNAL_ERROR;
+        ErrorCode errorCode = ErrorCode.INTERNAL_ERROR;
         log.error("처리하지 못한 오류 — {} {}", request.getMethod(), request.getRequestURI(), exception);
 
         return ResponseEntity.status(errorCode.httpStatus())
