@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="alert alert-info mb-6">
+        <div>
+            <p class="font-medium">인증정보를 등록한 뒤 채널을 활성화하세요.</p>
+            <p class="text-sm mt-1">
+                인증정보 없이 활성화하면 인증 실패가 반복되고, 쿠팡은 지속 초과 시 계정이
+                영구 차단됩니다. 등록이 완료된 채널만 활성화 버튼이 열립니다.
+            </p>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        <div th:each="channel : ${channels}" class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+
+                <!-- 헤더 -->
+                <div class="flex flex-wrap items-center gap-2 justify-between">
+                    <div class="flex items-center gap-2">
+                        <h2 class="card-title text-base" th:text="${channel.displayName}">채널명</h2>
+
+                        <span th:if="${channel.enabled}" class="badge badge-success">수집 중</span>
+                        <span th:unless="${channel.enabled}" class="badge badge-ghost">중단</span>
+
+                        <span th:if="${channel.hasFailure()}" class="badge badge-error"
+                              th:text="|실패 ${channel.consecutiveFailureCount}회|">실패</span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <form th:if="${!channel.enabled}"
+                              th:action="@{/settings/channels/{code}/enable(code=${channel.code})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    th:disabled="${!channel.canEnable()}"
+                                    th:title="${channel.canEnable()} ? '수집 시작'
+                                              : '인증정보를 먼저 등록하세요'">
+                                수집 시작
+                            </button>
+                        </form>
+                        <form th:if="${channel.enabled}"
+                              th:action="@{/settings/channels/{code}/disable(code=${channel.code})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm btn-outline">수집 중단</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 엑셀 업로드 채널 -->
+                <div th:if="${channel.credentialNotRequired}" class="alert alert-warning mt-2">
+                    <span>공식 API 가 없어 엑셀 업로드로만 처리합니다. 자동 수집 대상이 아닙니다.</span>
+                </div>
+
+                <!-- 수집 상태 -->
+                <div th:unless="${channel.credentialNotRequired}"
+                     class="grid gap-3 mt-2 sm:grid-cols-3">
+                    <div>
+                        <p class="text-xs text-base-content/60">마지막 수집</p>
+                        <p class="text-sm" th:text="${channel.lastCollectedAt} ?: '없음'">-</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-base-content/60">수집 커서</p>
+                        <p class="text-sm" th:text="${channel.collectedUntil} ?: '없음'">-</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-base-content/60">결과</p>
+                        <p class="text-sm" th:text="${channel.lastCollectStatus} ?: '-'">-</p>
+                    </div>
+                </div>
+
+                <div th:if="${channel.lastCollectError}" class="alert alert-error mt-2">
+                    <span class="text-sm" th:text="${channel.lastCollectError}">오류</span>
+                </div>
+
+                <!-- 수집 주기 -->
+                <form th:unless="${channel.credentialNotRequired}"
+                      th:action="@{/settings/channels/{code}/interval(code=${channel.code})}"
+                      method="post" class="flex items-end gap-2 mt-4">
+                    <fieldset class="fieldset">
+                        <label class="label text-xs" th:for="|interval-${channel.code}|">
+                            수집 주기 (분)
+                        </label>
+                        <input type="number" name="minutes" min="1" max="1440" required
+                               th:id="|interval-${channel.code}|"
+                               th:value="${channel.collectIntervalMinutes()}"
+                               class="input input-bordered input-sm w-24">
+                    </fieldset>
+                    <button type="submit" class="btn btn-sm">변경</button>
+                </form>
+
+                <!-- 인증정보 -->
+                <div th:unless="${channel.credentialNotRequired}" class="mt-4">
+                    <div class="divider text-xs">인증정보</div>
+
+                    <div class="alert alert-warning mb-3">
+                        <span class="text-sm">
+                            보안을 위해 저장된 값은 표시하지 않습니다. 변경할 항목만 입력하세요.
+                            비워두면 기존 값이 유지됩니다.
+                        </span>
+                    </div>
+
+                    <form th:action="@{/settings/channels/{code}/credentials(code=${channel.code})}"
+                          method="post" class="space-y-2">
+                        <div th:each="entry : ${channel.credentialStatus}"
+                             class="flex flex-wrap items-end gap-2">
+                            <fieldset class="fieldset grow">
+                                <label class="label text-xs"
+                                       th:for="|${channel.code}-${entry.key}|">
+                                    <span th:text="${entry.key}">키</span>
+                                    <span th:if="${entry.value}" class="badge badge-success badge-sm ml-1">
+                                        등록됨
+                                    </span>
+                                    <span th:unless="${entry.value}" class="badge badge-error badge-sm ml-1">
+                                        미등록
+                                    </span>
+                                </label>
+                                <input type="password" autocomplete="off"
+                                       th:id="|${channel.code}-${entry.key}|"
+                                       th:name="${entry.key}"
+                                       th:placeholder="${entry.value} ? '변경 시에만 입력' : '값을 입력하세요'"
+                                       class="input input-bordered input-sm w-full">
+                            </fieldset>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary mt-2">인증정보 저장</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>
