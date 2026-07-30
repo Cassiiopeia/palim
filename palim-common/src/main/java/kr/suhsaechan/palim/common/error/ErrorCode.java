@@ -178,7 +178,19 @@ public enum ErrorCode {
     INVALID_PASSWORD("A003", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
 
     /** 계정도 없고 초기 비밀번호도 지정되지 않아 기동할 수 없다. */
-    ADMIN_PASSWORD_REQUIRED("A004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR);
+    ADMIN_PASSWORD_REQUIRED("A004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
+
+    /** 비밀번호가 정책(최소 길이)에 미달한다. */
+    PASSWORD_TOO_SHORT("A005", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 비밀번호에 아이디가 포함되어 있다. */
+    PASSWORD_CONTAINS_USERNAME("A006", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 같은 문자가 연속 반복된다. */
+    PASSWORD_REPEATED_CHARS("A007", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 현재 비밀번호가 일치하지 않는다. 변경은 현재 비밀번호 재확인을 요구한다. */
+    PASSWORD_MISMATCH("A008", HttpStatus.BAD_REQUEST, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;

@@ -41,6 +41,12 @@ public enum AuditType {
     /** 유휴 시간 초과로 세션이 만료됐다. */
     SESSION_EXPIRED("세션 만료", "세션이 만료됐습니다.", AuditGroup.AUTH),
 
+    /** 비밀번호를 변경했다. */
+    PASSWORD_CHANGE("비밀번호 변경", "비밀번호를 변경했습니다.", AuditGroup.AUTH),
+
+    /** 비밀번호 변경에 실패했다(현재 비밀번호 불일치·정책 위반). */
+    PASSWORD_CHANGE_FAILED("비밀번호 변경 실패", "비밀번호 변경에 실패했습니다.", AuditGroup.AUTH),
+
     // --- 조회 ---
     /** 화면 조회. 인터셉터가 자동 기록한다. */
     VIEW("조회", "조회했습니다.", AuditGroup.VIEW),
@@ -90,7 +96,8 @@ public enum AuditType {
                 || this == LOGIN_BLOCKED_DUPLICATE
                 || this == LOGIN_BLOCKED_LOCKED
                 || this == LOGIN_BLOCKED_IP
-                || this == ACCOUNT_LOCKED;
+                || this == ACCOUNT_LOCKED
+                || this == PASSWORD_CHANGE_FAILED;
     }
 
     public enum AuditGroup {
