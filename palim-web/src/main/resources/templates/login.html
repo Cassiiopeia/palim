@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--/*
+  로그인 화면.
+
+  레이아웃을 쓰지 않는다 — 사이드바와 로그아웃 버튼이 로그인 전에는 의미가 없다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palim · 로그인</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+
+<div class="card w-full max-w-sm bg-base-100 shadow-xl">
+    <div class="card-body">
+        <div class="text-center mb-2">
+            <h1 class="text-2xl font-bold">Palim</h1>
+            <p class="text-sm text-base-content/60">다채널 판매 알림·재고 관리</p>
+        </div>
+
+        <div th:if="${param.error}" class="alert alert-error" role="alert">
+            <span>아이디 또는 비밀번호가 올바르지 않습니다.</span>
+        </div>
+        <div th:if="${param.logout}" class="alert alert-info" role="status">
+            <span>로그아웃되었습니다.</span>
+        </div>
+
+        <!--/* Thymeleaf 가 CSRF 토큰을 자동으로 넣는다. */-->
+        <form th:action="@{/login}" method="post" class="mt-2">
+            <fieldset class="fieldset">
+                <label class="label" for="username">아이디</label>
+                <input id="username" name="username" type="text" required autofocus
+                       autocomplete="username" class="input input-bordered w-full">
+
+                <label class="label mt-2" for="password">비밀번호</label>
+                <input id="password" name="password" type="password" required
+                       autocomplete="current-password" class="input input-bordered w-full">
+
+                <button type="submit" class="btn btn-primary w-full mt-4">로그인</button>
+            </fieldset>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

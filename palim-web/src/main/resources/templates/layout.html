@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--/*
+  공통 레이아웃.
+
+  daisyUI 컴포넌트만 쓴다. 커스텀 CSS 를 만들지 않는다(07-DECISIONS 009).
+  drawer 로 사이드바를 구성해 모바일에서는 접히고 데스크톱에서는 고정된다 — F-09 가
+  PC·모바일 모두 사용을 요구한다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org" th:fragment="layout(title, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="|Palim · ${title}|">Palim</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body class="min-h-screen bg-base-200">
+
+<div class="drawer lg:drawer-open">
+    <input id="sidebar-toggle" type="checkbox" class="drawer-toggle">
+
+    <div class="drawer-content flex flex-col">
+        <!-- 헤더 -->
+        <div class="navbar bg-base-100 shadow-sm lg:hidden">
+            <div class="flex-none">
+                <label for="sidebar-toggle" class="btn btn-square btn-ghost" aria-label="메뉴 열기">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                         viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </label>
+            </div>
+            <div class="flex-1">
+                <span class="text-lg font-semibold">Palim</span>
+            </div>
+        </div>
+
+        <main class="flex-1 p-4 lg:p-8">
+            <header class="mb-6">
+                <h1 class="text-2xl font-bold" th:text="${title}">제목</h1>
+            </header>
+
+            <!--/* 처리 결과 안내. 상태 변경 후 리다이렉트로 전달된다. */-->
+            <div th:if="${flashSuccess}" class="alert alert-success mb-4" role="status">
+                <span th:text="${flashSuccess}"></span>
+            </div>
+            <div th:if="${flashError}" class="alert alert-error mb-4" role="alert">
+                <span th:text="${flashError}"></span>
+            </div>
+
+            <th:block th:replace="${content}"></th:block>
+        </main>
+    </div>
+
+    <!-- 사이드바 -->
+    <div class="drawer-side z-10">
+        <label for="sidebar-toggle" class="drawer-overlay" aria-label="메뉴 닫기"></label>
+        <aside class="bg-base-100 min-h-full w-64 flex flex-col">
+            <div class="p-4 border-b border-base-300">
+                <a th:href="@{/}" class="text-xl font-bold">Palim</a>
+                <p class="text-xs text-base-content/60 mt-1">다채널 판매 알림·재고 관리</p>
+            </div>
+
+            <ul class="menu p-2 flex-1">
+                <li class="menu-title">운영</li>
+                <li><a th:href="@{/}">대시보드</a></li>
+                <li><a th:href="@{/skus}">재고 관리</a></li>
+                <li><a th:href="@{/mappings}">상품 매핑</a></li>
+
+                <li class="menu-title">설정</li>
+                <li><a th:href="@{/settings/channels}">채널 설정</a></li>
+                <li><a th:href="@{/settings/notification}">알림 설정</a></li>
+            </ul>
+
+            <div class="p-2 border-t border-base-300">
+                <form th:action="@{/logout}" method="post">
+                    <button type="submit" class="btn btn-ghost btn-sm w-full justify-start">
+                        로그아웃
+                    </button>
+                </form>
+            </div>
+        </aside>
+    </div>
+</div>
+
+</body>
+</html>

@@ -3,6 +3,8 @@ plugins {
     // 루트는 실행 가능한 jar를 만들지 않는다. bootJar는 palim-app 에서만 생성한다.
     id("org.springframework.boot") version "4.1.0" apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
+    // 화면 스타일(Tailwind CSS 4 + daisyUI 5) 빌드용. palim-web 에서만 적용한다.
+    id("com.github.node-gradle.node") version "7.1.0" apply false
 }
 
 allprojects {

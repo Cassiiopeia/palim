@@ -1,0 +1,15 @@
+{
+  "name": "palim-web-styles",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Palim 관리자 화면 스타일 빌드. Gradle 이 호출한다 — 직접 실행할 필요는 없다.",
+  "scripts": {
+    "build:css": "tailwindcss -i src/main/css/app.css -o src/main/resources/static/css/app.css --minify",
+    "watch:css": "tailwindcss -i src/main/css/app.css -o src/main/resources/static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "daisyui": "^5.1.29",
+    "tailwindcss": "^4.1.14"
+  }
+}

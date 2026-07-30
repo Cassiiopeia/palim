@@ -1,0 +1,22 @@
+/*
+ * Palim 관리자 화면 스타일.
+ *
+ * Tailwind CSS 4 는 설정 파일 대신 CSS 안에서 선언한다. tailwind.config.js 가 없는 이유다.
+ *
+ * 커스텀 CSS 를 여기에 쌓지 않는다(07-DECISIONS 009). 관리자 1명이 쓰는 내부 도구에
+ * 디자인 시스템을 자체 구축할 이유가 없고, 커스텀 CSS 는 유지보수 대상만 늘린다.
+ * 필요한 것은 daisyUI 컴포넌트 클래스와 Tailwind 유틸리티로 해결한다.
+ */
+
+@import "tailwindcss";
+
+/*
+ * 템플릿을 스캔해 사용된 클래스만 추출한다.
+ * 이 경로가 빠지면 CSS 가 비어 화면이 스타일 없이 렌더링된다.
+ */
+@source "../resources/templates/**/*.html";
+
+@plugin "daisyui" {
+    /* daisyUI 내장 테마를 쓴다. 색상을 직접 지정하지 않는다. */
+    themes: corporate --default, business --prefersdark;
+}
