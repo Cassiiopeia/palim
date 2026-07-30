@@ -34,6 +34,32 @@ Spring Data JPA 는 version 속성이 있으면 그 값의 null 여부로 신규
 
 표시할 때는 KST 로 변환한다. 문구에 UTC 시각이 나가면 주문 시각을 오해한다.
 
+### `JdbcClient` 에는 `Instant` 를 바인딩할 수 없다
+
+Hibernate 는 변환을 처리하지만 순수 JDBC 는 PostgreSQL 드라이버에 직접 넘기므로 타입 추론이 실패한다.
+
+```
+Can't infer the SQL type to use for an instance of java.time.Instant
+```
+
+`timestamptz` 컬럼에는 **`OffsetDateTime`** 을 넘긴다.
+
+```java
+OffsetDateTime from = targetDate.atStartOfDay(BUSINESS_ZONE).toOffsetDateTime();   // O
+// Instant from = targetDate.atStartOfDay(BUSINESS_ZONE).toInstant();              // X
+```
+
+여러 도메인에 걸친 조회는 전부 `JdbcClient` 를 쓰므로(02-ARCHITECTURE 규칙 3) **화면용 조회에서도 같은 문제를 만난다.**
+
+### PostgreSQL 의 `count`·`sum` 은 `bigint` 다
+
+`record` 컴포넌트가 `int` 면 매핑이 실패한다. SQL 에서 명시 캐스팅한다.
+
+```sql
+select count(*)::int as order_count,        -- O
+       sum(l.quantity)::int as quantity     -- O
+```
+
 ## 엔티티
 
 ```java

@@ -104,6 +104,12 @@ throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
 
 컴포넌트 `boolean success` 가 있으면 `success()` 는 accessor 로 취급되어 `boolean` 을 반환해야 한다. `of()`·`from()`·`sent()` 처럼 겹치지 않는 이름을 쓴다.
 
+### `JdbcClient` 에는 `Instant` 를 바인딩할 수 없다
+
+Hibernate 는 처리하지만 순수 JDBC 는 타입 추론에 실패한다. `timestamptz` 컬럼에는 **`OffsetDateTime`** 을 넘긴다.
+
+PostgreSQL 의 `count`·`sum` 은 `bigint` 이므로 `record` 컴포넌트가 `int` 면 `count(*)::int` 로 캐스팅한다.
+
 ### `implementation` 은 테스트 컴파일 classpath 로도 전이되지 않는다
 
 `palim-app` 이 하위 모듈을 `implementation` 으로 의존하므로, 그 모듈의 라이브러리를 직접 참조하려면 **해당 의존성을 명시 선언**해야 한다. `api` 로 뚫어서 우회하면 모듈별 의존성 최소화가 무너진다.

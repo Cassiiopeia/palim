@@ -1,7 +1,7 @@
 package kr.suhsaechan.palim.monitor;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import kr.suhsaechan.palim.notification.payload.DailyReportPayload;
@@ -28,6 +28,16 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>저장은 {@code timestamptz}(UTC)지만 발주자가 인지하는 "어제"는 KST 기준이다. UTC 자정으로
  * 자르면 <b>한국 시간 오전 9시까지의 주문이 전일로 집계되어</b> 수치가 실제와 어긋난다.
+ *
+ * <h2>바인딩 파라미터는 {@link OffsetDateTime} 이다</h2>
+ *
+ * <p>도메인 코드는 전 계층 {@code Instant} 를 쓰지만(04-CONVENTIONS), <b>JdbcClient 에는
+ * {@code Instant} 를 바인딩할 수 없다.</b> Hibernate 는 변환을 처리하지만 순수 JDBC 는
+ * PostgreSQL 드라이버에 직접 넘기므로 타입 추론이 실패한다.
+ *
+ * <pre>{@code Can't infer the SQL type to use for an instance of java.time.Instant}</pre>
+ *
+ * <p>{@code timestamptz} 컬럼에는 {@code OffsetDateTime} 을 넘긴다.
  */
 @Component
 @RequiredArgsConstructor
@@ -45,8 +55,9 @@ public class DailyReportAssembler {
      */
     @Transactional(readOnly = true)
     public DailyReportPayload assemble(LocalDate targetDate) {
-        Instant from = targetDate.atStartOfDay(BUSINESS_ZONE).toInstant();
-        Instant to = targetDate.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
+        // JdbcClient 는 Instant 를 바인딩할 수 없다. OffsetDateTime 으로 넘긴다.
+        OffsetDateTime from = targetDate.atStartOfDay(BUSINESS_ZONE).toOffsetDateTime();
+        OffsetDateTime to = targetDate.plusDays(1).atStartOfDay(BUSINESS_ZONE).toOffsetDateTime();
 
         Totals totals = queryTotals(from, to);
 
@@ -61,9 +72,9 @@ public class DailyReportAssembler {
                 queryFailedChannels());
     }
 
-    private Totals queryTotals(Instant from, Instant to) {
+    private Totals queryTotals(OffsetDateTime from, OffsetDateTime to) {
         return jdbcClient.sql("""
-                        select count(*)                       as order_count,
+                        select count(*)::int                  as order_count,
                                coalesce(sum(total_amount), 0) as amount
                         from orders
                         where ordered_at >= :from and ordered_at < :to
@@ -75,10 +86,10 @@ public class DailyReportAssembler {
                 .single();
     }
 
-    private List<DailyReportPayload.ChannelSummary> queryChannelSummaries(Instant from, Instant to) {
+    private List<DailyReportPayload.ChannelSummary> queryChannelSummaries(OffsetDateTime from, OffsetDateTime to) {
         return jdbcClient.sql("""
                         select channel_code                   as channel_name,
-                               count(*)                       as order_count,
+                               count(*)::int                  as order_count,
                                coalesce(sum(total_amount), 0) as amount
                         from orders
                         where ordered_at >= :from and ordered_at < :to
@@ -98,11 +109,11 @@ public class DailyReportAssembler {
      * <p>미매핑 항목은 제외한다. {@code sku_id} 가 null 이므로 조인 대상이 없고, 상품명을 알 수
      * 없어 리포트에 표시할 수 없다. 미매핑 건수는 별도 항목으로 알린다.
      */
-    private List<DailyReportPayload.TopSku> queryTopSkus(Instant from, Instant to) {
+    private List<DailyReportPayload.TopSku> queryTopSkus(OffsetDateTime from, OffsetDateTime to) {
         return jdbcClient.sql("""
-                        select s.code          as sku_code,
-                               s.name          as product_name,
-                               sum(l.quantity) as quantity
+                        select s.code               as sku_code,
+                               s.name               as product_name,
+                               sum(l.quantity)::int as quantity
                         from order_line l
                                  join sku s on s.id = l.sku_id
                                  join orders o on o.id = l.order_id
@@ -121,7 +132,7 @@ public class DailyReportAssembler {
 
     private int countLowStock() {
         return jdbcClient.sql("""
-                        select count(*) from sku
+                        select count(*)::int from sku
                         where active = true and quantity < safety_threshold
                         """)
                 .query(Integer.class)
@@ -129,7 +140,7 @@ public class DailyReportAssembler {
     }
 
     private int countUnmappedLines() {
-        return jdbcClient.sql("select count(*) from order_line where sku_id is null")
+        return jdbcClient.sql("select count(*)::int from order_line where sku_id is null")
                 .query(Integer.class)
                 .single();
     }
