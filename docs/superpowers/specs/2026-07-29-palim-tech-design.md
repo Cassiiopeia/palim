@@ -13,7 +13,7 @@
 |---|---|
 | 언어 / 런타임 | Java 25 LTS (Lombok 호환 검증 실패 시 Java 21 LTS) |
 | 프레임워크 | Spring Boot 4.x |
-| 빌드 | Gradle (Kotlin DSL), 멀티모듈 6개 |
+| 빌드 | Gradle (Kotlin DSL), 도메인 축 멀티모듈 10개 |
 | 영속성 | JPA / Hibernate |
 | 기본키 | **UUIDv7**, 애플리케이션에서 생성·할당 |
 | 데이터베이스 | PostgreSQL |
@@ -60,40 +60,100 @@ Java 25 + Spring Boot 4.x + Lombok 최신 → 컴파일 통과 여부
 
 ## 3. 모듈 구조
 
-```
-palim/
-├─ palim-domain     엔티티, 도메인 규칙, 포트 인터페이스
-├─ palim-channel    채널 어댑터 + 공통 HTTP·재시도·rate limiter
-├─ palim-collector  수집 스케줄러, 주문 처리 파이프라인, 재고 반영
-├─ palim-notifier   Outbox 소비, 텔레그램 발송, AI 요약
-├─ palim-web        Thymeleaf 관리자 화면 + Spring Security
-└─ palim-app        부트 진입점, 설정 조립, Flyway 마이그레이션
-```
+모듈은 **도메인 축**으로 나눈다. 원칙은 하나다 — **도메인 모듈은 자기 도메인만 안다.** 여러 도메인을 관통하는 책임은 조율 계층이 갖는다.
 
-### 3.1 의존 방향
+| 모듈 | 책임 | 의존 |
+|---|---|---|
+| `palim-common` | `UuidV7`, `BaseTimeEntity`, 공통 예외, 통합 테스트 픽스처 | 없음 |
+| `palim-auth` | 관리자 계정, 비밀번호 해싱 | common |
+| `palim-sku` | SKU · 재고 수량 · 안전재고 임계치 · 재고 이력 | common |
+| `palim-order` | 주문 · 주문 항목 | common |
+| `palim-channel` | 채널 설정 · API 인증정보 · 수집 커서 · 채널 어댑터 | common |
+| `palim-mapping` | 채널 상품코드 ↔ SKU 매핑 | common |
+| `palim-notification` | Outbox · 알림 설정 · 텔레그램 발송 | common |
+| `palim-collector` | 수집 스케줄러 · **수집 조율 트랜잭션** | 도메인 전부 |
+| `palim-web` | Thymeleaf 화면 · Security · 화면용 조회 | 도메인 전부 |
+| `palim-app` | 진입점 · 설정 조립 · Flyway | collector, web |
+
+### 3.1 모듈을 나누는 목적 — jar 크기가 아니다
+
+`bootJar`는 실행 가능한 단일 파일이므로 전체 런타임 의존성의 **합집합**을 포함한다. 모듈별로 의존성을 좁혀도 최종 jar 크기는 줄지 않는다. 크기가 줄어드는 것은 모듈을 별도 프로세스로 배포할 때이며, 본 시스템은 단일 배포다(4.5 참조).
+
+목적은 다음 네 가지다.
+
+| 이득 | 내용 |
+|---|---|
+| **컴파일 타임 격리** | `palim-sku`에 web 의존성을 주지 않으면 재고 도메인에서 `@Controller`·`HttpServletRequest`를 **쓸 수 없다.** 규칙을 문서가 아니라 컴파일러가 강제한다 |
+| 빌드 속도 | 변경된 모듈과 그 하위만 재컴파일된다 |
+| 의존 방향 강제 | 역참조·순환이 컴파일 단계에서 차단된다 |
+| 분리 여지 확보 | 경계가 이미 존재하면 향후 프로세스 분리가 파일 이동 수준이 된다 |
+
+즉 얻으려는 것은 작은 jar가 아니라 **실수할 수 없는 구조**다.
+
+### 3.2 의존 방향
 
 ```
 palim-app
-   ├──→ palim-web ─────────┐
-   ├──→ palim-collector ───┼──→ palim-domain
-   └──→ palim-notifier ────┘
-              │
-              └──→ palim-channel   (palim-domain을 참조하지 않는다)
+   ├──→ palim-collector ──→ 도메인 모듈들
+   └──→ palim-web       ──→ 도메인 모듈들
+
+모든 도메인 모듈 ──→ palim-common
+도메인 모듈 ──X──→ 다른 도메인 모듈        (금지)
 ```
 
-의존은 단방향이다. 역방향 참조는 컴파일 단계에서 차단된다.
+`palim-app`이 최상위인 이유는 진입점이 여기 있어 하위 모듈의 빈을 스캔해야 하기 때문이다. `collector`와 `web`은 목적이 달라 서로를 의존하지 않는다.
 
-`palim-collector`만이 `palim-channel`과 `palim-domain`을 동시에 알며, 채널 공통 `record`를 도메인 엔티티로 변환하는 책임을 갖는다.
+부트 jar는 `palim-app`에서만 생성한다. 나머지는 라이브러리 jar로 빌드된다.
 
-### 3.2 채널 어댑터의 격리
+### 3.3 도메인 간 참조는 UUID 값으로만
 
-`palim-channel`은 **`palim-domain`의 엔티티를 알지 못한다.** 채널 어댑터는 공통 `record`(예: `ChannelOrder`, `ChannelProduct`)만 반환하며, 이를 `Order`·`Sku` 엔티티로 변환하는 책임은 `palim-collector`에 있다.
+```java
+// palim-order 의 OrderLine
+private UUID skuId;              // O
+// private Sku sku;              // X — palim-sku 의존이 생긴다
+```
+
+기본키가 애플리케이션에서 생성하는 UUIDv7이라 저장 전에 식별자가 확정되므로, 다른 모듈의 엔티티를 몰라도 참조를 표현할 수 있다.
+
+> **설계 근거**: `@GeneratedValue` 시퀀스라면 저장 전에 식별자가 없어 이 구조가 훨씬 번거로워진다. 4.1의 UUIDv7 결정이 모듈 경계 유지에서 실질적 이득으로 돌아오는 지점이다.
+
+DB 레벨 외래키는 Flyway로 정상 부여한다. 모듈 독립성은 코드 차원의 문제이고 데이터 정합성은 별개다. 단 미매핑 주문을 저장해야 하므로(F-04) `order_line.sku_id`는 **nullable**이다.
+
+### 3.4 트랜잭션은 `palim-collector`가 연다
+
+주문 수집 1건이 도메인 4개를 관통하며, 이 전체가 한 트랜잭션이어야 한다.
+
+```java
+// palim-collector
+@Transactional
+public void ingest(ChannelOrder channelOrder) {
+    UUID skuId = mappingService.resolveSkuId(...);    // palim-mapping
+    boolean isNew = orderService.saveIfAbsent(...);   // palim-order (유니크 제약)
+    if (!isNew) return;                              // 중복 → 재고 미차감 (A-02)
+    if (skuId != null) {
+        skuService.decrease(skuId, quantity);        // palim-sku (비관적 락)
+    }
+    outboxService.enqueue(...);                      // palim-notification
+}
+```
+
+도메인 서비스는 자체 트랜잭션을 열지 않고 참여만 한다.
+
+> **설계 근거**: 도메인이 각자 트랜잭션을 열면 재고는 차감됐는데 주문은 롤백되는 상태가 발생한다. 트랜잭션을 여는 지점을 한 곳으로 고정해야 재고 정합성이 보장된다.
+
+### 3.5 채널 어댑터의 격리
+
+`palim-channel`은 **주문·재고 도메인을 알지 못한다.** 어댑터는 공통 `record`(예: `ChannelOrder`, `ChannelProduct`)만 반환하며, 이를 엔티티로 변환하는 책임은 `palim-collector`에 있다.
 
 > **설계 근거**: 기능 명세서 4.2는 *"신규 채널 추가 시 기존 코드에 영향을 주지 않는다"* 고 규정한다. 이를 문서상의 약속이 아니라 **빌드 시스템이 강제하는 사실**로 만든다. 쿠팡 어댑터에서 `Sku`를 참조하면 컴파일이 실패한다.
 
-### 3.3 채널을 모듈 단위로 분리하지 않은 이유
+채널마다 모듈을 분리하지는 않는다. 어댑터 간에 HTTP 클라이언트·재시도 정책·rate limiter를 공유하므로, 분리하면 공유 코드를 다시 공통 모듈로 추출해야 하고 얻는 격리 수준에 비해 관리 대상만 증가한다. 채널 간 분리는 패키지 단위로 수행한다.
 
-어댑터 간에 HTTP 클라이언트·재시도 정책·rate limiter를 공유한다. 채널마다 모듈을 분리하면 공유 코드를 다시 공통 모듈로 추출해야 하며, 얻는 격리 수준에 비해 관리 대상 파일만 증가한다. 채널 간 분리는 패키지 단위로 수행한다.
+### 3.6 텔레그램 발송을 별도 모듈로 두지 않는 이유
+
+발송은 Outbox를 소유한 `palim-notification` 도메인의 외부 연동 인프라다. 별 모듈로 빼면 Outbox 상태 전이와 발송이 모듈 경계를 넘나들게 되어 오히려 결합이 늘어난다.
+
+반면 수집 조율(`palim-collector`)은 여러 도메인을 관통하는 독립된 책임이므로 별 모듈로 유지한다. 화면(`palim-web`)과 목적이 전혀 달라 한 모듈에 합치면 배치 코드와 화면 코드가 섞인다.
 
 ---
 
@@ -389,7 +449,7 @@ notifier 소비 → 텔레그램 발송 → outbox 상태 SENT
 
 Outbox 없이 RabbitMQ만 사용하면, 주문 커밋 후 큐 발행이 실패하는 순간 알림이 영구 소실된다.
 
-발송 인터페이스는 `palim-domain`의 포트로 분리하여, 기능 명세서 4.4가 규정한 *"큐 제품 교체 시 해당 계층만 교체"* 요건을 충족한다.
+발송 인터페이스는 `palim-notification` 내부의 포트로 분리하여, 기능 명세서 4.4가 규정한 *"큐 제품 교체 시 해당 계층만 교체"* 요건을 충족한다. 호출자는 Outbox에 기록하는 것까지만 알고, RabbitMQ 발행은 구현체가 담당한다.
 
 ---
 

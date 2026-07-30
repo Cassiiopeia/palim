@@ -6,7 +6,7 @@ WORKDIR /app
 # 루트 권한으로 실행하지 않는다
 RUN groupadd --system palim && useradd --system --gid palim palim
 
-COPY build/libs/*.jar app.jar
+COPY palim-app/build/libs/*.jar app.jar
 
 USER palim
 
