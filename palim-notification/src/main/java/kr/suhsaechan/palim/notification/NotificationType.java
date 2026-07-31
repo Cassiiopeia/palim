@@ -10,35 +10,46 @@ package kr.suhsaechan.palim.notification;
 public enum NotificationType {
 
     /** 신규 주문 (F-02). */
-    NEW_ORDER,
+    NEW_ORDER("신규 주문"),
 
     /** 안전재고 미달 (F-05). */
-    LOW_STOCK,
+    LOW_STOCK("재고 부족"),
 
     /** 재고 0 도달 — 긴급 (F-05). */
-    OUT_OF_STOCK,
+    OUT_OF_STOCK("품절"),
 
     /**
      * 오버셀링 — 실재고를 초과해 판매되어 재고가 음수가 되었다.
      *
      * <p>채널 재고 동기화 지연 중에 발생한다. 출고 불가 상태이므로 발주자가 즉시 조치해야 한다.
      */
-    OVERSELL,
+    OVERSELL("초과판매"),
 
     /** 미매핑 상품 주문 수집 (F-04). 방치하면 재고가 조용히 틀어진다. */
-    UNMAPPED_PRODUCT,
+    UNMAPPED_PRODUCT("미매핑 상품"),
 
     /** 일일 요약 리포트 (F-06). */
-    DAILY_REPORT,
+    DAILY_REPORT("일일 리포트"),
 
     /** 채널 수집 연속 실패 (A-10). */
-    COLLECT_FAILURE,
+    COLLECT_FAILURE("수집 실패"),
 
     /** 채널 재고 전송 실패·차단 (F-08). */
-    STOCK_PUSH_FAILURE,
+    STOCK_PUSH_FAILURE("재고 전송 실패"),
 
     /** 재고 스냅샷과 이력 누적합 불일치 (설계서 5.3). */
-    STOCK_MISMATCH;
+    STOCK_MISMATCH("재고 불일치");
+
+    private final String displayName;
+
+    NotificationType(String displayName) {
+        this.displayName = displayName;
+    }
+
+    /** 화면·메시지 표시 이름. */
+    public String displayName() {
+        return displayName;
+    }
 
     /**
      * 긴급 알림 여부.

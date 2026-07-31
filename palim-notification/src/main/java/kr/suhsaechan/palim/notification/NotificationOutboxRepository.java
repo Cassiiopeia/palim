@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface NotificationOutboxRepository extends JpaRepository<NotificationOutbox, UUID> {
@@ -28,4 +30,7 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
      * 기준으로 판단한다 — 발송이 실패해 재시도 중인 알림이 있는데 또 등록하면 중복이 쌓인다.
      */
     boolean existsByDedupeKeyAndCreatedAtAfter(String dedupeKey, Instant after);
+
+    /** 이력 화면용 (#32). 정렬은 서비스가 지정한다. */
+    Page<NotificationOutbox> findByStatus(OutboxStatus status, Pageable pageable);
 }

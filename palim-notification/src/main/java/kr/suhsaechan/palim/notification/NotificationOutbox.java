@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -119,5 +121,27 @@ public class NotificationOutbox extends BaseTimeEntity {
 
     public boolean isPending() {
         return status == OutboxStatus.PENDING;
+    }
+
+    public boolean isFailed() {
+        return status == OutboxStatus.FAILED;
+    }
+
+    /**
+     * 사람이 원인을 해결한 뒤 재발송 대기로 되돌린다 (#32).
+     *
+     * <p><b>FAILED 에서만 허용한다.</b> PENDING 은 이미 발송 예정이라 되돌릴 것이 없고, SENT 를
+     * 되돌리면 같은 알림이 중복 발송된다.
+     *
+     * <p>시도 횟수를 0 으로 초기화한다 — FAILED 는 한도(5회)를 이미 소진한 상태라, 리셋하지
+     * 않으면 재발송 첫 실패에 즉시 다시 FAILED 가 되어 재발송이 사실상 1회짜리가 된다.
+     * {@code lastError} 는 다음 시도가 덮어쓸 때까지 남겨 원인 문맥을 유지한다.
+     */
+    public void retryManually() {
+        if (status != OutboxStatus.FAILED) {
+            throw new BusinessException(ErrorCode.NOTIFICATION_NOT_RETRYABLE, status);
+        }
+        this.status = OutboxStatus.PENDING;
+        this.attemptCount = 0;
     }
 }

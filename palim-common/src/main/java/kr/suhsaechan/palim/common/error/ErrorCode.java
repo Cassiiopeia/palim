@@ -167,6 +167,9 @@ public enum ErrorCode {
     /** 텔레그램 발송 실패. Outbox 에 남아 재시도된다. */
     TELEGRAM_SEND_FAILED("N008", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
 
+    /** 실패 상태가 아닌 알림에 재발송을 요청했다. */
+    NOTIFICATION_NOT_RETRYABLE("N009", HttpStatus.CONFLICT, LogLevel.WARN),
+
     // ==================================================================
     // 인증 (A)
     // ==================================================================

@@ -9,6 +9,10 @@ import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -115,6 +119,31 @@ public class OutboxService {
     @Transactional(readOnly = true)
     public long countFailed() {
         return notificationOutboxRepository.countByStatus(OutboxStatus.FAILED);
+    }
+
+    /**
+     * 이력 조회 (#32). 최신 등록순.
+     *
+     * @param status {@code null} 이면 전체 상태
+     */
+    @Transactional(readOnly = true)
+    public Page<NotificationOutbox> findHistory(OutboxStatus status, Pageable pageable) {
+        Pageable sorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return status == null
+                ? notificationOutboxRepository.findAll(sorted)
+                : notificationOutboxRepository.findByStatus(status, sorted);
+    }
+
+    /**
+     * 실패한 알림을 재발송 대기로 되돌린다 (#32).
+     *
+     * <p>발송 자체는 기존 relay 가 다음 주기에 처리한다 — 화면 요청 스레드에서 텔레그램 API 를
+     * 직접 호출하는 새 발송 경로를 만들지 않는다. 경로가 둘이 되면 재시도 판단 기준이 갈라진다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void retryManually(UUID outboxId) {
+        get(outboxId).retryManually();
     }
 
     @Transactional(readOnly = true)
