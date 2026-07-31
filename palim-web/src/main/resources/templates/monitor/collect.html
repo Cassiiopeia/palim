@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!--/* 조치 필요 요약. 문제가 있는 채널이 목록 앞에 정렬되어 있다. */-->
+    <div th:if="${attentionCount > 0}" class="alert alert-error mb-4" role="alert">
+        <span th:text="'조치가 필요한 채널이 ' + ${attentionCount} + '개 있습니다.'"></span>
+    </div>
+    <div th:if="${attentionCount == 0}" class="alert alert-success mb-4" role="status">
+        <span>모든 채널이 정상입니다.</span>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+        <div th:each="status : ${statuses}" class="card bg-base-100 shadow-sm"
+             th:classappend="${status.health().needsAttention()} ? 'border border-error' : ''">
+            <div class="card-body">
+                <div class="flex items-center justify-between">
+                    <h2 class="card-title text-base" th:text="${status.channelName}">채널</h2>
+                    <span class="badge"
+                          th:classappend="'badge-' + ${status.health().badgeClass()}"
+                          th:text="${status.health().displayName()}">상태</span>
+                </div>
+
+                <!--/* 자동 중단은 조치 방법까지 알려준다. 상태 이름만으론 뭘 해야 할지 모른다. */-->
+                <p th:if="${status.health().name() == 'AUTO_DISABLED'}" class="text-sm text-error">
+                    연속 실패로 수집이 중단됐습니다. 채널 설정에서 인증정보를 확인하고 다시
+                    활성화하세요.
+                </p>
+                <p th:if="${status.health().name() == 'STALE'}" class="text-sm text-warning">
+                    예정 시각을 넘겼는데 수집 기록이 없습니다. 애플리케이션이 정상 동작 중인지
+                    확인하세요.
+                </p>
+                <p th:if="${status.lastError != null}" class="text-sm text-error font-mono break-all"
+                   th:text="${status.lastError}">오류</p>
+
+                <div class="overflow-x-auto mt-1">
+                    <table class="table table-sm">
+                        <tbody>
+                        <tr>
+                            <td class="text-base-content/60 w-32">마지막 수집</td>
+                            <td class="font-mono text-xs" th:text="${status.lastCollectedAtText}">-</td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/60">수집 커서</td>
+                            <td>
+                                <span class="font-mono text-xs" th:text="${status.collectedUntilText}">-</span>
+                                <span th:if="${status.cursorLagText != null}"
+                                      class="text-xs text-base-content/60 ml-1"
+                                      th:text="'(' + ${status.cursorLagText} + ')'"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/60">연속 실패</td>
+                            <td>
+                                <span th:classappend="${status.consecutiveFailureCount > 0} ? 'text-error font-semibold' : ''"
+                                      th:text="${status.consecutiveFailureCount}">0</span>
+                                <span class="text-xs text-base-content/60"
+                                      th:text="' / ' + ${status.failureThreshold} + ' (임계)'"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/60">수집 주기</td>
+                            <td th:text="${status.intervalText}">5분</td>
+                        </tr>
+                        <tr>
+                            <td class="text-base-content/60">다음 수집</td>
+                            <td th:text="${status.nextDueText}">-</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-actions justify-end">
+                    <a th:href="@{/settings/channels}" class="btn btn-ghost btn-xs">채널 설정 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-xs text-base-content/60 mt-4">
+        수집 커서: 이 시각 이전의 주문은 수집이 끝났다는 뜻입니다. 커서가 오래 뒤처져 있으면
+        그 사이의 판매가 재고에 반영되지 않은 상태입니다.
+    </p>
+
+</th:block>
+</body>
+</html>
