@@ -64,7 +64,9 @@ public enum AuditType {
     CHANNEL_CREDENTIAL_UPDATE("채널 설정", "채널 인증정보를 변경했습니다.", AuditGroup.CHANGE),
     CHANNEL_TOGGLE("채널 설정", "채널 사용 여부를 변경했습니다.", AuditGroup.CHANGE),
 
-    NOTIFICATION_SETTING_UPDATE("알림 설정", "알림 설정을 변경했습니다.", AuditGroup.CHANGE);
+    NOTIFICATION_SETTING_UPDATE("알림 설정", "알림 설정을 변경했습니다.", AuditGroup.CHANGE),
+
+    NOTIFICATION_RESEND("알림 재발송", "실패한 알림을 재발송 대기로 되돌렸습니다.", AuditGroup.CHANGE);
 
     private final String displayName;
     private final String defaultSummary;

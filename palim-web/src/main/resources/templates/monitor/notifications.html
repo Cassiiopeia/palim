@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+
+            <!--/* 상태 탭. 기본은 실패 — 조치 대상부터 보인다. */-->
+            <div role="tablist" class="tabs tabs-box">
+                <a role="tab" class="tab" th:classappend="${showAll} ? 'tab-active' : ''"
+                   th:href="@{/monitor/notifications(all=true)}">전체</a>
+                <a th:each="s : ${statuses}" role="tab" class="tab"
+                   th:classappend="${!showAll and s == selectedStatus} ? 'tab-active' : ''"
+                   th:href="@{/monitor/notifications(status=${s})}"
+                   th:text="${s.name() == 'PENDING'} ? '대기'
+                            : (${s.name() == 'SENT'} ? '발송됨' : '실패')">상태</a>
+            </div>
+
+            <div th:if="${history.isEmpty()}" class="alert alert-info mt-4">
+                <span>해당 상태의 알림이 없습니다.</span>
+            </div>
+
+            <div th:unless="${history.isEmpty()}" class="overflow-x-auto mt-4">
+                <table class="table table-sm table-zebra">
+                    <thead>
+                    <tr>
+                        <th>등록 시각</th>
+                        <th>유형</th>
+                        <th>상태</th>
+                        <th class="text-right">시도</th>
+                        <th>발송 시각</th>
+                        <th>내용</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${history.content}">
+                        <td class="font-mono text-xs whitespace-nowrap" th:text="${row.createdAtText}">-</td>
+                        <td>
+                            <span th:text="${row.typeName}">유형</span>
+                            <span th:if="${row.urgent}" class="badge badge-error badge-xs ml-1">긴급</span>
+                        </td>
+                        <td>
+                            <span class="badge badge-sm" th:classappend="${row.badgeClass}"
+                                  th:text="${row.statusName}">상태</span>
+                        </td>
+                        <td class="text-right" th:text="${row.attemptCount}">0</td>
+                        <td class="font-mono text-xs whitespace-nowrap" th:text="${row.sentAtText}">-</td>
+                        <td class="max-w-md">
+                            <p th:if="${row.lastError != null}" class="text-xs text-error break-all"
+                               th:text="${row.lastError}">오류</p>
+                            <!--/* payload 는 이스케이프 출력만 한다 — 저장형 XSS 방어의 마지막 단. */-->
+                            <details>
+                                <summary class="text-xs text-base-content/60 cursor-pointer">payload</summary>
+                                <pre class="text-xs font-mono bg-base-200 rounded p-2 mt-1 whitespace-pre-wrap break-all"
+                                     th:text="${row.payload}"></pre>
+                            </details>
+                        </td>
+                        <td>
+                            <form th:if="${row.retryable}"
+                                  th:action="@{/monitor/notifications/{id}/retry(id=${row.id})}"
+                                  method="post">
+                                <button type="submit" class="btn btn-xs btn-outline btn-error">재발송</button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 페이징 -->
+            <div th:if="${history.totalPages > 1}" class="join justify-center mt-4">
+                <a class="join-item btn btn-sm"
+                   th:classappend="${history.first} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/notifications(status=${selectedStatus}, all=${showAll},
+                            page=${history.number - 1})}">«</a>
+                <span class="join-item btn btn-sm btn-active"
+                      th:text="${history.number + 1} + ' / ' + ${history.totalPages}">1 / 1</span>
+                <a class="join-item btn btn-sm"
+                   th:classappend="${history.last} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/notifications(status=${selectedStatus}, all=${showAll},
+                            page=${history.number + 1})}">»</a>
+            </div>
+
+            <p class="text-xs text-base-content/60 mt-3">
+                실패는 재시도 한도(5회)를 소진한 상태입니다. 원인(텔레그램 연결·chat_id)을 해결한
+                뒤 재발송하세요. 재발송은 다음 발송 주기에 처리되며 감사 로그에 기록됩니다.
+            </p>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>
