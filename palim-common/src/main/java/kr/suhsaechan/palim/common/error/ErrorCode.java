@@ -171,6 +171,21 @@ public enum ErrorCode {
     NOTIFICATION_NOT_RETRYABLE("N009", HttpStatus.CONFLICT, LogLevel.WARN),
 
     // ==================================================================
+    // 인시던트 (I)
+    // ==================================================================
+
+    INCIDENT_NOT_FOUND("I001", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    /** 이미 해결된 인시던트를 다시 처리하려 했다. 재발은 새 인시던트로 만든다. */
+    INCIDENT_ALREADY_RESOLVED("I002", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /** 허용되지 않는 상태 전이. */
+    INCIDENT_INVALID_TRANSITION("I003", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /** 해결 메모 없이 해결하려 했다. */
+    INCIDENT_MEMO_REQUIRED("I004", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    // ==================================================================
     // 인증 (A)
     // ==================================================================
 

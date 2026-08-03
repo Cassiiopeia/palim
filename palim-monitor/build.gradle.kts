@@ -8,6 +8,8 @@ dependencies {
     implementation(project(":palim-channel"))
     implementation(project(":palim-mapping"))
     implementation(project(":palim-notification"))
+    // 재고 불일치를 인시던트로 보고한다 (#34)
+    implementation(project(":palim-incident"))
     implementation(project(":palim-order"))
     implementation(project(":palim-sku"))
 

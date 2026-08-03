@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div th:if="${unresolvedCount > 0}" class="alert alert-warning mb-4" role="alert">
+        <span th:text="'미해결 인시던트가 ' + ${unresolvedCount} + '건 있습니다.'"></span>
+    </div>
+    <div th:if="${unresolvedCount == 0}" class="alert alert-success mb-4" role="status">
+        <span>미해결 인시던트가 없습니다.</span>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <!--/* 상태 탭. 기본은 미확인 — 조치 대상부터 보인다. */-->
+                <div role="tablist" class="tabs tabs-box">
+                    <a role="tab" class="tab" th:classappend="${showAll} ? 'tab-active' : ''"
+                       th:href="@{/monitor/incidents(all=true, type=${selectedType})}">전체</a>
+                    <a th:each="s : ${statuses}" role="tab" class="tab"
+                       th:classappend="${!showAll and s == selectedStatus} ? 'tab-active' : ''"
+                       th:href="@{/monitor/incidents(status=${s}, type=${selectedType})}"
+                       th:text="${s.displayName()}">상태</a>
+                </div>
+
+                <!-- 유형 필터 -->
+                <form th:action="@{/monitor/incidents}" method="get" class="flex items-center gap-2">
+                    <input type="hidden" name="status" th:value="${selectedStatus}" th:if="${!showAll}">
+                    <input type="hidden" name="all" value="true" th:if="${showAll}">
+                    <select name="type" class="select select-bordered select-sm" aria-label="유형 필터">
+                        <option value="">전체 유형</option>
+                        <option th:each="t : ${types}" th:value="${t}"
+                                th:selected="${t == selectedType}"
+                                th:text="${t.displayName()}">유형</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm">적용</button>
+                </form>
+            </div>
+
+            <div th:if="${incidents.isEmpty()}" class="alert alert-info mt-4">
+                <span>해당 조건의 인시던트가 없습니다.</span>
+            </div>
+
+            <div th:unless="${incidents.isEmpty()}" class="space-y-3 mt-4">
+                <div th:each="incident : ${incidents.content}"
+                     class="border border-base-300 rounded-box p-4"
+                     th:classappend="${incident.status.name() == 'OPEN'} ? 'border-error' : ''">
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="badge badge-sm" th:classappend="${incident.badgeClass}"
+                              th:text="${incident.statusName}">상태</span>
+                        <span class="badge badge-ghost badge-sm" th:text="${incident.typeName}">유형</span>
+                        <span class="font-medium" th:text="${incident.title}">제목</span>
+                        <span th:if="${incident.occurrenceCount > 1}"
+                              class="badge badge-outline badge-sm"
+                              th:text="${incident.occurrenceCount} + '회 발생'"></span>
+                    </div>
+
+                    <pre th:if="${incident.detail != null}"
+                         class="text-xs bg-base-200 rounded p-2 mt-2 whitespace-pre-wrap break-all"
+                         th:text="${incident.detail}"></pre>
+
+                    <div class="text-xs text-base-content/60 mt-2 space-x-3">
+                        <span th:text="'최초: ' + ${incident.firstOccurredAtText}"></span>
+                        <span th:text="'최근: ' + ${incident.lastOccurredAtText}"></span>
+                        <span th:if="${incident.acknowledgedAtText != null}"
+                              th:text="'확인: ' + ${incident.acknowledgedAtText}"></span>
+                        <span th:if="${incident.resolvedAtText != null}"
+                              th:text="'해결: ' + ${incident.resolvedAtText}"></span>
+                    </div>
+
+                    <p th:if="${incident.resolutionMemo != null}"
+                       class="text-sm mt-2 text-base-content/80">
+                        조치: <span th:text="${incident.resolutionMemo}"></span>
+                    </p>
+
+                    <!--/* 해결에는 메모가 필수다 — 무엇을 했는지 없는 해결은 추적이 아니다. */-->
+                    <div th:if="${incident.canAcknowledge() or incident.canResolve()}"
+                         class="flex flex-wrap items-end gap-2 mt-3">
+                        <form th:if="${incident.canAcknowledge()}"
+                              th:action="@{/monitor/incidents/{id}/acknowledge(id=${incident.id})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm">확인</button>
+                        </form>
+                        <form th:if="${incident.canResolve()}"
+                              th:action="@{/monitor/incidents/{id}/resolve(id=${incident.id})}"
+                              method="post" class="flex items-center gap-2">
+                            <input type="text" name="memo" required maxlength="1000"
+                                   placeholder="조치 내용 (필수)"
+                                   class="input input-bordered input-sm w-64"
+                                   th:aria-label="'조치 내용 — ' + ${incident.title}">
+                            <button type="submit" class="btn btn-sm btn-primary">해결</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 페이징 -->
+            <div th:if="${incidents.totalPages > 1}" class="join justify-center mt-4">
+                <a class="join-item btn btn-sm"
+                   th:classappend="${incidents.first} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/incidents(status=${selectedStatus}, all=${showAll},
+                            type=${selectedType}, page=${incidents.number - 1})}">«</a>
+                <span class="join-item btn btn-sm btn-active"
+                      th:text="${incidents.number + 1} + ' / ' + ${incidents.totalPages}">1 / 1</span>
+                <a class="join-item btn btn-sm"
+                   th:classappend="${incidents.last} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/incidents(status=${selectedStatus}, all=${showAll},
+                            type=${selectedType}, page=${incidents.number + 1})}">»</a>
+            </div>
+
+            <p class="text-xs text-base-content/60 mt-3">
+                같은 사건이 재발하면 새 인시던트 대신 발생 횟수가 누적됩니다. 해결된 뒤 재발하면
+                새 인시던트로 등록됩니다. 확인·해결은 감사 로그에 기록됩니다.
+            </p>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

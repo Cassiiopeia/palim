@@ -27,6 +27,7 @@ final class ScreenNames {
         NAMES.put("/settings/account", "계정 설정");
         NAMES.put("/monitor/collect", "수집 모니터");
         NAMES.put("/monitor/notifications", "알림 이력");
+        NAMES.put("/monitor/incidents", "인시던트");
         NAMES.put("/mappings", "상품 매핑");
         NAMES.put("/audit", "감사 로그");
         NAMES.put("/skus", "재고 관리");

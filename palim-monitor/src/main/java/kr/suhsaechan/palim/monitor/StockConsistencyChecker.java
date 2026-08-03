@@ -1,6 +1,8 @@
 package kr.suhsaechan.palim.monitor;
 
 import java.util.List;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
@@ -46,6 +48,7 @@ public class StockConsistencyChecker {
     private final SkuService skuService;
     private final OutboxService outboxService;
     private final MonitorProperties monitorProperties;
+    private final IncidentService incidentService;
 
     /**
      * 전 SKU 를 대조한다.
@@ -90,5 +93,13 @@ public class StockConsistencyChecker {
                 "STOCK_MISMATCH:" + sku.getCode(),
                 monitorProperties.mismatchAlertInterval(),
                 new StockMismatchPayload(sku.getCode(), sku.getName(), sku.getQuantity(), historySum));
+
+        // 인시던트는 알림과 달리 억제가 필요 없다 — 미해결이면 발생 횟수만 누적된다 (#34).
+        incidentService.report(IncidentType.STOCK_MISMATCH,
+                "STOCK_MISMATCH:" + sku.getCode(),
+                "%s 재고 불일치 — 스냅샷 %d vs 이력 %d".formatted(
+                        sku.getCode(), sku.getQuantity(), historySum),
+                "SKU: %s (%s)%n재고 수량: %d / 변동 이력 누적합: %d%n원인을 찾기 전까지 이 SKU 의 재고를 믿을 수 없습니다. 변동 이력을 확인하세요."
+                        .formatted(sku.getCode(), sku.getName(), sku.getQuantity(), historySum));
     }
 }

@@ -30,6 +30,7 @@ dependencies {
     // 도메인 규칙 자체는 각 모듈에서 Spring 없는 단위 테스트로 검증한다(설계서 8장).
     testImplementation(project(":palim-audit"))
     testImplementation(project(":palim-auth"))
+    testImplementation(project(":palim-incident"))
     testImplementation(project(":palim-channel"))
     testImplementation(project(":palim-mapping"))
     testImplementation(project(":palim-notification"))

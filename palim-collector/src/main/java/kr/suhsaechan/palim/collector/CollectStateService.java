@@ -4,6 +4,8 @@ import java.time.Instant;
 import kr.suhsaechan.palim.channel.Channel;
 import kr.suhsaechan.palim.channel.ChannelService;
 import kr.suhsaechan.palim.common.ChannelCode;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
 import kr.suhsaechan.palim.notification.payload.CollectFailurePayload;
@@ -26,6 +28,7 @@ public class CollectStateService {
 
     private final ChannelService channelService;
     private final OutboxService outboxService;
+    private final IncidentService incidentService;
 
     /** 수집 성공. 커서를 전진시키고 실패 카운터를 초기화한다. */
     @Transactional
@@ -68,6 +71,14 @@ public class CollectStateService {
             channelService.disable(channelCode);
             log.error("연속 실패 {}회로 {} 채널 수집을 중단했습니다. 인증정보와 IP 등록을 확인하세요.",
                     channel.getConsecutiveFailureCount(), channelCode);
+
+            // 수집 중단은 발주자 조치 전까지 재고 반영이 멈추는 상태다 — 인시던트로 추적 (#34).
+            incidentService.report(IncidentType.COLLECT_STOPPED,
+                    "COLLECT_STOPPED:" + channelCode,
+                    "%s 수집 자동 중단 — 연속 실패 %d회".formatted(
+                            channelCode.displayName(), channel.getConsecutiveFailureCount()),
+                    "마지막 오류: %s%n인증정보와 IP 등록을 확인한 뒤 채널 설정에서 다시 활성화하세요."
+                            .formatted(errorMessage));
         }
 
         outboxService.enqueue(NotificationType.COLLECT_FAILURE, new CollectFailurePayload(

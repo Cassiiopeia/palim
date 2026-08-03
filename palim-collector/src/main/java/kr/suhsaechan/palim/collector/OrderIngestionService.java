@@ -5,6 +5,8 @@ import java.util.UUID;
 import kr.suhsaechan.palim.channel.adapter.ChannelOrder;
 import kr.suhsaechan.palim.channel.adapter.ChannelOrderLine;
 import kr.suhsaechan.palim.common.ChannelCode;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.mapping.ProductMappingService;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
@@ -51,6 +53,7 @@ public class OrderIngestionService {
     private final ProductMappingService productMappingService;
     private final SkuService skuService;
     private final OutboxService outboxService;
+    private final IncidentService incidentService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IngestResult ingest(ChannelOrder channelOrder, Instant collectedAt) {
@@ -155,6 +158,7 @@ public class OrderIngestionService {
                     sku.getName(),
                     line.getQuantity(),
                     sku.getQuantity()));
+            reportOversellIncident(sku);
         }
         return true;
     }
@@ -185,6 +189,20 @@ public class OrderIngestionService {
                 line.channelOptionNo(),
                 line.channelProductName(),
                 line.quantity()));
+
+        // 같은 채널 상품의 미매핑 주문이 반복되면 인시던트 하나에 횟수만 누적된다 (#34).
+        incidentService.report(IncidentType.UNMAPPED_PRODUCT,
+                "UNMAPPED:%s:%s:%s".formatted(channelOrder.channelCode(),
+                        line.channelProductNo(), nullToDash(line.channelOptionNo())),
+                "%s 미매핑 상품 — %s".formatted(
+                        channelOrder.channelCode().displayName(), line.channelProductName()),
+                "채널 상품번호: %s / 옵션: %s%n상품명: %s%n상품 매핑 화면에서 SKU 를 연결하면 소급 반영됩니다."
+                        .formatted(line.channelProductNo(), nullToDash(line.channelOptionNo()),
+                                line.channelProductName()));
+    }
+
+    private static String nullToDash(String value) {
+        return value == null ? "-" : value;
     }
 
     /** 오버셀링 알림. 출고 불가 상태이므로 발주자가 즉시 조치해야 한다. */
@@ -200,5 +218,19 @@ public class OrderIngestionService {
                 sku.getName(),
                 line.quantity(),
                 sku.getQuantity()));
+
+        reportOversellIncident(sku);
+    }
+
+    /**
+     * 오버셀 인시던트 (#34). 같은 SKU 의 추가 오버셀은 발생 횟수로 누적되고, 제목·상세가 최신
+     * 재고로 갱신된다 — 목록에는 악화된 현재 상태가 보여야 한다.
+     */
+    private void reportOversellIncident(Sku sku) {
+        incidentService.report(IncidentType.OVERSELL,
+                "OVERSELL:" + sku.getCode(),
+                "%s 초과판매 — 재고 %d".formatted(sku.getCode(), sku.getQuantity()),
+                "SKU: %s (%s)%n현재 재고: %d%n출고 불가 상태입니다. 재고 확보 또는 주문 취소가 필요합니다."
+                        .formatted(sku.getCode(), sku.getName(), sku.getQuantity()));
     }
 }

@@ -9,6 +9,8 @@ dependencies {
     implementation(project(":palim-order"))
     implementation(project(":palim-sku"))
     implementation(project(":palim-notification"))
+    // 오버셀·미매핑·수집 중단을 인시던트로 보고한다 (#34)
+    implementation(project(":palim-incident"))
 
     testImplementation(testFixtures(project(":palim-common")))
 }
