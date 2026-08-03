@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+
+            <!--/* 상태 탭. 기본은 미확인 — 조치 대상부터 보인다. */-->
+            <div role="tablist" class="tabs tabs-box">
+                <a role="tab" class="tab" th:classappend="${showAll} ? 'tab-active' : ''"
+                   th:href="@{/monitor/incidents(all=true)}">전체</a>
+                <a th:each="s : ${statuses}" role="tab" class="tab"
+                   th:classappend="${!showAll and s == selectedStatus} ? 'tab-active' : ''"
+                   th:href="@{/monitor/incidents(status=${s})}"
+                   th:text="${s.displayName()}">상태</a>
+            </div>
+
+            <div th:if="${incidents.isEmpty()}" class="alert alert-info mt-4">
+                <span>해당 상태의 인시던트가 없습니다.</span>
+            </div>
+
+            <div th:unless="${incidents.isEmpty()}" class="overflow-x-auto mt-4">
+                <table class="table table-sm table-zebra">
+                    <thead>
+                    <tr>
+                        <th>유형</th>
+                        <th>제목</th>
+                        <th class="text-right">발생</th>
+                        <th>최초 발생</th>
+                        <th>최근 발생</th>
+                        <th>상태</th>
+                        <th>조치</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${incidents.content}">
+                        <td class="whitespace-nowrap" th:text="${row.typeName}">유형</td>
+                        <td class="max-w-md">
+                            <p th:text="${row.title}">제목</p>
+                            <!--/* 상세·해결 메모는 이스케이프 출력만 한다 — 채널 상품명이 들어오므로
+                                   저장형 XSS 방어의 마지막 단. */-->
+                            <details th:if="${row.detail != null or row.resolutionNote != null}">
+                                <summary class="text-xs text-base-content/60 cursor-pointer">상세</summary>
+                                <p th:if="${row.detail != null}"
+                                   class="text-xs bg-base-200 rounded p-2 mt-1 whitespace-pre-wrap break-all"
+                                   th:text="${row.detail}"></p>
+                                <p th:if="${row.resolutionNote != null}" class="text-xs mt-1">
+                                    <span class="font-semibold">해결 메모:</span>
+                                    <span th:text="${row.resolutionNote}"></span>
+                                    <span th:if="${row.resolvedAtText != '-'}"
+                                          class="text-base-content/60"
+                                          th:text="|(${row.resolvedAtText})|"></span>
+                                </p>
+                            </details>
+                        </td>
+                        <td class="text-right" th:text="${row.occurrenceCount}">1</td>
+                        <td class="font-mono text-xs whitespace-nowrap" th:text="${row.firstOccurredAtText}">-</td>
+                        <td class="font-mono text-xs whitespace-nowrap" th:text="${row.lastOccurredAtText}">-</td>
+                        <td>
+                            <span class="badge badge-sm" th:classappend="${row.badgeClass}"
+                                  th:text="${row.statusName}">상태</span>
+                        </td>
+                        <td class="whitespace-nowrap">
+                            <form th:if="${row.acknowledgeable}" class="inline"
+                                  th:action="@{/monitor/incidents/{id}/acknowledge(id=${row.id})}"
+                                  method="post">
+                                <button type="submit" class="btn btn-xs btn-outline">확인</button>
+                            </form>
+                            <details th:if="${row.resolvable}" class="dropdown dropdown-end">
+                                <summary class="btn btn-xs btn-outline btn-success">해결</summary>
+                                <form class="dropdown-content bg-base-100 rounded-box z-10 w-64 p-3 shadow"
+                                      th:action="@{/monitor/incidents/{id}/resolve(id=${row.id})}"
+                                      method="post">
+                                    <input type="text" name="resolutionNote" maxlength="1000"
+                                           placeholder="해결 메모 (선택)"
+                                           class="input input-sm input-bordered w-full mb-2">
+                                    <button type="submit" class="btn btn-sm btn-success w-full">해결 처리</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 페이징 -->
+            <div th:if="${incidents.totalPages > 1}" class="join justify-center mt-4">
+                <a class="join-item btn btn-sm"
+                   th:classappend="${incidents.first} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/incidents(status=${selectedStatus}, all=${showAll},
+                            page=${incidents.number - 1})}">«</a>
+                <span class="join-item btn btn-sm btn-active"
+                      th:text="${incidents.number + 1} + ' / ' + ${incidents.totalPages}">1 / 1</span>
+                <a class="join-item btn btn-sm"
+                   th:classappend="${incidents.last} ? 'btn-disabled' : ''"
+                   th:href="@{/monitor/incidents(status=${selectedStatus}, all=${showAll},
+                            page=${incidents.number + 1})}">»</a>
+            </div>
+
+            <p class="text-xs text-base-content/60 mt-3">
+                미해결 상태의 같은 문제는 행이 늘지 않고 발생 횟수로 누적됩니다. 해결 처리 후
+                다시 발생하면 새 인시던트로 등록됩니다. 확인·해결은 감사 로그에 기록됩니다.
+            </p>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":palim-channel"))
     // 매핑 등록 직후 재고 소급 반영을 호출한다 (F-04).
     implementation(project(":palim-collector"))
+    implementation(project(":palim-incident"))
     implementation(project(":palim-mapping"))
     implementation(project(":palim-notification"))
     implementation(project(":palim-order"))

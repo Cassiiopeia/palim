@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":palim-order"))
     implementation(project(":palim-sku"))
     implementation(project(":palim-notification"))
+    implementation(project(":palim-incident"))
 
     testImplementation(testFixtures(project(":palim-common")))
 }

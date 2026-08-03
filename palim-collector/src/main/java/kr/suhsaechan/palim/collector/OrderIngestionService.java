@@ -5,6 +5,8 @@ import java.util.UUID;
 import kr.suhsaechan.palim.channel.adapter.ChannelOrder;
 import kr.suhsaechan.palim.channel.adapter.ChannelOrderLine;
 import kr.suhsaechan.palim.common.ChannelCode;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.mapping.ProductMappingService;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
@@ -51,6 +53,7 @@ public class OrderIngestionService {
     private final ProductMappingService productMappingService;
     private final SkuService skuService;
     private final OutboxService outboxService;
+    private final IncidentService incidentService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IngestResult ingest(ChannelOrder channelOrder, Instant collectedAt) {
@@ -86,6 +89,7 @@ public class OrderIngestionService {
             if (skuId == null) {
                 unmappedCount++;
                 enqueueUnmapped(channelOrder, line);
+                reportUnmappedIncident(channelCode, line);
                 continue;
             }
 
@@ -98,6 +102,8 @@ public class OrderIngestionService {
             if (oversold) {
                 oversoldCount++;
                 enqueueOversell(channelOrder, line, sku);
+                reportOversellIncident(sku, line.quantity(),
+                        "채널 %s 주문 %s".formatted(channelCode.displayName(), channelOrderNo));
             }
             newCount++;
         }
@@ -155,6 +161,9 @@ public class OrderIngestionService {
                     sku.getName(),
                     line.getQuantity(),
                     sku.getQuantity()));
+            reportOversellIncident(sku, line.getQuantity(),
+                    "미매핑 소급 반영 — 채널 %s 주문 %s".formatted(
+                            line.getChannelCode().displayName(), line.getChannelOrderNo()));
         }
         return true;
     }
@@ -185,6 +194,32 @@ public class OrderIngestionService {
                 line.channelOptionNo(),
                 line.channelProductName(),
                 line.quantity()));
+    }
+
+    /**
+     * 오버셀 인시던트 (#35). 알림과 별개로 해결 전까지 남는 기록이다.
+     *
+     * <p>수집 트랜잭션에 참여하므로 수집이 롤백되면 인시던트도 남지 않는다.
+     */
+    private void reportOversellIncident(Sku sku, int quantity, String context) {
+        incidentService.report(
+                IncidentType.OVERSELL,
+                "OVERSELL:" + sku.getCode(),
+                "SKU %s %s 초과판매".formatted(sku.getCode(), sku.getName()),
+                "%s 수량 %d 처리 후 재고 %d — 출고 가능 여부를 확인하고 실재고를 맞춰야 한다"
+                        .formatted(context, quantity, sku.getQuantity()));
+    }
+
+    /** 미매핑 인시던트 (#35). 매핑 등록 후 해결 처리는 사람이 한다 — 소급 반영 확인까지가 조치다. */
+    private void reportUnmappedIncident(ChannelCode channelCode, ChannelOrderLine line) {
+        String optionPart = line.channelOptionNo() == null ? "-" : line.channelOptionNo();
+        incidentService.report(
+                IncidentType.UNMAPPED_PRODUCT,
+                "UNMAPPED_PRODUCT:%s:%s:%s".formatted(
+                        channelCode, line.channelProductNo(), optionPart),
+                "%s 상품 %s 미매핑".formatted(channelCode.displayName(), line.channelProductNo()),
+                "상품명 %s (옵션 %s) — 매핑을 등록하면 재고가 소급 반영된다"
+                        .formatted(line.channelProductName(), optionPart));
     }
 
     /** 오버셀링 알림. 출고 불가 상태이므로 발주자가 즉시 조치해야 한다. */
