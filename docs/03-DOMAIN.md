@@ -16,6 +16,8 @@
 | palim-notification | `NotificationOutbox` | 발송 대기 알림 |
 | | `NotificationSetting` | 알림 설정 (단일 행) |
 | palim-auth | `AdminAccount` | 관리자 계정 |
+| palim-audit | `AuditLog` | 감사 로그 (불변 기록, #20) |
+| palim-incident | `Incident` | 인시던트 — 오버셀·정합성 불일치·미매핑의 미확인→확인→해결 관리 (#35) |
 
 ## 재고 정합성
 
