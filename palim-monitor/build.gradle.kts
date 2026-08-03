@@ -6,6 +6,7 @@ dependencies {
     // 내부 상태를 점검해 이상을 알리는 조율 계층이다.
     // palim-collector 와 방향이 반대다 — collector 는 외부→내부, monitor 는 내부→알림.
     implementation(project(":palim-channel"))
+    implementation(project(":palim-incident"))
     implementation(project(":palim-mapping"))
     implementation(project(":palim-notification"))
     implementation(project(":palim-order"))

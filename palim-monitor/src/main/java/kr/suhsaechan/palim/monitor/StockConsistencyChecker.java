@@ -1,6 +1,8 @@
 package kr.suhsaechan.palim.monitor;
 
 import java.util.List;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
@@ -45,6 +47,7 @@ public class StockConsistencyChecker {
 
     private final SkuService skuService;
     private final OutboxService outboxService;
+    private final IncidentService incidentService;
     private final MonitorProperties monitorProperties;
 
     /**
@@ -90,5 +93,14 @@ public class StockConsistencyChecker {
                 "STOCK_MISMATCH:" + sku.getCode(),
                 monitorProperties.mismatchAlertInterval(),
                 new StockMismatchPayload(sku.getCode(), sku.getName(), sku.getQuantity(), historySum));
+
+        // 인시던트는 억제와 무관하게 누적한다 (#35) — 알림은 스팸 방지, 인시던트는 기록이 목적이다.
+        // 해결 전까지 매 주기 발생 횟수가 쌓여 "며칠째 지속 중인지"가 화면에 남는다.
+        incidentService.report(
+                IncidentType.STOCK_MISMATCH,
+                "STOCK_MISMATCH:" + sku.getCode(),
+                "SKU %s %s 재고 불일치".formatted(sku.getCode(), sku.getName()),
+                "스냅샷 %d vs 이력 누적합 %d — 원인 확인 후 실사 조정으로 맞춰야 한다"
+                        .formatted(sku.getQuantity(), historySum));
     }
 }

@@ -33,6 +33,7 @@ import org.springframework.http.HttpStatus;
  *   <tr><td>{@code H}</td><td>채널</td></tr>
  *   <tr><td>{@code N}</td><td>알림</td></tr>
  *   <tr><td>{@code A}</td><td>인증</td></tr>
+ *   <tr><td>{@code I}</td><td>인시던트</td></tr>
  * </table>
  *
  * <p>{@link #logLevel()} 을 코드가 직접 갖는 이유는, 전역 핸들러가 예외마다 if 분기로 레벨을
@@ -193,7 +194,16 @@ public enum ErrorCode {
     PASSWORD_REPEATED_CHARS("A007", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
 
     /** 현재 비밀번호가 일치하지 않는다. 변경은 현재 비밀번호 재확인을 요구한다. */
-    PASSWORD_MISMATCH("A008", HttpStatus.BAD_REQUEST, LogLevel.WARN);
+    PASSWORD_MISMATCH("A008", HttpStatus.BAD_REQUEST, LogLevel.WARN),
+
+    // ==================================================================
+    // 인시던트 (I)
+    // ==================================================================
+
+    INCIDENT_NOT_FOUND("I001", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    /** 현재 상태에서 허용되지 않는 전이다 — 해결된 건 재해결, 확인된 건 재확인 등. */
+    INCIDENT_STATUS_INVALID("I002", HttpStatus.CONFLICT, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;

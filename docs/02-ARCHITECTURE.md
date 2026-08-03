@@ -6,7 +6,7 @@
 |---|---|
 | 언어 / 런타임 | Java 25 LTS |
 | 프레임워크 | Spring Boot 4.1.x |
-| 빌드 | Gradle 9.x (Kotlin DSL), 멀티모듈 10개 |
+| 빌드 | Gradle 9.x (Kotlin DSL), 멀티모듈 13개 |
 | 영속성 | JPA / Hibernate |
 | 기본키 | UUIDv7, 애플리케이션에서 생성 |
 | 데이터베이스 | PostgreSQL 17 |
@@ -24,12 +24,14 @@
 
 ```
 palim-common          UuidV7 · BaseTimeEntity · ErrorCode · BusinessException
+├─ palim-audit        감사 로그 (불변 기록)
 ├─ palim-auth         관리자 계정 · 비밀번호 해싱
 ├─ palim-sku          SKU · 재고 · 안전재고 · 재고 이력
 ├─ palim-order        주문 · 주문 항목
 ├─ palim-channel      채널 설정 · 인증정보 · 수집 커서 · 채널 어댑터
 ├─ palim-mapping      채널 상품코드 ↔ SKU 매핑
-└─ palim-notification Outbox · 알림 설정 · 텔레그램 발송
+├─ palim-notification Outbox · 알림 설정 · 텔레그램 발송
+└─ palim-incident     인시던트 (오버셀·정합성 불일치·미매핑 상태 관리)
 
 palim-collector       수집 스케줄러 · 수집 조율 트랜잭션      외부 -> 내부
 palim-monitor         정합성 대조 · 안전재고 감시 · 일일 리포트  내부 -> 알림

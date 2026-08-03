@@ -11,6 +11,7 @@ include("palim-order")
 include("palim-channel")
 include("palim-mapping")
 include("palim-notification")
+include("palim-incident")
 
 // 조율 — 여러 도메인을 의존한다
 include("palim-collector")   // 외부 -> 내부 (채널 주문 수집)

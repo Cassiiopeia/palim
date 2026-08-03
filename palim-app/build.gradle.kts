@@ -31,6 +31,7 @@ dependencies {
     testImplementation(project(":palim-audit"))
     testImplementation(project(":palim-auth"))
     testImplementation(project(":palim-channel"))
+    testImplementation(project(":palim-incident"))
     testImplementation(project(":palim-mapping"))
     testImplementation(project(":palim-notification"))
     testImplementation(project(":palim-order"))

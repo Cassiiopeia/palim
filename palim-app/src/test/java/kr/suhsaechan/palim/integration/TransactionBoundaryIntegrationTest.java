@@ -3,6 +3,8 @@ package kr.suhsaechan.palim.integration;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import kr.suhsaechan.palim.common.support.IntegrationTest;
+import kr.suhsaechan.palim.incident.IncidentService;
+import kr.suhsaechan.palim.incident.IncidentType;
 import kr.suhsaechan.palim.sku.SkuService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,9 @@ class TransactionBoundaryIntegrationTest extends IntegrationTest {
     @Autowired
     private SkuService skuService;
 
+    @Autowired
+    private IncidentService incidentService;
+
     @Test
     @DisplayName("트랜잭션 없이 SKU 등록을 호출하면 예외가 발생한다")
     void 트랜잭션_없는_등록은_거부된다() {
@@ -36,6 +41,15 @@ class TransactionBoundaryIntegrationTest extends IntegrationTest {
     void 트랜잭션_없는_차감은_거부된다() {
         assertThatThrownBy(() -> skuService.decreaseForSale(
                 java.util.UUID.randomUUID(), 1, java.util.UUID.randomUUID()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test
+    @DisplayName("트랜잭션 없이 인시던트 보고를 호출하면 예외가 발생한다")
+    void 트랜잭션_없는_인시던트_보고는_거부된다() {
+        // 감지 지점의 트랜잭션에 참여해야 수집 롤백 시 유령 인시던트가 남지 않는다 (#35).
+        assertThatThrownBy(() -> incidentService.report(
+                IncidentType.OVERSELL, "OVERSELL:SKU-TX", "제목", "상세"))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 

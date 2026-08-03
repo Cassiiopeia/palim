@@ -66,7 +66,10 @@ public enum AuditType {
 
     NOTIFICATION_SETTING_UPDATE("알림 설정", "알림 설정을 변경했습니다.", AuditGroup.CHANGE),
 
-    NOTIFICATION_RESEND("알림 재발송", "실패한 알림을 재발송 대기로 되돌렸습니다.", AuditGroup.CHANGE);
+    NOTIFICATION_RESEND("알림 재발송", "실패한 알림을 재발송 대기로 되돌렸습니다.", AuditGroup.CHANGE),
+
+    INCIDENT_ACKNOWLEDGE("인시던트", "인시던트를 확인 상태로 변경했습니다.", AuditGroup.CHANGE),
+    INCIDENT_RESOLVE("인시던트", "인시던트를 해결 처리했습니다.", AuditGroup.CHANGE);
 
     private final String displayName;
     private final String defaultSummary;
