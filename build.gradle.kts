@@ -7,7 +7,7 @@ plugins {
     id("com.github.node-gradle.node") version "7.1.0" apply false
     // SBOM 산출 (09-SECURITY). 루트에 적용하면 전 서브모듈 의존성이 하나의 BOM 으로 집계된다.
     // `./gradlew cyclonedxBom` → build/reports/bom.json
-    id("org.cyclonedx.bom") version "2.3.1"
+    id("org.cyclonedx.bom") version "2.4.1"
 }
 
 allprojects {
