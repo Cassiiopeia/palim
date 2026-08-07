@@ -1,6 +1,11 @@
 # Palim — 작업 지침
 
-다채널 판매 알림·재고 관리 시스템. Java 25 / Spring Boot 4.x / Gradle 멀티모듈.
+**AI 업무자동화 플랫폼.** 발주사의 반복 업무(리포트·분석·콘텐츠 생성)를 모듈 단위로 자동화한다.
+Java 25 / Spring Boot 4.x 모놀리스 + `scripts/` Python 서브프로세스.
+
+> **2026-08 방향 전환**: 기존 재고 알림 시스템은 발주사 협의 결과 **동결**되었다(07-DECISIONS 023).
+> 재고 도메인 코드(sku·order·collector·channel·mapping·incident)는 삭제하지 않되 **수정도 하지
+> 않는다.** 새 기능은 자동화 모듈로만 추가한다.
 
 **코드를 쓰기 전에 관련 문서를 읽는다.** 이 파일은 요약이고, 판단 근거는 `docs/` 에 있다.
 
@@ -8,10 +13,9 @@
 |---|---|
 | 무엇을 만드는지 파악 | `docs/01-REQUIREMENTS.md` |
 | 새 모듈·클래스를 어디 둘지 | `docs/02-ARCHITECTURE.md` |
-| 엔티티·재고 로직 작성 | `docs/03-DOMAIN.md` |
-| 코드 스타일·예외·트랜잭션 | `docs/04-CONVENTIONS.md` |
-| 채널 어댑터·수집·알림 | `docs/05-INTEGRATION.md` |
-| 배포·설정·보안 | `docs/06-OPERATIONS.md` |
+| 코드 스타일·예외·py 규약 | `docs/04-CONVENTIONS.md` |
+| AI·외부 API·알림 연동 | `docs/05-INTEGRATION.md` |
+| 배포·설정·Docker·AWS | `docs/06-OPERATIONS.md` |
 | **"왜 이렇게 되어 있나"** | `docs/07-DECISIONS.md` |
 | 다음에 할 일 | `docs/08-ROADMAP.md` |
 | 인증·암호화·감사·공급망 보안 | `docs/09-SECURITY.md` |
@@ -20,87 +24,57 @@
 
 ## 절대 하지 말 것
 
-아래는 **재고 정합성이나 보안을 직접 깨뜨린다.** 예외 없이 지킨다.
-
-### 1. 도메인 모듈끼리 의존하지 않는다
-
-```java
-// palim-order 에서
-private UUID skuId;              // O — 값 참조
-// private Sku sku;              // X — palim-sku 의존이 생긴다
-```
-
-도메인 간 협력이 필요하면 조율 계층(`palim-collector`·`palim-monitor`·`palim-web`)이 처리한다.
-→ `docs/02-ARCHITECTURE.md`
-
-### 2. 도메인 서비스에 `@Transactional` 을 그냥 붙이지 않는다
-
-변경 메서드는 **`Propagation.MANDATORY`** 다. 트랜잭션은 호출자가 연다.
-
-```java
-@Transactional(propagation = Propagation.MANDATORY)   // O
-// @Transactional                                     // X
-// (애너테이션 없음)                                    // X — auto-commit 으로 조용히 동작한다
-```
-
-애너테이션을 생략하면 재고 변경과 이력 기록이 **각각 커밋**되어 중간 실패 시 정합성이 깨진다.
-→ `docs/04-CONVENTIONS.md`
-
-### 3. 재고를 바꿀 때 이력을 따로 만들지 않는다
-
-`SkuService` 의 변경 메서드가 `StockMovement` 를 함께 기록한다. **호출자가 직접 만들지 않는다.**
-
-```java
-skuService.decreaseForSale(skuId, qty, orderLineId);   // O — 이력이 함께 남는다
-// sku.decrease(qty); stockMovementRepository.save(...) // X — 언젠가 한쪽을 빠뜨린다
-```
-
-→ `docs/03-DOMAIN.md`
-
-### 4. 시각에 `LocalDateTime` 을 쓰지 않는다
-
-전 계층 `Instant`, DB `timestamptz`. 표시 직전에만 변환한다.
-
-채널 API 가 KST/UTC 를 섞어 주므로, 타임존 모호성이 들어오면 중복 판정과 수집 커서가 어긋나 **재고가 이중 차감된다.**
-
-### 5. 예외 클래스를 새로 만들지 않는다
-
-`BusinessException` 하나만 쓰고 구분은 `ErrorCode` 로 한다.
-
-```java
-throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
-// public class SkuNotFoundException extends ...                // X
-```
-
-새 실패 유형이 필요하면 `ErrorCode` enum 에 한 줄, `errors.properties` 와 `errors_en.properties` 에 각 한 줄을 더한다.
-→ `docs/04-CONVENTIONS.md`
-
-### 6. 소프트 삭제를 상위 클래스에 전역 적용하지 않는다
-
-`@SQLRestriction` 을 `BaseTimeEntity` 에 걸면, 미매핑 주문 소급 반영에서 대상 행이 **조용히 필터링돼 재고가 무증상으로 틀어진다.**
-
-### 7. 채널 인증정보를 화면이나 로그에 노출하지 않는다
-
-`ChannelCredentialService` 경계 밖으로 평문도 암호문도 나가지 않는다. 화면에는 키 이름만 보여준다.
-
-### 8. 커밋에 AI 흔적을 남기지 않는다
-
-`Co-Authored-By`, `Generated with`, 🤖, `noreply@anthropic.com` 등 일절 금지. **CI `guard` 잡이
-커밋 메시지를 검사해 위반 시 빌드를 실패시킨다** — 걸리면 해당 커밋을 reword 한다.
-
-### 9. 이 저장소는 PUBLIC 이다 — 커밋 전 민감정보를 확인한다
-
-커밋되는 모든 것이 인터넷에 공개된다. 예외 없이 지킨다:
+### 1. 이 저장소는 PUBLIC 이다 — 커밋 전 민감정보를 확인한다
 
 | 대상 | 규칙 |
 |---|---|
 | 비밀값(키·토큰·비밀번호) | 어떤 파일에도 리터럴 금지. 항상 `${환경변수}` 로만 |
-| `application-prod.yaml` | gitignore 대상. `-f` 로도 커밋하지 않는다. 형태는 `.example` 에만 |
-| `docs/somansa/` (사내 자료) | gitignore + CI 가 차단. 사내 이슈 캡처·코드 조각 포함 금지 |
-| 사내 레거시 코드 | **코드 이식 금지. 개념만 가져와 새로 작성한다** (07-DECISIONS 021). 클래스명·주석·문자열 그대로 복사도 금지 — 사내 자산이다 |
-| 사내 제품명·호스트명·내부 IP·이슈 번호 | 커밋·코드·문서·GitHub 이슈 어디에도 쓰지 않는다. 언급이 필요하면 **"레거시 관리자 시스템"** 으로 통칭한다 |
+| `application-prod.yml` / `application-dev.yml` | gitignore 대상. `-f` 로도 커밋하지 않는다. 형태는 `.example` 에만 |
+| **발주사 식별정보** | 상호·브랜드·제품명·계정명·채널 URL 을 코드·문서·테스트·이슈 어디에도 쓰지 않는다. "발주사" 로 통칭 |
+| 발주사 실데이터 | 업로드 엑셀·이미지·리뷰 원문 커밋 금지. 테스트는 합성 데이터로 |
+| `docs/somansa/` (사내·발주사 자료) | gitignore + CI 가 차단 |
+| 사내 레거시 코드 | 이식 금지. 개념만 가져와 새로 작성. 사내 제품명·호스트·이슈번호 금지 — 필요 시 "레거시 관리자 시스템" 통칭 |
 
-보안 관련 코드를 만지기 전에 `docs/09-SECURITY.md` 를 읽는다.
+### 2. 커밋에 AI 흔적을 남기지 않는다
+
+`Co-Authored-By`, `Generated with`, 🤖, `noreply@anthropic.com` 등 일절 금지. **CI `guard` 잡이
+커밋 메시지를 검사해 위반 시 빌드를 실패시킨다** — 걸리면 해당 커밋을 reword 한다.
+
+### 3. 동결 도메인을 수정하지 않는다
+
+`palim-sku`·`palim-order`·`palim-collector`·`palim-channel`·`palim-mapping`·`palim-incident` 는
+동결이다. 버그가 보여도 고치지 않는다(실행되지 않는 코드다). 브릿지 모듈(auth·audit·
+notification·common·web 골격)만 확장 대상이다.
+
+### 4. py 스크립트 호출 규약을 어기지 않는다
+
+```java
+new ProcessBuilder(List.of("python3", script, arg1, arg2))   // O — 인자 배열
+// Runtime.exec("python3 " + script + " " + userInput)        // X — 커맨드 인젝션
+```
+
+- 스크립트는 **stdout 에 JSON 만**, 사람용 메시지는 stderr. 종료코드 0/1
+- `PYTHONIOENCODING=utf-8` 고정 + Java 읽기 UTF-8 명시 (Windows cp949 함정)
+- `waitFor(타임아웃)` + 초과 시 `destroyForcibly()` 필수
+- 스크립트 실행은 전용 스레드풀(크기 2) — 동시 실행 폭주 방지
+- 사용자 입력(URL 등)은 검증 후 인자로만. 쉘 문자열 조립 금지
+→ `docs/04-CONVENTIONS.md`
+
+### 5. 예외 클래스를 새로 만들지 않는다
+
+`BusinessException` + `ErrorCode` 만 쓴다. 새 실패 유형은 `ErrorCode` enum 한 줄 +
+`errors.properties`/`errors_en.properties` 각 한 줄. → `docs/04-CONVENTIONS.md`
+
+### 6. AI 호출 경계를 지킨다
+
+- AI 에는 필요한 컬럼만 보낸다 — 개인 식별자·전화번호는 마스킹 후 전송
+- AI 출력은 항상 **구조화 출력(json_schema)** 으로 받아 코드가 검증한다. AI 출력 문자열에 따라
+  임의 동작을 실행하지 않는다 (프롬프트 인젝션 방어)
+- API 키는 사용량 한도(hard limit)를 걸어둔 키만 쓴다
+
+### 7. 시각에 `LocalDateTime` 을 쓰지 않는다
+
+전 계층 `Instant`, DB `timestamptz`. 표시 직전에만 변환한다.
 
 ---
 
@@ -112,32 +86,23 @@ throw new BusinessException(ErrorCode.SKU_NOT_FOUND, skuId);   // O
 |---|---|---|
 | Testcontainers | BOM 이 버전 관리 | **관리하지 않는다.** BOM 직접 지정 |
 | Flyway | `flyway-core` 만으로 자동 구성 | **`spring-boot-flyway` 필요** |
-| Jackson | `com.fasterxml.jackson` 전체 | **`databind`·`core` 만 `tools.jackson`** — 아래 참조 |
+| Jackson | `com.fasterxml.jackson` 전체 | **`databind`·`core` 만 `tools.jackson`** — 애노테이션은 `com.fasterxml.jackson.annotation` 그대로. 예외는 unchecked `JacksonException` |
 
 자동 구성이 필요한 기술을 추가할 때는 `spring-boot-{기술}` 모듈이 별도로 있는지 먼저 확인한다.
 
-**Jackson 3 은 패키지를 부분만 옮겼다.** 애노테이션까지 바꾸면 컴파일이 깨진다.
-
-| 대상 | 패키지 |
-|---|---|
-| `ObjectMapper`, `JacksonException` | **`tools.jackson.databind` / `tools.jackson.core`** |
-| `@JsonIgnoreProperties`, `@JsonProperty` 등 애노테이션 | `com.fasterxml.jackson.annotation` (**그대로**) |
-
-예외는 unchecked 로 바뀌었다 — `JsonProcessingException` 대신 `JacksonException` 을 잡는다.
-
 ### record 컴포넌트와 같은 이름의 정적 팩토리는 만들 수 없다
 
-컴포넌트 `boolean success` 가 있으면 `success()` 는 accessor 로 취급되어 `boolean` 을 반환해야 한다. `of()`·`from()`·`sent()` 처럼 겹치지 않는 이름을 쓴다.
+컴포넌트 `boolean success` 가 있으면 `success()` 는 accessor 로 취급된다. `of()`·`from()` 처럼
+겹치지 않는 이름을 쓴다.
 
 ### `JdbcClient` 에는 `Instant` 를 바인딩할 수 없다
 
-Hibernate 는 처리하지만 순수 JDBC 는 타입 추론에 실패한다. `timestamptz` 컬럼에는 **`OffsetDateTime`** 을 넘긴다.
-
-PostgreSQL 의 `count`·`sum` 은 `bigint` 이므로 `record` 컴포넌트가 `int` 면 `count(*)::int` 로 캐스팅한다.
+`timestamptz` 컬럼에는 **`OffsetDateTime`** 을 넘긴다. PostgreSQL 의 `count`·`sum` 은 `bigint`
+이므로 `record` 컴포넌트가 `int` 면 `count(*)::int` 로 캐스팅한다.
 
 ### `implementation` 은 테스트 컴파일 classpath 로도 전이되지 않는다
 
-`palim-app` 이 하위 모듈을 `implementation` 으로 의존하므로, 그 모듈의 라이브러리를 직접 참조하려면 **해당 의존성을 명시 선언**해야 한다. `api` 로 뚫어서 우회하면 모듈별 의존성 최소화가 무너진다.
+하위 모듈의 라이브러리를 직접 참조하려면 해당 의존성을 명시 선언한다. `api` 로 뚫지 않는다.
 
 ---
 
@@ -148,11 +113,12 @@ PostgreSQL 의 `count`·`sum` 은 `bigint` 이므로 `record` 컴포넌트가 `i
 ./gradlew :palim-app:bootJar
 ```
 
-**로컬에서 Gradle 배포판 다운로드가 막힐 수 있다.** 그 경우 push 하고 GitHub Actions 결과로 검증한다 — 이 구조는 의도된 것이다.
+**로컬에서 Gradle 배포판 다운로드가 막힐 수 있다.** 그 경우 push 하고 GitHub Actions 결과로
+검증한다 — 이 구조는 의도된 것이다.
 
-통합 테스트는 Testcontainers 로 실제 PostgreSQL 을 띄운다. 인메모리 DB 를 쓰지 않는다 — 비관적 락·부분 인덱스·`timestamptz` 동작이 달라 검증 의미가 없다.
+통합 테스트는 Testcontainers 로 실제 PostgreSQL 을 띄운다. 인메모리 DB 를 쓰지 않는다.
 
----
+py 스크립트 수정 후에는 로컬에서 스크립트 단독 실행(JSON 출력 확인)까지만 한다.
 
 ## 작업 흐름
 
@@ -162,4 +128,4 @@ PostgreSQL 의 `count`·`sum` 은 `bigint` 이므로 `record` 컴포넌트가 `i
 4. push → CI 통과 확인
 5. PR → 머지(merge commit)
 
-**설계 판단을 바꿨으면 `docs/07-DECISIONS.md` 에 항목을 추가한다.** 문서와 코드가 어긋나면 문서가 거짓말이 된다.
+**설계 판단을 바꿨으면 `docs/07-DECISIONS.md` 에 항목을 추가한다.**

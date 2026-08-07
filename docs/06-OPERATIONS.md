@@ -1,111 +1,52 @@
 # 06. 운영
 
-## 배포
-
-```
-git push → GitHub Actions 빌드 → GHCR 이미지 push (태그 = 커밋 SHA)
-                                      ↓
-                      NAS: docker compose pull && up -d
-```
-
-이미지 태그가 커밋 SHA 라서 **롤백은 이전 태그를 pull 하는 것으로 끝난다.** NAS 는 빌드를 수행하지 않는다.
-
-로컬에서 Gradle 배포판 다운로드가 막힐 수 있다. 그 경우 push 하고 Actions 결과로 검증한다 — **의도된 구조다.** 빌드 검증을 CI 에 위임하므로 실제 배포 경로에 영향이 없다.
-
-## 환경 구성
-
-| 구성 | 비고 |
-|---|---|
-| 애플리케이션 | Docker 컨테이너 (JRE 25, 비 root 실행) |
-| PostgreSQL 17 | Docker 컨테이너 |
-| RabbitMQ | **현재 미사용.** 컨테이너를 띄우지 않아도 된다 |
-| 외부 노출 | Cloudflare Tunnel — 포트 개방 없이 HTTPS |
-
-`JAVA_OPTS=-XX:MaxRAMPercentage=75.0` 으로 컨테이너 메모리 한도에 맞춰 힙을 조정한다.
-
-## 필수 환경변수
-
-| 변수 | 없으면 |
-|---|---|
-| `PALIM_CRYPTO_MASTER_KEY` | **기동 실패.** 암호화 없이 인증정보를 저장하는 상태로 뜨지 않게 한다 |
-| `DB_*` | 기동 실패 |
-| `ADMIN_PASSWORD` | 계정이 이미 있으면 무시. 없으면 **기동 실패** |
-| `TELEGRAM_BOT_TOKEN` | 기동은 되지만 알림이 Outbox 에 쌓인다 |
-
-마스터키 생성 — `openssl rand -base64 32`
-
-**계정이 이미 있으면 `ADMIN_PASSWORD` 로 비밀번호를 덮어쓰지 않는다.** 재기동마다 발주자가 바꾼 비밀번호가 초기값으로 되돌아가면 안 된다.
-
-### 운영 설정 파일 정책 — 이 저장소는 PUBLIC 이다
+## 설정 파일 전략 (PUBLIC 레포 전제)
 
 | 파일 | 커밋 | 내용 |
 |---|---|---|
-| `application.yaml` | O | 공통 설정. 민감값은 전부 `${환경변수}` 플레이스홀더 |
-| `application-local.yaml` | O | localhost 개발용. 실 비밀값 금지 (`palim/palim` 은 로컬 Docker 전용) |
-| `application-prod.yaml` | **X — gitignore** | 운영 설정. 배포 시 GitHub Secrets 값으로 생성·주입 |
-| `application-prod.yaml.example` | O | prod 의 형태 문서. 플레이스홀더만 |
+| `application.yml` | O | 공통 구조·무해한 기본값. **민감값은 전부 `${환경변수}` placeholder** |
+| `application-dev.yml` | **X (gitignore)** | 로컬 개발값 |
+| `application-prod.yml` | **X (gitignore)** | 운영값. `-f` 로도 커밋 금지 |
+| `*.yml.example` | O | 형태만 — 값은 placeholder |
 
-**민감값을 어느 yaml 에도 리터럴로 쓰지 않는다.** prod 파일이 gitignore 라도 마찬가지다 —
-실수로 `-f` 커밋되는 순간 공개된다. 값은 항상 환경변수(GitHub Secrets → env)로만 흐른다.
+3중 방어: ① gitignore ② push protection/secret scanning ③ CI `guard` 잡.
 
-## 백업
+비밀값 주입: 로컬 `.env`(gitignore) → 운영은 AWS SSM Parameter Store / Secrets Manager.
 
-`pg_dump` 를 일 1회 수행해 NAS 별도 볼륨에 보관하고, 성공·실패를 텔레그램으로 통보한다.
+## 빌드 · 배포 — Docker 단일 이미지
 
-> 이 시스템에서 데이터베이스 유실은 복구가 어려운 것이 아니라 **불가능하다.** 주문은 채널에서 재수집할 수 있으나, 수동 입력한 초기 재고·실사 조정·입고 이력은 다른 어디에도 없다.
+```
+이미지 = JRE + 애플리케이션 jar + python3 + pip 의존성(requirements.txt) + yt-dlp
+```
 
-## 감시 — 별도 관측 스택을 두지 않는다
+- py 의존성은 `scripts/requirements.txt` 로 버전 고정 — 시스템 파이썬에 의존하지 않는다
+- 로컬 Gradle 배포판 다운로드가 막히면 push 하고 GitHub Actions 로 검증한다 (의도된 구조)
 
-이미 운영자에게 도달하는 경로(텔레그램)가 있으므로 시스템 장애도 같은 경로로 보낸다.
+## AWS 이식 경로
 
-| 감시 대상 | 통보 조건 |
+| 항목 | 결정 |
 |---|---|
-| 채널 수집 | 연속 실패 시 (A-10) |
-| Outbox | 미발송 건수가 임계치 초과 시 |
-| 재고 정합성 | 스냅샷과 이력 누적합 불일치 시 |
-| 데이터베이스 | 연결 실패 시 |
-| 애플리케이션 | 재기동 발생 시 |
+| 컴퓨트 | EC2 (t4g.small급) 또는 ECS — 컨테이너 1개면 충분 |
+| DB | 초기: 같은 인스턴스 PostgreSQL 컨테이너 → 필요 시 RDS |
+| 비밀 | SSM Parameter Store (환경변수 주입) |
+| 인바운드 | 443 만 (+SSH 는 관리자 IP 한정). DB·내부 포트 노출 금지 |
+| TLS | ALB/nginx 종단 또는 기존 Cloudflare Tunnel 유지 |
 
-> 이 시스템의 목적 자체가 "접속하지 않아도 알 수 있게 하는 것"이다. 운영 감시를 위해 대시보드에 접속해야 한다면 목적과 모순된다.
+서버 실비(인스턴스+스토리지)는 발주사에 투명 고지 — 마진 없음.
 
-Actuator health 정보를 위 경로에 연결한다. `/actuator/health` 는 인증 없이 열어둔다.
+## 데이터 · 백업
 
-로그는 JSON 구조화 형식으로 볼륨에 마운트하고 로테이션한다. 수집 스택은 구성하지 않는다.
+- 업로드 원본은 `data/`(gitignore·컨테이너 볼륨) + 처리 결과는 DB
+- DB 일일 백업(pg_dump → 스토리지), 보존 기한은 발주사와 합의
+- 리뷰 원문 등 개인정보성 텍스트는 **로그에 남기지 않는다** — 로그엔 건수·ID 만
 
-## 화면 보안
+## 감시 · 장애
 
-관리자 화면은 재고 수정과 채널 인증정보 등록을 수행하므로, 세션이 탈취되면 매출에 직접 영향을 준다.
+- 모듈 실행 실패 → 텔레그램 알림 (palim-notification 경유)
+- 스케줄 작업(브리핑 등)이 정시에 안 돌았을 때를 감지하는 하트비트 체크
+- py 서브프로세스 타임아웃·비정상 종료는 실행 이력에 기록 + 알림
 
-| 항목 | 조치 |
-|---|---|
-| CSRF | Spring Security 기본 활성 유지. 상태 변경은 전부 POST |
-| 콘텐츠 보안 정책 | `Content-Security-Policy` 로 스크립트·스타일 출처를 자기 도메인으로 제한 |
-| 클릭재킹 | `X-Frame-Options: DENY` |
-| MIME 스니핑 | `X-Content-Type-Options: nosniff` |
-| HTTPS | Cloudflare Tunnel 이 종단. HSTS 헤더 부여 |
-| 세션 | 로그인 시 세션 ID 교체(고정 공격 방지), 유휴 타임아웃, 동시 세션 1개 |
-| **인증정보 노출** | 채널 API 키를 **화면에 표시하지 않는다.** 등록 여부와 키 이름만 |
-| 오류 응답 | 예상하지 못한 예외는 내부 메시지를 노출하지 않는다 |
+## 화면 보안 (유지)
 
-> 인증정보 마스킹이 특히 중요하다. AES-GCM 으로 암호화해 저장하는 이유가 유출 방지인데, 화면에서 평문을 되돌려 보여주면 그 노력이 무의미해진다. 갱신은 새 값을 입력받는 방식으로만 지원한다.
-
-## 화면 스타일
-
-**Tailwind CSS 4 + daisyUI 5 를 쓰고, daisyUI 컴포넌트를 최대한 그대로 사용한다.**
-
-| 원칙 | 내용 |
-|---|---|
-| daisyUI 우선 | `btn`, `card`, `table`, `badge`, `alert`, `modal`, `stat`, `drawer` 등을 그대로 |
-| 커스텀 CSS 최소화 | 별도 스타일시트를 만들지 않는다. 필요하면 Tailwind 유틸리티로 |
-| 테마 | daisyUI 내장 테마 사용. 색상을 직접 지정하지 않는다 |
-| 반응형 | PC·모바일 모두 사용하므로 Tailwind 브레이크포인트 사용 (F-09) |
-
-> 관리자 1명이 쓰는 내부 도구에 디자인 시스템을 자체 구축할 이유가 없다. 커스텀 CSS 를 쌓으면 유지보수 대상만 늘어난다.
-
-**정적 자원은 빌드 산출물을 jar 에 포함한다.** CDN 을 쓰면 콘텐츠 보안 정책에 외부 도메인을 열어야 하고, 외부 장애가 화면 장애가 된다.
-
-## 채널 연동 기록
-
-채널별 인증 절차·응답 특성·실제로 겪은 함정을 `docs/channels/<채널명>.md` 에 기록한다.
-
-> 채널 API 는 문서와 실제 동작이 일치하지 않는 경우가 많다. 수개월 뒤 같은 문제를 다시 조사하는 것은 개발자 본인이다.
+CSP·CSRF·세션 방어·감사 로그 등은 09-SECURITY 구현 현황 그대로 유지된다. 새 화면(업로드·
+실행·결과)도 같은 규칙을 따른다.

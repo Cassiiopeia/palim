@@ -4,123 +4,74 @@
 
 | 영역 | 결정 |
 |---|---|
-| 언어 / 런타임 | Java 25 LTS |
-| 프레임워크 | Spring Boot 4.1.x |
-| 빌드 | Gradle 9.x (Kotlin DSL), 멀티모듈 13개 |
-| 영속성 | JPA / Hibernate |
-| 기본키 | UUIDv7, 애플리케이션에서 생성 |
-| 데이터베이스 | PostgreSQL 17 |
-| 시각 | `Instant` / `timestamptz` |
-| 스키마 | Flyway + `ddl-auto=validate` |
-| 알림 전달 | PostgreSQL Outbox (메시지 큐 미사용) |
-| 화면 | Thymeleaf + Tailwind CSS 4 / daisyUI 5 + Spring Security |
-| 알림 | Telegram Bot API |
-| 배포 | GitHub Actions → GHCR → NAS `docker compose pull` |
-| 외부 노출 | Cloudflare Tunnel |
+| 메인 | Java 25 / Spring Boot 4.x — Gradle 멀티모듈 모놀리스 |
+| 스크립트 | Python 3 (`scripts/`) — Java 가 `ProcessBuilder` 서브프로세스로 호출 |
+| AI | OpenAI API (Java SDK 직접 호출, 구조화 출력) — 05-INTEGRATION |
+| DB | PostgreSQL (Flyway 마이그레이션) |
+| 화면 | Thymeleaf + daisyUI (07-DECISIONS 009) |
+| 배포 | Docker 단일 이미지 (JRE + python3 + pip 의존성) — 06-OPERATIONS |
 
-선택 근거는 [07-DECISIONS](07-DECISIONS.md) 를 본다.
-
-## 모듈 구성
+## 전체 구조
 
 ```
-palim-common          UuidV7 · BaseTimeEntity · ErrorCode · BusinessException
-├─ palim-audit        감사 로그 (불변 기록)
-├─ palim-auth         관리자 계정 · 비밀번호 해싱
-├─ palim-sku          SKU · 재고 · 안전재고 · 재고 이력
-├─ palim-order        주문 · 주문 항목
-├─ palim-channel      채널 설정 · 인증정보 · 수집 커서 · 채널 어댑터
-├─ palim-mapping      채널 상품코드 ↔ SKU 매핑
-├─ palim-notification Outbox · 알림 설정 · 텔레그램 발송
-└─ palim-incident     인시던트 (오버셀·정합성 불일치·미매핑 상태 관리)
-
-palim-collector       수집 스케줄러 · 수집 조율 트랜잭션      외부 -> 내부
-palim-monitor         정합성 대조 · 안전재고 감시 · 일일 리포트  내부 -> 알림
-palim-web             Thymeleaf 화면 · Security · 화면용 조회
-palim-app             진입점 · 설정 조립 · Flyway
+┌─ Spring Boot 모놀리스 (두뇌) ────────────────────────────┐
+│  업로드 화면 · 스케줄러 · DB(처리 이력) · 텔레그램 알림      │
+│  모듈 오케스트레이션 · OpenAI 호출(구조화 출력)             │
+│                                                         │
+│   ProcessBuilder ──▶ scripts/  (py, 손발)                │
+│                      ├ parse_excel.py   (pandas 파싱)    │
+│                      ├ video_fetch.py   (yt-dlp·자막)    │
+│                      └ ...모듈별 추가                     │
+└─────────────────────────────────────────────────────────┘
+        Docker 이미지 1개 → 컨테이너 1개 (AWS 이식 = 이미지 이동)
 ```
 
-조율 계층이 셋이다. 방향과 실패 대응이 달라 분리했다.
+**역할 분담 원칙**: 판단·흐름·화면·알림·AI 호출은 Java. py 는 **Java 에 대체재가 없는 지점**만
+(pandas 엑셀 파싱, yt-dlp). AI 호출을 py 로 우회하지 않는다.
 
-| 계층 | 책임 | 방향 | 실패 시 |
-|---|---|---|---|
-| `palim-collector` | 채널 주문을 내부 상태에 반영 | 외부 → 내부 | 커서를 되돌려 재시도 |
-| `palim-monitor` | 내부 상태를 점검해 알림 | 내부 → 알림 | 다음 주기에 다시 본다 |
-| `palim-web` | 사용자 조작을 상태에 반영 | 사용자 → 내부 | 오류 응답 |
+py 호출 규약(인자 배열·JSON stdout·타임아웃·스레드풀)은 04-CONVENTIONS 에 있다. 이 규약을
+지키면 추후 py 서버 분리 시 ProcessBuilder 호출부를 HTTP 로 바꾸는 것으로 끝난다.
 
-## 의존 규칙
+## 모듈 구분 — 활성 / 브릿지 / 동결
 
-```
-palim-app
-   ├──→ palim-collector ──→ 도메인 모듈들
-   ├──→ palim-monitor   ──→ 도메인 모듈들
-   └──→ palim-web       ──→ 도메인 모듈들
+### 활성 (새 코드가 들어가는 곳)
 
-모든 도메인 모듈 ──→ palim-common
-도메인 모듈 ──X──→ 다른 도메인 모듈        (금지)
-```
-
-`palim-app` 이 최상위인 이유는 진입점이 여기 있어 하위 모듈의 빈을 스캔해야 하기 때문이다. `collector`·`monitor`·`web` 은 목적이 달라 서로를 의존하지 않는다.
-
-부트 jar 는 `palim-app` 에서만 만든다. 나머지는 라이브러리 jar 다.
-
-## 규칙 1 — 도메인 모듈은 서로를 의존하지 않는다
-
-```java
-// palim-order 의 OrderLine
-private UUID skuId;              // O
-// private Sku sku;              // X — palim-sku 의존이 생긴다
-```
-
-기본키가 애플리케이션에서 생성하는 UUIDv7 이라 저장 전에 식별자가 확정되므로, 다른 모듈의 엔티티를 몰라도 참조를 표현할 수 있다.
-
-DB 외래키는 정상 부여한다. **모듈 독립성은 코드 차원이고 데이터 정합성은 별개다.** 단 미매핑 주문을 저장해야 하므로 `order_line.sku_id` 는 nullable 이다.
-
-> 자동 검증 장치는 없다. ArchUnit 을 도입하지 않았으므로 `build.gradle.kts` 와 `package-info.java` 의 규칙을 사람이 지켜야 한다.
-
-## 규칙 2 — 트랜잭션은 조율 계층이 연다
-
-트랜잭션을 여는 곳은 **조율 계층 셋(`collector`·`monitor`·`web`)뿐**이다. 도메인 서비스의 변경 메서드는 `Propagation.MANDATORY` 로 참여만 한다.
-
-```java
-// palim-collector
-@Transactional(propagation = Propagation.REQUIRES_NEW)
-public IngestResult ingest(ChannelOrder channelOrder, Instant collectedAt) {
-    UUID skuId = mappingService.resolveSkuId(...);    // palim-mapping
-    OrderLine line = orderService.saveOrderLine(...); // palim-order
-    skuService.decreaseForSale(skuId, qty, line.getId()); // palim-sku
-    outboxService.enqueue(...);                       // palim-notification
-}
-```
-
-자세한 근거는 [04-CONVENTIONS](04-CONVENTIONS.md) 의 트랜잭션 절을 본다.
-
-## 규칙 3 — 여러 도메인에 걸친 조회는 SQL 로 한다
-
-모듈이 분리되어 JPA 조인이 불가능하다. `palim-web` 에서 `JdbcClient` 로 직접 SQL 을 쓰고 결과를 `record` 로 매핑한다.
-
-쓰기는 도메인 모듈(JPA), 읽기는 SQL 이다.
-
-## 모듈을 나누는 목적
-
-**jar 크기가 아니다.** `bootJar` 는 실행 가능한 단일 파일이라 전체 런타임 의존성의 합집합을 포함한다. 모듈별로 의존성을 좁혀도 최종 크기는 줄지 않는다.
-
-| 이득 | 내용 |
+| 모듈 | 역할 |
 |---|---|
-| **컴파일 타임 격리** | `palim-sku` 에 web 의존성을 주지 않으면 재고 도메인에서 `@Controller` 를 **쓸 수 없다** |
-| 빌드 속도 | 변경된 모듈과 그 하위만 재컴파일 |
-| 의존 방향 강제 | 역참조·순환이 컴파일 단계에서 차단 |
-| 분리 여지 | 경계가 있으면 향후 프로세스 분리가 파일 이동 수준 |
+| `palim-automation` *(신설 예정)* | 자동화 모듈 도메인 — 작업 정의·실행 이력·결과물 |
+| `palim-web` | 화면·컨트롤러 (동결 화면 제외) |
+| `palim-app` | 부트스트랩·조립 |
 
-얻으려는 것은 작은 jar 가 아니라 **실수할 수 없는 구조**다.
+### 브릿지 (재사용 기반 — 확장 가능)
 
-## 부트스트랩
+| 모듈 | 역할 |
+|---|---|
+| `palim-common` | `BusinessException`·`ErrorCode`·기반 엔티티·테스트 픽스처 |
+| `palim-auth` | 로그인·세션 제한·실패 잠금 |
+| `palim-audit` | 감사 로그 |
+| `palim-notification` | 텔레그램 발송·Outbox·알림 이력 |
 
-기동 시 초기화는 **각 도메인 모듈이 자기 것을 소유**한다. `palim-app` 은 도메인 모듈을 `implementation` 으로만 의존하므로 서비스를 직접 볼 수 없고, 여기에 의존을 추가하면 모듈 격리가 무너진다.
+### 동결 (수정 금지 — 삭제도 하지 않는다)
 
-| 컴포넌트 | 위치 | 초기화 대상 |
-|---|---|---|
-| `ChannelBootstrap` | palim-channel | 채널 7개(비활성), `StockPushSetting` |
-| `NotificationBootstrap` | palim-notification | `NotificationSetting` |
-| `AdminAccountBootstrap` | palim-auth | 관리자 계정 |
+`palim-sku` · `palim-order` · `palim-collector` · `palim-channel` · `palim-mapping` ·
+`palim-incident`
 
-`ApplicationRunner` 를 쓴다. `ApplicationReadyEvent` 리스너에서 던진 예외는 로그만 남고 애플리케이션이 계속 떠서, **설정이 없는 상태로 운영에 들어갈 수 있다.**
+재고 시스템의 도메인 코드다. 실행 경로에서 분리되어 있고(화면 내비게이션 제거, 컨트롤러
+`@Deprecated`), 향후 모듈(재고 대사 등)에서 개념 재활용 가능성이 있어 보존한다. 설계 문서는
+`archive/2026-08-07-domain-frozen.md`.
+
+## 의존 규칙 (유지)
+
+- 도메인 모듈끼리 직접 의존하지 않는다 — 값(UUID)으로 참조
+- 하위 모듈은 `implementation` 의존 — 테스트에서 직접 참조 시 명시 선언
+- 여러 도메인에 걸친 조회는 `JdbcClient` (화면용 read model)
+
+## 새 코드를 어디에 두나
+
+| 만들려는 것 | 위치 |
+|---|---|
+| 자동화 모듈 로직 (파싱 결과 처리·AI 호출·리포트 생성) | `palim-automation` |
+| py 스크립트 | `scripts/` (규약: 04-CONVENTIONS) |
+| 업로드·실행·결과 화면 | `palim-web` |
+| 새 실패 유형 | `palim-common` `ErrorCode` |
+| 텔레그램 발송이 필요한 기능 | `palim-notification` 경유 — 직접 봇 API 호출 금지 |
