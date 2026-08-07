@@ -63,20 +63,19 @@
         <aside class="bg-base-100 min-h-full w-64 flex flex-col">
             <div class="p-4 border-b border-base-300">
                 <a th:href="@{/}" class="text-xl font-bold">Palim</a>
-                <p class="text-xs text-base-content/60 mt-1">다채널 판매 알림·재고 관리</p>
+                <p class="text-xs text-base-content/60 mt-1">AI 업무자동화</p>
             </div>
 
+            <!--/*
+              동결 화면(재고·매핑·수집·인시던트·채널 설정)은 내비게이션에서 제거했다.
+              컨트롤러·템플릿은 @Deprecated 로 보존한다 — 07-DECISIONS 023.
+            */-->
             <ul class="menu p-2 flex-1">
                 <li class="menu-title">운영</li>
                 <li><a th:href="@{/}">대시보드</a></li>
-                <li><a th:href="@{/skus}">재고 관리</a></li>
-                <li><a th:href="@{/mappings}">상품 매핑</a></li>
-                <li><a th:href="@{/monitor/collect}">수집 모니터</a></li>
                 <li><a th:href="@{/monitor/notifications}">알림 이력</a></li>
-                <li><a th:href="@{/monitor/incidents}">인시던트</a></li>
 
                 <li class="menu-title">설정</li>
-                <li><a th:href="@{/settings/channels}">채널 설정</a></li>
                 <li><a th:href="@{/settings/notification}">알림 설정</a></li>
 
                 <li class="menu-title">보안</li>

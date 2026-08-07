@@ -5,49 +5,20 @@
 <th:block th:fragment="content">
 
     <div class="alert alert-info">
-        <span>대시보드는 준비 중입니다. 왼쪽 메뉴에서 설정을 진행하세요.</span>
-    </div>
-
-    <div class="grid gap-4 mt-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="stat bg-base-100 rounded-box shadow-sm">
-            <div class="stat-title">금일 주문</div>
-            <div class="stat-value text-primary">-</div>
-            <div class="stat-desc">집계 예정</div>
-        </div>
-        <div class="stat bg-base-100 rounded-box shadow-sm">
-            <div class="stat-title">금일 매출</div>
-            <div class="stat-value">-</div>
-            <div class="stat-desc">집계 예정</div>
-        </div>
-        <div class="stat bg-base-100 rounded-box shadow-sm">
-            <div class="stat-title">재고 부족</div>
-            <div class="stat-value text-warning">-</div>
-            <div class="stat-desc">집계 예정</div>
-        </div>
-        <div class="stat bg-base-100 rounded-box shadow-sm">
-            <div class="stat-title">미매핑 상품</div>
-            <div class="stat-value text-error">-</div>
-            <div class="stat-desc">집계 예정</div>
-        </div>
+        <span>AI 업무자동화 대시보드는 준비 중입니다. 모듈이 추가되면 이곳에서 실행·이력을 봅니다.</span>
     </div>
 
     <div class="card bg-base-100 shadow-sm mt-6">
         <div class="card-body">
-            <h2 class="card-title text-base">도입 순서</h2>
+            <h2 class="card-title text-base">시작하기</h2>
             <ul class="steps steps-vertical">
                 <li class="step step-primary">
-                    <a th:href="@{/settings/channels}" class="link">채널 인증정보 등록</a>
-                </li>
-                <li class="step">
                     <a th:href="@{/settings/notification}" class="link">텔레그램 연결</a>
                 </li>
+                <li class="step">첫 자동화 모듈 등록 (준비 중)</li>
                 <li class="step">
-                    <a th:href="@{/skus}" class="link">SKU 등록과 초기 재고 입력</a>
+                    <a th:href="@{/monitor/notifications}" class="link">알림 이력에서 발송 확인</a>
                 </li>
-                <li class="step">
-                    <a th:href="@{/mappings}" class="link">채널 상품과 SKU 연결</a>
-                </li>
-                <li class="step">채널 활성화</li>
             </ul>
         </div>
     </div>

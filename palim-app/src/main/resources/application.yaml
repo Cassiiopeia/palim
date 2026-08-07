@@ -2,7 +2,7 @@ spring:
   application:
     name: palim
   profiles:
-    default: local
+    default: dev
 
   jpa:
     open-in-view: false

@@ -24,7 +24,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * 때까지 붙잡아 두고, "지금 열려 있는 문제가 몇 개인지"를 답한다.
  *
  * <p>기본 탭은 미확인이다 — 조치 대상부터 보인다.
+ *
+ * @deprecated 재고 시스템 동결(07-DECISIONS 023). 내비게이션에서 제거되었고 수정하지 않는다.
  */
+@Deprecated
 @Slf4j
 @Controller
 @RequiredArgsConstructor
