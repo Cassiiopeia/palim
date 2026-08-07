@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.GetMapping;
  * 확인할 수 있어야 한다.
  *
  * <p>조치 필요 상태를 목록 앞으로 정렬한다 — 발주자는 첫 화면에서 문제를 봐야 한다.
+ *
+ * @deprecated 재고 시스템 동결(07-DECISIONS 023). 내비게이션에서 제거되었고 수정하지 않는다.
  */
+@Deprecated
 @Controller
 @RequiredArgsConstructor
 public class CollectMonitorController {

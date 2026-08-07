@@ -20,7 +20,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *
  * <p>재고 변동은 사유별로 경로를 나눈다 — 입고·폐기·실사 조정이 이력에 서로 다른 사유로
  * 기록되어야 나중에 추적이 가능하다.
+ *
+ * @deprecated 재고 시스템 동결(07-DECISIONS 023). 내비게이션에서 제거되었고 수정하지 않는다.
  */
+@Deprecated
 @Slf4j
 @Controller
 @RequiredArgsConstructor

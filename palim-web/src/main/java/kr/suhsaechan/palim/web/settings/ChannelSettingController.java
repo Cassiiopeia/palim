@@ -21,7 +21,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * 수집이 시작되지 않는다.
  *
  * <p>상태 변경은 전부 POST 다. CSRF 토큰이 필수이며 Thymeleaf 가 폼에 자동으로 넣는다.
+ *
+ * @deprecated 재고 시스템 동결(07-DECISIONS 023). 내비게이션에서 제거되었고 수정하지 않는다.
  */
+@Deprecated
 @Slf4j
 @Controller
 @RequiredArgsConstructor

@@ -19,7 +19,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *
  * <p>매핑되지 않은 상품의 주문은 재고에 반영되지 않는다. 이 화면이 없으면 <b>재고가 조용히
  * 틀어진 상태를 고칠 방법이 없다.</b>
+ *
+ * @deprecated 재고 시스템 동결(07-DECISIONS 023). 내비게이션에서 제거되었고 수정하지 않는다.
  */
+@Deprecated
 @Slf4j
 @Controller
 @RequiredArgsConstructor

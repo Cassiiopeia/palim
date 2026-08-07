@@ -247,3 +247,40 @@ testImplementation(testFixtures(project(":palim-common")))
 ```
 
 컨테이너는 JVM 당 1회 기동하는 singleton 이다. `@Container` 로 클래스 단위 lifecycle 을 맡기면 **상속한 첫 테스트가 끝날 때 컨테이너가 중지되어 이후 테스트가 실패한다.**
+
+## Python 스크립트 규약 (`scripts/`)
+
+Java 가 `ProcessBuilder` 로 호출하는 서브프로세스다. **전 스크립트 공통, 예외 없다.**
+
+| 규약 | 내용 |
+|---|---|
+| 실행 | `new ProcessBuilder(List.of("python3", script, args...))` — **인자 배열만.** 쉘 문자열 조립 금지(커맨드 인젝션) |
+| 입력 | argv 또는 입력 파일 경로. 사용자 입력(URL 등)은 Java 쪽에서 검증 후 전달 |
+| 출력 | stdout 에 **JSON 한 덩어리만.** 사람용 메시지·진행 로그는 stderr |
+| 종료코드 | 0=성공, 1=실패(JSON 에 `error` 필드 포함) |
+| 인코딩 | 환경변수 `PYTHONIOENCODING=utf-8` 고정 + Java 스트림 읽기 UTF-8 명시 — Windows 개발 시 cp949 로 한글이 깨진다 |
+| 타임아웃 | `waitFor(timeout)` 필수, 초과 시 `destroyForcibly()` — 없으면 스레드가 영원히 대기한다 |
+| 동시성 | 스크립트 실행 전용 스레드풀(크기 2) — 영상 분석 등 동시 실행으로 메모리가 폭주한다 |
+| 의존성 | `scripts/requirements.txt` 버전 고정. 시스템 파이썬 전역 설치에 의존하지 않는다 |
+
+> 이 규약을 지키면 추후 py 서버 분리 시 ProcessBuilder 호출부를 HTTP 호출로 바꾸는 것만으로
+> 끝난다 — 스크립트는 한 줄도 바뀌지 않는다.
+
+스크립트 쪽 골격:
+
+```python
+import json, sys
+
+def main() -> int:
+    try:
+        result = do_work(sys.argv[1:])
+        print(json.dumps(result, ensure_ascii=False))   # stdout = JSON only
+        return 0
+    except Exception as e:
+        print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        print(f"failed: {e}", file=sys.stderr)          # 사람용은 stderr
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
