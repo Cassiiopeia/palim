@@ -22,5 +22,7 @@ public interface DiscoveryCursorRepository extends JpaRepository<DiscoveryCursor
             where c.source = :source
             order by c.lastRunAt asc nulls first
             """)
-    List<DiscoveryCursor> findNextTargets(DiscoverySource source, Limit limit);
+    List<DiscoveryCursor> findNextTargets(
+            @org.springframework.data.repository.query.Param("source") DiscoverySource source,
+            Limit limit);
 }

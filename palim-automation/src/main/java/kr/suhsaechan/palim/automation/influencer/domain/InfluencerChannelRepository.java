@@ -28,5 +28,8 @@ public interface InfluencerChannelRepository extends JpaRepository<InfluencerCha
               and (c.lastRefreshedAt is null or c.lastRefreshedAt < :threshold)
             order by c.lastRefreshedAt asc nulls first
             """)
-    List<InfluencerChannel> findRefreshTargets(RefreshTier tier, Instant threshold, Limit limit);
+    List<InfluencerChannel> findRefreshTargets(
+            @org.springframework.data.repository.query.Param("tier") RefreshTier tier,
+            @org.springframework.data.repository.query.Param("threshold") Instant threshold,
+            Limit limit);
 }

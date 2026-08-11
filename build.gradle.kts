@@ -44,6 +44,13 @@ subprojects {
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
+    // 파라미터 이름을 클래스 파일에 남긴다. 없으면 Spring Data 의 명명 파라미터 @Query 가
+    // "provide names for method parameters" 로 실패한다 — 부트 플러그인이 붙는 모듈에만
+    // 자동 적용되므로 java-library 모듈까지 덮으려면 여기서 지정해야 한다.
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("-parameters")
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
 

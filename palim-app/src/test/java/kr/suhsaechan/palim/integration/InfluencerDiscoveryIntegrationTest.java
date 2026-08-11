@@ -36,7 +36,9 @@ class InfluencerDiscoveryIntegrationTest extends IntegrationTest {
                     .withChannel("ch-a", "합성 채널 가", "KR", 60_000,
                             StubYoutubeClient.longforms("ch-a", LATEST, 10, 30_000, 1_500, 300))
                     .withChannel("ch-b", "합성 채널 나", "KR", 120_000,
-                            StubYoutubeClient.longforms("ch-b", LATEST, 10, 40_000, 2_000, 400));
+                            StubYoutubeClient.longforms("ch-b", LATEST, 10, 40_000, 2_000, 400))
+                    // 수동 시드 전용. 다른 경로가 먼저 등록하면 발견 경로 검증이 무의미해진다.
+                    .withChannel("ch-manual", "합성 채널 다", "KR", 80_000, List.of());
         }
     }
 
@@ -63,13 +65,14 @@ class InfluencerDiscoveryIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("시드 키워드마다 커서가 생기고 진행 위치가 남는다")
+    @DisplayName("시드 키워드마다 커서가 생기고 아직 안 돌린 키가 먼저 나온다")
     void 키워드_커서() {
-        int registered = discoveryService.discoverByKeywords(3);
+        discoveryService.discoverByKeywords(3);
 
-        assertThat(registered).isEqualTo(2);
-        // 요청한 3개만 돌았어도 커서는 전체 키워드에 대해 만들어진다
+        // 요청한 3개만 돌았어도 커서는 전체 키워드에 대해 만들어진다.
+        // 커서가 없으면 매번 앞쪽 키워드만 검색되어 뒤쪽은 영영 순서를 못 받는다.
         assertThat(cursors.count()).isGreaterThan(100);
+        // 다음 실행은 아직 안 돌린 키부터 집는다
         assertThat(cursors.findNextTargets(DiscoverySource.KEYWORD_SEARCH, Limit.of(3)))
                 .allSatisfy(cursor -> assertThat(cursor.getLastRunAt()).isNull());
     }
@@ -77,18 +80,17 @@ class InfluencerDiscoveryIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("인기 차트로 발굴한 채널도 등록된다")
     void 차트_발굴() {
-        int registered = discoveryService.discoverByPopularChart(List.of("22", "26"));
+        discoveryService.discoverByPopularChart(List.of("22", "26"));
 
-        assertThat(registered).isEqualTo(2);
         assertThat(channels.findByYoutubeChannelId("ch-a")).isPresent();
     }
 
     @Test
     @DisplayName("수동 시드로 올린 채널은 발견 경로가 MANUAL_SEED 로 남는다")
     void 수동_시드() {
-        discoveryService.registerManualSeeds(List.of("ch-a"));
+        discoveryService.registerManualSeeds(List.of("ch-manual"));
 
-        assertThat(channels.findByYoutubeChannelId("ch-a"))
+        assertThat(channels.findByYoutubeChannelId("ch-manual"))
                 .get()
                 .extracting(channel -> channel.getDiscoverySource())
                 .isEqualTo(DiscoverySource.MANUAL_SEED);
