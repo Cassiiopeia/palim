@@ -53,9 +53,14 @@ palim:
     relay-delay: 30000
 
   youtube:
-    # YouTube Data API 키. 저장소가 공개이므로 환경변수로만 주입한다.
-    # 발급 시 사용량 하드 리밋을 걸어둔 키를 쓴다 — 초과 과금을 막는 유일한 장치다.
-    # 없으면 기동은 되되 수집 배치가 경고를 남기고 건너뛴다.
+    # YouTube Data API v3 키 (Google Cloud Console 에서 발급).
+    # 저장소가 공개이므로 환경변수로만 주입한다. 없으면 기동은 되되 수집이 건너뛴다.
+    #
+    # 이 API 는 무료다 — 과금이 아니라 일 10,000 units 할당량으로 제한된다. 초과하면 403 이
+    # 떨어지고 태평양시 자정에 초기화되므로, 우리가 관리할 것은 비용이 아니라 예산 배분이다
+    # (검색 100 units vs 나머지 1 unit — youtube_quota_ledger 가 이를 기록한다).
+    #
+    # 키에는 서버 IP 제한을 걸어둔다. 유출되어도 남이 우리 할당량을 소모할 수 없다.
     api-key: ${YOUTUBE_API_KEY:}
     base-url: https://www.googleapis.com/youtube/v3
 
