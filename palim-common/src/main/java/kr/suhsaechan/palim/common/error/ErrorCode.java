@@ -216,8 +216,11 @@ public enum ErrorCode {
     /** YouTube API 호출 실패. 커서를 전진시키지 않고 다음 주기에 재시도한다. */
     YOUTUBE_API_FAILED("Y002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
 
-    /** 자막 수집 실패·차단. 메타+댓글 폴백으로 심사를 계속하므로 WARN 이다. */
-    TRANSCRIPT_UNAVAILABLE("Y003", HttpStatus.BAD_GATEWAY, LogLevel.WARN),
+    /**
+     * 자막 수집 실패·차단. 메타+댓글 폴백으로 심사를 계속하는 예상된 상황이므로
+     * 5xx 가 아니라 404(자막이라는 리소스가 없음) + WARN 이다. 3회 연속 차단 시 별도 경고.
+     */
+    TRANSCRIPT_UNAVAILABLE("Y003", HttpStatus.NOT_FOUND, LogLevel.WARN),
 
     INFLUENCER_CHANNEL_NOT_FOUND("Y004", HttpStatus.NOT_FOUND, LogLevel.WARN),
 
