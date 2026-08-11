@@ -34,6 +34,7 @@ import org.springframework.http.HttpStatus;
  *   <tr><td>{@code N}</td><td>알림</td></tr>
  *   <tr><td>{@code A}</td><td>인증</td></tr>
  *   <tr><td>{@code I}</td><td>인시던트</td></tr>
+ *   <tr><td>{@code Y}</td><td>인플루언서 · 유튜브</td></tr>
  * </table>
  *
  * <p>{@link #logLevel()} 을 코드가 직접 갖는 이유는, 전역 핸들러가 예외마다 if 분기로 레벨을
@@ -203,7 +204,24 @@ public enum ErrorCode {
     INCIDENT_NOT_FOUND("I001", HttpStatus.NOT_FOUND, LogLevel.WARN),
 
     /** 현재 상태에서 허용되지 않는 전이다 — 해결된 건 재해결, 확인된 건 재확인 등. */
-    INCIDENT_STATUS_INVALID("I002", HttpStatus.CONFLICT, LogLevel.WARN);
+    INCIDENT_STATUS_INVALID("I002", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    // ==================================================================
+    // 인플루언서 · 유튜브 (Y)
+    // ==================================================================
+
+    /** 일일 quota 소진. 오류가 아니라 정상 흐름 제어 — 커서를 저장하고 다음 실행에 재개한다. */
+    YOUTUBE_QUOTA_EXCEEDED("Y001", HttpStatus.TOO_MANY_REQUESTS, LogLevel.INFO),
+
+    /** YouTube API 호출 실패. 커서를 전진시키지 않고 다음 주기에 재시도한다. */
+    YOUTUBE_API_FAILED("Y002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 자막 수집 실패·차단. 메타+댓글 폴백으로 심사를 계속하므로 WARN 이다. */
+    TRANSCRIPT_UNAVAILABLE("Y003", HttpStatus.BAD_GATEWAY, LogLevel.WARN),
+
+    INFLUENCER_CHANNEL_NOT_FOUND("Y004", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    INFLUENCER_CAMPAIGN_NOT_FOUND("Y005", HttpStatus.NOT_FOUND, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;
