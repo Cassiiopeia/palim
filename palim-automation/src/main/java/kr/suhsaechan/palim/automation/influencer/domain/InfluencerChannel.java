@@ -141,4 +141,9 @@ public class InfluencerChannel extends BaseTimeEntity {
     public void reactivate() {
         this.status = ChannelStatus.ACTIVE;
     }
+
+    /** 사람이 제외한 채널인가 — 하드 탈락 판정에 쓴다. */
+    public boolean isExcluded() {
+        return status == ChannelStatus.EXCLUDED;
+    }
 }

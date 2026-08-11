@@ -32,26 +32,45 @@ public class YoutubeApiClient implements YoutubeClient {
     /** channels.list·videos.list 의 배치 상한. API 규격이라 설정으로 빼지 않는다. */
     private static final int BATCH_SIZE = 50;
 
-    private final RestClient restClient;
     private final YoutubeProperties properties;
     private final YoutubeQuotaService quotaService;
     private final ConfigReader config;
+
+    /**
+     * 첫 호출 때 만든다.
+     *
+     * <p>생성자에서 만들면 안 된다 — 타임아웃이 {@code SystemConfig} 값인데, <b>빈 생성은
+     * 설정 부트스트랩보다 먼저 일어나서</b> 그 시점엔 값이 아직 DB 에 없다. 이 규칙은
+     * {@link ConfigReader} 를 쓰는 모든 빈에 해당한다.
+     */
+    private volatile RestClient restClient;
 
     public YoutubeApiClient(YoutubeProperties properties, YoutubeQuotaService quotaService,
                             ConfigReader config) {
         this.properties = properties;
         this.quotaService = quotaService;
         this.config = config;
+    }
 
-        JdkClientHttpRequestFactory requestFactory =
-                new JdkClientHttpRequestFactory(HttpClient.newHttpClient());
-        requestFactory.setReadTimeout(java.time.Duration.ofSeconds(
-                config.getInt(YoutubeConfigKeys.REQUEST_TIMEOUT_SECONDS)));
-
-        this.restClient = RestClient.builder()
-                .baseUrl(properties.baseUrl())
-                .requestFactory(requestFactory)
-                .build();
+    private RestClient restClient() {
+        RestClient local = restClient;
+        if (local == null) {
+            synchronized (this) {
+                local = restClient;
+                if (local == null) {
+                    JdkClientHttpRequestFactory requestFactory =
+                            new JdkClientHttpRequestFactory(HttpClient.newHttpClient());
+                    requestFactory.setReadTimeout(java.time.Duration.ofSeconds(
+                            config.getInt(YoutubeConfigKeys.REQUEST_TIMEOUT_SECONDS)));
+                    local = RestClient.builder()
+                            .baseUrl(properties.baseUrl())
+                            .requestFactory(requestFactory)
+                            .build();
+                    restClient = local;
+                }
+            }
+        }
+        return local;
     }
 
     @Override
@@ -222,7 +241,7 @@ public class YoutubeApiClient implements YoutubeClient {
         quotaService.ensureAvailable(units, search);
 
         try {
-            JsonNode response = restClient.get()
+            JsonNode response = restClient().get()
                     .uri(uri -> {
                         java.net.URI built = uriSpec.apply(uri);
                         return java.net.URI.create(built + (built.getQuery() == null ? "?" : "&")
