@@ -83,7 +83,7 @@ public class InfluencerController {
                     "%s(으)로 기록했습니다.".formatted(decision.displayName()));
         } catch (BusinessException e) {
             log.warn("심사 기록 실패 — 캠페인 {}, 채널 {}", campaignId, channelId, e);
-            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e));
+            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/influencer/campaigns/%s/channels/%s".formatted(campaignId, channelId);
     }
@@ -101,7 +101,7 @@ public class InfluencerController {
             influencerAdminService.applyQuotedPrice(campaignId, channelId, quotedPrice);
             redirectAttributes.addFlashAttribute("flashSuccess", "견적을 반영했습니다.");
         } catch (BusinessException e) {
-            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e));
+            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/influencer/campaigns/%s/channels/%s".formatted(campaignId, channelId);
     }

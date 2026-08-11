@@ -103,7 +103,7 @@ public class CampaignController {
                     "%d개 중 %d개를 새로 등록했습니다.".formatted(ids.size(), registered));
         } catch (BusinessException e) {
             log.warn("수동 시드 등록 실패", e);
-            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e));
+            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/influencer/campaigns";
     }

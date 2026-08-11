@@ -91,7 +91,7 @@ public class SystemConfigController {
                     "설정을 저장했습니다. 다음 채점부터 바로 반영됩니다.");
         } catch (BusinessException e) {
             log.warn("설정 변경 실패 — {}", configKey, e);
-            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e));
+            redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return category == null
                 ? "redirect:/settings/system"
