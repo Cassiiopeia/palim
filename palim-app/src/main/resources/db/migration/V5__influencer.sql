@@ -127,7 +127,9 @@ CREATE TABLE influencer_score
     rule_total       numeric(6, 2)  NOT NULL,
     ai_total         numeric(6, 2),
     total            numeric(6, 2)  NOT NULL,
-    grade            varchar(1)     NOT NULL,
+    -- 등급은 S/A/B/C/D 한 글자다. Hibernate 는 length=1 문자열 매핑을 char(1) 로 검증하므로
+    -- varchar(1) 로 두면 ddl-auto=validate 가 타입 불일치로 기동을 막는다.
+    grade            char(1)        NOT NULL,
     rule_breakdown   jsonb          NOT NULL,
     ai_breakdown     jsonb,
     badges           varchar(100)   NOT NULL,
