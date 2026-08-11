@@ -46,5 +46,14 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+
+        // 로컬에서 Gradle 배포판 다운로드가 막히는 환경이라 CI 로그가 유일한 진단 창구다.
+        // 축약된 스택트레이스로는 스키마 검증 실패 같은 원인을 알 수 없어 전문을 남긴다.
+        testLogging {
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            events("failed")
+            showStackTraces = true
+            showCauses = true
+        }
     }
 }
