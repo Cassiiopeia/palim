@@ -246,8 +246,13 @@ public enum ErrorCode {
     // AI (X)
     // ==================================================================
 
-    /** API 키가 없다. 기동은 되되 AI 기능만 동작하지 않는다. */
-    AI_NOT_CONFIGURED("X001", HttpStatus.SERVICE_UNAVAILABLE, LogLevel.WARN),
+    /**
+     * API 키가 없다. 기동은 되되 AI 기능만 동작하지 않는다.
+     *
+     * <p>ERROR 로 남기는 이유는 <b>운영자가 조치해야 끝나는 상태</b>이기 때문이다. 심사는 수동
+     * 트리거라 이 로그가 쌓여 다른 기록을 묻을 일도 없다.
+     */
+    AI_NOT_CONFIGURED("X001", HttpStatus.SERVICE_UNAVAILABLE, LogLevel.ERROR),
 
     /** AI 호출 실패. 재시도 1회 후 해당 항목은 미평가로 남긴다. */
     AI_CALL_FAILED("X002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
