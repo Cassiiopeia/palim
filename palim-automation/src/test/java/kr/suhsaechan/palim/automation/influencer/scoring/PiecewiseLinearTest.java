@@ -1,6 +1,7 @@
 package kr.suhsaechan.palim.automation.influencer.scoring;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -17,8 +18,8 @@ class PiecewiseLinearTest {
 
     @Test
     void 제어점_사이는_선형_보간한다() {
-        // 0.08~0.5 구간의 중점 0.29 → 2.0~14.0 의 중점 8.0
-        assertThat(PiecewiseLinear.interpolate(CURVE, 0.29)).isEqualTo(8.0);
+        // 0.08~0.5 구간의 중점 0.29 → 2.0~14.0 의 중점 8.0 (부동소수점 오차 허용)
+        assertThat(PiecewiseLinear.interpolate(CURVE, 0.29)).isCloseTo(8.0, within(1e-9));
     }
 
     @Test
