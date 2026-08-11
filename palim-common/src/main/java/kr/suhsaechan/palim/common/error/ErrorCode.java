@@ -261,7 +261,17 @@ public enum ErrorCode {
     AI_RESPONSE_INVALID("X003", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
 
     /** 프롬프트 리소스를 찾을 수 없다 — 버전 설정과 파일이 어긋난 상태다. */
-    AI_PROMPT_NOT_FOUND("X004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR);
+    AI_PROMPT_NOT_FOUND("X004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
+
+    /**
+     * 재실행 쿨다운 중이다.
+     *
+     * <p>오류가 아니라 의도된 차단이다 — 버튼 연타로 같은 심사가 반복되는 것을 막는다.
+     */
+    AI_RATE_LIMITED("X005", HttpStatus.TOO_MANY_REQUESTS, LogLevel.DEBUG),
+
+    /** 일일 호출 상한에 도달했다. 비용의 마지막 방어선이므로 넘기지 않는다. */
+    AI_DAILY_LIMIT_EXCEEDED("X006", HttpStatus.TOO_MANY_REQUESTS, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;

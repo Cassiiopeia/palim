@@ -39,6 +39,7 @@ public class CampaignController {
     private final ScoringService scoringService;
     private final DiscoveryService discoveryService;
     private final kr.suhsaechan.palim.automation.influencer.ai.AiReviewService aiReviewService;
+    private final kr.suhsaechan.palim.automation.influencer.ai.AiCallGuard aiCallGuard;
     private final ErrorMessageResolver errorMessageResolver;
 
     @GetMapping("/influencer/campaigns")
@@ -49,6 +50,9 @@ public class CampaignController {
                 channelRepository.findAll().stream()
                         .filter(channel -> channel.getStatus() == ChannelStatus.ACTIVE)
                         .count());
+        // 남은 AI 호출 한도를 보여준다 — 버튼을 누르기 전에 얼마나 쓸 수 있는지 알아야 한다.
+        model.addAttribute("aiCallsUsed", aiCallGuard.usedToday());
+        model.addAttribute("aiCallsRemaining", aiCallGuard.remainingToday());
         return "influencer/campaigns";
     }
 

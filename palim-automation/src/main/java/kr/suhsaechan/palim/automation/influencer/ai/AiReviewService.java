@@ -65,6 +65,7 @@ public class AiReviewService {
     private final InfluencerScoreRepository scoreRepository;
     private final ChannelCategoryRepository categoryRepository;
     private final ScoringPropertiesProvider scoringProperties;
+    private final AiCallGuard callGuard;
     private final ConfigReader config;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -116,9 +117,16 @@ public class AiReviewService {
         return true;
     }
 
-    /** 캠페인 상위 N명 심사. 한 채널 실패가 나머지를 멈추지 않는다. */
+    /**
+     * 캠페인 상위 N명 심사. 한 채널 실패가 나머지를 멈추지 않는다.
+     *
+     * <p>진입 시 <b>캠페인 단위 쿨다운</b>을 건다. 캠페인별로 거는 이유는 한 캠페인의 연타가
+     * 다른 캠페인의 정상 실행을 막지 않게 하기 위해서다.
+     */
     @Transactional
     public int reviewTopCandidates(Campaign campaign) {
+        callGuard.ensureAllowed("campaign:" + campaign.getId());
+
         int topN = config.getInt(AiConfigKeys.REVIEW_TOP_N);
         List<InfluencerScore> targets = scoreRepository
                 .findByCampaignIdAndHardFailReasonIsNullOrderByTotalDesc(campaign.getId(),
@@ -130,6 +138,15 @@ public class AiReviewService {
                 if (review(campaign, target.getChannel())) {
                     reviewed++;
                 }
+            } catch (BusinessException e) {
+                // 일일 상한에 닿으면 남은 채널은 시도하지 않는다 — 계속 돌아봐야 전부 실패한다.
+                if (e.getErrorCode() == ErrorCode.AI_DAILY_LIMIT_EXCEEDED) {
+                    log.warn("일일 상한 도달 — 남은 {}건은 다음 기회에",
+                            targets.size() - reviewed);
+                    break;
+                }
+                log.error("AI 심사 실패 — 채널 {}",
+                        target.getChannel().getYoutubeChannelId(), e);
             } catch (RuntimeException e) {
                 log.error("AI 심사 실패 — 채널 {}",
                         target.getChannel().getYoutubeChannelId(), e);
@@ -144,16 +161,32 @@ public class AiReviewService {
     // 내부
     // ==================================================================
 
-    /** 스키마 위반은 재시도 1회. 두 번째도 실패하면 예외를 올려 미평가로 남긴다. */
+    /**
+     * 스키마 위반은 재시도 1회. 두 번째도 실패하면 예외를 올려 미평가로 남긴다.
+     *
+     * <p>재시도도 <b>일일 상한을 다시 확인하고 원장에 기록한다</b>. 재시도가 공짜라고 착각하면
+     * 상한이 실제 사용량의 절반만 세게 되고, 형식 오류가 반복되는 상황에서 정확히 그만큼
+     * 초과된다.
+     */
     private AiReviewResult callWithRetry(ReviewInput input, AiScorePoints points, String channelId) {
         try {
-            return aiClient.review(input, points);
+            return call(input, points);
         } catch (BusinessException e) {
             if (e.getErrorCode() != ErrorCode.AI_RESPONSE_INVALID) {
                 throw e;
             }
             log.warn("AI 응답 형식 오류 — 1회 재시도 {}", channelId);
+            return call(input, points);
+        }
+    }
+
+    /** 호출 1건 = 확인 → 호출 → 기록. 실패해도 기록한다 — 요금은 이미 발생했다. */
+    private AiReviewResult call(ReviewInput input, AiScorePoints points) {
+        callGuard.ensureDailyBudget();
+        try {
             return aiClient.review(input, points);
+        } finally {
+            callGuard.record();
         }
     }
 

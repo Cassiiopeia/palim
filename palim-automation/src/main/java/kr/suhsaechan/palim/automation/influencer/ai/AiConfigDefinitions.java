@@ -45,7 +45,18 @@ public class AiConfigDefinitions implements ConfigDefinitionProvider {
                         "최신순·인기순 각각 이 개수만큼 모은다. 최신순이 논란 탐지의 핵심 신호다.", 22),
                 ConfigDefinition.integer(TRANSCRIPT_MAX_CHARS, 8000, 500, 40000, CATEGORY,
                         "자막 길이 상한(자)",
-                        "편당 이 길이로 잘라 보낸다. AI 입력 토큰이 비용의 대부분이다.", 23)
+                        "편당 이 길이로 잘라 보낸다. AI 입력 토큰이 비용의 대부분이다.", 23),
+
+                // ── 사용량 제한 ────────────────────────────────────────
+                ConfigDefinition.integer(COOLDOWN_SECONDS, 60, 0, 3600, CATEGORY,
+                        "재실행 쿨다운(초)",
+                        "같은 캠페인의 AI 심사를 이 시간 안에 다시 실행할 수 없다. 버튼 연타와 "
+                                + "중복 실행을 막는 층이다. 0 이면 쿨다운을 걸지 않는다.", 30),
+                ConfigDefinition.integer(DAILY_CALL_LIMIT, 200, 0, 100000, CATEGORY,
+                        "일일 호출 상한(회)",
+                        "하루에 나갈 수 있는 AI 호출의 절대 한도. 재시도 루프가 돌거나 다른 곳에서 "
+                                + "같은 키를 써도 이 선에서 멈춘다. 채널 1건 심사가 1회이며 "
+                                + "약 2만 토큰이 든다 — 이 값이 곧 하루 비용의 상한이다.", 31)
         );
     }
 }

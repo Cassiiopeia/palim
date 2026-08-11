@@ -16,6 +16,8 @@ public final class AiConfigKeys {
     public static final String VIDEOS_PER_CHANNEL = P + "videosPerChannel";
     public static final String COMMENTS_PER_VIDEO = P + "commentsPerVideo";
     public static final String TRANSCRIPT_MAX_CHARS = P + "transcriptMaxChars";
+    public static final String COOLDOWN_SECONDS = P + "limit.cooldownSeconds";
+    public static final String DAILY_CALL_LIMIT = P + "limit.dailyCallLimit";
 
     private AiConfigKeys() {
     }

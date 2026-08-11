@@ -98,9 +98,21 @@
                     <button type="submit" class="btn btn-sm w-full">등록</button>
                 </form>
 
-                <div class="stat px-0 py-2">
-                    <div class="stat-title text-xs">수집 대상 채널</div>
-                    <div class="stat-value text-2xl" th:text="${channelCount}">0</div>
+                <div class="stats stats-horizontal shadow-none bg-base-200 mt-2">
+                    <div class="stat py-2">
+                        <div class="stat-title text-xs">수집 대상 채널</div>
+                        <div class="stat-value text-2xl" th:text="${channelCount}">0</div>
+                    </div>
+                    <!--/* AI 는 실제로 과금된다. 버튼을 누르기 전에 남은 한도가 보여야 한다. */-->
+                    <div class="stat py-2">
+                        <div class="stat-title text-xs">오늘 남은 AI 호출</div>
+                        <div class="stat-value text-2xl"
+                             th:classappend="${aiCallsRemaining == 0} ? 'text-error' : ''"
+                             th:text="${aiCallsRemaining}">0</div>
+                        <div class="stat-desc text-xs">
+                            사용 <span th:text="${aiCallsUsed}">0</span>회 · 채널 1건당 1회
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
