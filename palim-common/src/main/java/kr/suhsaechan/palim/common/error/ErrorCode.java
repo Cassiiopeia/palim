@@ -64,6 +64,22 @@ public enum ErrorCode {
     /** 트랜잭션 없이 변경 서비스를 호출했다. 설계 위반이므로 반드시 고쳐야 한다. */
     TRANSACTION_REQUIRED("C006", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
 
+    /**
+     * 설정 키가 등록되어 있지 않다.
+     *
+     * <p>정의({@code ConfigDefinitionProvider})에 없는 키를 읽었다는 뜻이므로 코드 결함이다.
+     */
+    CONFIG_NOT_FOUND("C007", HttpStatus.NOT_FOUND, LogLevel.ERROR),
+
+    /** 설정값 형식이 타입과 맞지 않는다. 화면 입력 오류이므로 사용자에게 되돌린다. */
+    CONFIG_VALUE_INVALID("C008", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 설정값이 허용 범위를 벗어났다. 배점에 음수가 들어가면 점수 체계가 무너진다. */
+    CONFIG_VALUE_OUT_OF_RANGE("C009", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 화면에서 편집할 수 없는 내부 설정을 바꾸려 했다. */
+    CONFIG_NOT_EDITABLE("C010", HttpStatus.FORBIDDEN, LogLevel.WARN),
+
     // ==================================================================
     // SKU · 재고 (S)
     // ==================================================================

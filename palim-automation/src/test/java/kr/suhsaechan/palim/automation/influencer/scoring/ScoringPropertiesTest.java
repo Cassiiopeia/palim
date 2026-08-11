@@ -1,13 +1,16 @@
 package kr.suhsaechan.palim.automation.influencer.scoring;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ScoringPropertiesTest {
 
     @Test
-    void 기본_YAML_이_바인딩되고_배점_합이_스펙과_일치한다() {
+    @DisplayName("기본 정의가 조립되고 배점 합이 스펙과 일치한다")
+    void 기본_정의_조립() {
         ScoringProperties props = ScoringFixtures.defaultProps();
 
         assertThat(props.shortsMaxSeconds()).isEqualTo(60);
@@ -33,5 +36,28 @@ class ScoringPropertiesTest {
         assertThat(props.grade().s()).isEqualTo(85);
         assertThat(props.hardFilter().maxDaysSinceUpload()).isEqualTo(90);
         assertThat(props.cpv().defaultCoefficient()).isEqualTo(25.0);
+        assertThat(props.cpv().categoryCoefficients()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("설정을 바꾸면 재기동 없이 다음 채점부터 점수가 달라진다")
+    void 설정_변경이_점수에_반영된다() {
+        CampaignTarget target = new CampaignTarget(50_000, 300_000, 10_000, 1_000_000);
+        // 참여율만 평범하고 나머지는 좋은 채널
+        ChannelMetrics metrics = new ChannelMetrics(50, 100_000, 0.5, 0.03, 0.3,
+                1.5, 1.0, 1.0, 12, 3, 0.1, 1.0, 1.0);
+
+        double before = RuleScorer.score(metrics, 200_000, target,
+                ScoringFixtures.defaultProps()).breakdown().get("engagement");
+
+        // 참여율 곡선을 완만하게 바꾼다 — 3% 에서 만점이 나오도록
+        ScoringProperties adjusted = ScoringPropertiesAssembler.assemble(
+                ScoringFixtures.reader().with(ScoringConfigKeys.RULE_ENGAGEMENT_CURVE,
+                        "[[0.0,0.0],[0.03,12.0]]"));
+        double after = RuleScorer.score(metrics, 200_000, target, adjusted)
+                .breakdown().get("engagement");
+
+        assertThat(before).isCloseTo(5.0, within(0.01));
+        assertThat(after).isCloseTo(12.0, within(0.01));
     }
 }

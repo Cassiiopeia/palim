@@ -141,10 +141,12 @@ class InfluencerSchemaIntegrationTest extends IntegrationTest {
                 campaign, channel, new BigDecimal("70.00"), breakdown, "", Grade.A,
                 2_500_000L, new BigDecimal("50.00"), "v1", NOW));
 
-        assertThat(scores.findByCampaignIdAndChannelId(campaign.getId(), channel.getId()))
-                .get()
-                .extracting(InfluencerScore::getRuleBreakdown)
-                .isEqualTo(breakdown);
+        // jsonb 는 PostgreSQL 이 키 순서·공백을 정규화하므로 문자열이 아니라 구조로 비교한다.
+        String stored = scores.findByCampaignIdAndChannelId(campaign.getId(), channel.getId())
+                .orElseThrow()
+                .getRuleBreakdown();
+        assertThat(new tools.jackson.databind.ObjectMapper().readTree(stored))
+                .isEqualTo(new tools.jackson.databind.ObjectMapper().readTree(breakdown));
         assertThat(saved.getAiTotal()).isNull();
         assertThat(saved.needsAiReview("hash-1")).isTrue();
     }
