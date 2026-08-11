@@ -38,6 +38,7 @@ public class CampaignController {
     private final InfluencerChannelRepository channelRepository;
     private final ScoringService scoringService;
     private final DiscoveryService discoveryService;
+    private final kr.suhsaechan.palim.automation.influencer.ai.AiReviewService aiReviewService;
     private final ErrorMessageResolver errorMessageResolver;
 
     @GetMapping("/influencer/campaigns")
@@ -106,6 +107,32 @@ public class CampaignController {
             redirectAttributes.addFlashAttribute("flashError", errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/influencer/campaigns";
+    }
+
+    /**
+     * AI 심층 심사 실행.
+     *
+     * <p>수동 트리거인 이유가 둘이다. 비용이 드는 단계라 사람이 명시적으로 눌러야 하고,
+     * 자막 수집이 외부 도구에 의존해 언제든 막힐 수 있어 배치가 조용히 반복 시도하면
+     * 차단을 자초한다.
+     */
+    @PostMapping("/influencer/campaigns/{campaignId}/ai-review")
+    public String aiReview(@PathVariable UUID campaignId, RedirectAttributes redirectAttributes) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.INFLUENCER_CAMPAIGN_NOT_FOUND, campaignId));
+        try {
+            int reviewed = aiReviewService.reviewTopCandidates(campaign);
+            redirectAttributes.addFlashAttribute("flashSuccess",
+                    reviewed == 0
+                            ? "새로 심사할 채널이 없습니다. 자료가 그대로면 기존 결과를 유지합니다."
+                            : "%d개 채널을 AI 심사했습니다.".formatted(reviewed));
+        } catch (BusinessException e) {
+            log.warn("AI 심사 실패 — 캠페인 {}", campaignId, e);
+            redirectAttributes.addFlashAttribute("flashError",
+                    errorMessageResolver.resolve(e.getErrorCode(), e.messageArgs()));
+        }
+        return "redirect:/influencer/grades?campaignId=" + campaignId;
     }
 
     /** 수동 채점 — 설정을 바꾼 뒤 결과를 바로 보고 싶을 때 쓴다. */

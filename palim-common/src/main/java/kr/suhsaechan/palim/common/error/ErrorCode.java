@@ -240,7 +240,23 @@ public enum ErrorCode {
 
     INFLUENCER_CHANNEL_NOT_FOUND("Y004", HttpStatus.NOT_FOUND, LogLevel.WARN),
 
-    INFLUENCER_CAMPAIGN_NOT_FOUND("Y005", HttpStatus.NOT_FOUND, LogLevel.WARN);
+    INFLUENCER_CAMPAIGN_NOT_FOUND("Y005", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    // ==================================================================
+    // AI (X)
+    // ==================================================================
+
+    /** API 키가 없다. 기동은 되되 AI 기능만 동작하지 않는다. */
+    AI_NOT_CONFIGURED("X001", HttpStatus.SERVICE_UNAVAILABLE, LogLevel.WARN),
+
+    /** AI 호출 실패. 재시도 1회 후 해당 항목은 미평가로 남긴다. */
+    AI_CALL_FAILED("X002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 구조화 출력이 스키마를 벗어났다. 자유 텍스트 파싱으로 넘어가지 않는다. */
+    AI_RESPONSE_INVALID("X003", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 프롬프트 리소스를 찾을 수 없다 — 버전 설정과 파일이 어긋난 상태다. */
+    AI_PROMPT_NOT_FOUND("X004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR);
 
     private final String code;
     private final HttpStatus httpStatus;

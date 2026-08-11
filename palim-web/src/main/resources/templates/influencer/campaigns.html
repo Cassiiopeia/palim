@@ -148,6 +148,13 @@
                                   method="post">
                                 <button type="submit" class="btn btn-xs btn-primary">채점 실행</button>
                             </form>
+                            <!--/* AI 심사는 비용이 드는 단계라 사람이 명시적으로 누른다. */-->
+                            <form class="inline"
+                                  th:action="@{/influencer/campaigns/{id}/ai-review(id=${c.id})}"
+                                  method="post">
+                                <button type="submit" class="btn btn-xs btn-secondary"
+                                        title="상위 후보의 자막·댓글을 모아 AI 가 심사합니다">AI 심사</button>
+                            </form>
                             <a class="btn btn-xs btn-ghost"
                                th:href="@{/influencer/grades(campaignId=${c.id})}">등급표</a>
                         </td>

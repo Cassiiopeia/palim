@@ -64,6 +64,20 @@ palim:
     api-key: ${YOUTUBE_API_KEY:}
     base-url: https://www.googleapis.com/youtube/v3
 
+  ai:
+    # OpenAI API 키. YouTube 와 달리 이쪽은 실제로 과금된다 —
+    # 반드시 사용량 하드 리밋을 걸어둔 키만 쓴다(05-INTEGRATION).
+    # 모델명은 여기가 아니라 시스템 설정(화면)에서 바꾼다.
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com/v1
+    timeout-seconds: 120
+
+  scripts:
+    # py 서브프로세스 실행 환경. 도커 이미지 레이아웃에 묶인 값이라 런타임 설정이 아니다.
+    python-executable: python3
+    directory: scripts
+    timeout-seconds: 90
+
 
   monitor:
     # 재고 정합성 대조. 본 시스템은 스스로를 재고의 유일한 기준으로 정의하므로
