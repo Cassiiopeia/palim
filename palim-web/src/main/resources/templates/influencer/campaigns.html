@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<!--/*
+  캠페인 관리.
+
+  캠페인이 채점의 전제다 — 같은 채널이 캠페인 A 에서 82점, B 에서 51점이 되는 것이 정상이고,
+  기준 없이 매긴 "그냥 좋은 채널" 점수는 광고 집행에 쓸모가 없다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="grid gap-4 lg:grid-cols-2">
+
+        <!--/* 캠페인 만들기 */-->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-lg">새 캠페인</h2>
+                <p class="text-xs text-base-content/60">
+                    목표 도달 구간이 실도달량 점수의 만점 기준이 됩니다.
+                    구독자 하한에 못 미치는 채널은 후보에서 자동으로 빠집니다.
+                </p>
+
+                <form th:action="@{/influencer/campaigns}" method="post" class="space-y-2 mt-2">
+                    <label class="form-control">
+                        <span class="label-text text-xs">캠페인 이름</span>
+                        <input type="text" name="name" required maxlength="200"
+                               class="input input-sm input-bordered">
+                    </label>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="form-control">
+                            <span class="label-text text-xs">제품 카테고리</span>
+                            <input type="text" name="productCategory" maxlength="100"
+                                   class="input input-sm input-bordered">
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">타깃</span>
+                            <input type="text" name="targetAudience" maxlength="500"
+                                   class="input input-sm input-bordered">
+                        </label>
+                    </div>
+
+                    <label class="form-control">
+                        <span class="label-text text-xs">소구 포인트</span>
+                        <textarea name="sellingPoints" rows="2"
+                                  class="textarea textarea-sm textarea-bordered"></textarea>
+                    </label>
+
+                    <label class="form-control">
+                        <span class="label-text text-xs">금지 조건 (경쟁사 광고 이력 등)</span>
+                        <textarea name="exclusions" rows="2"
+                                  class="textarea textarea-sm textarea-bordered"></textarea>
+                    </label>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="form-control">
+                            <span class="label-text text-xs">목표 도달 하한</span>
+                            <input type="number" name="targetReachMin" value="30000" min="0" required
+                                   class="input input-sm input-bordered font-mono">
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">목표 도달 상한</span>
+                            <input type="number" name="targetReachMax" value="200000" min="0" required
+                                   class="input input-sm input-bordered font-mono">
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">구독자 하한</span>
+                            <input type="number" name="subscriberMin" value="10000" min="0" required
+                                   class="input input-sm input-bordered font-mono">
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">구독자 상한</span>
+                            <input type="number" name="subscriberMax" value="1000000" min="0" required
+                                   class="input input-sm input-bordered font-mono">
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary w-full">만들기</button>
+                </form>
+            </div>
+        </div>
+
+        <!--/* 수동 시드 */-->
+        <div class="card bg-base-100 shadow-sm h-fit">
+            <div class="card-body">
+                <h2 class="card-title text-lg">채널 직접 추가</h2>
+                <p class="text-xs text-base-content/60">
+                    이미 아는 채널을 넣습니다. 발굴 배치가 돌기 전에도 등급표를 볼 수 있고,
+                    기준을 맞출 때 쓸 정답셋을 만드는 통로이기도 합니다.
+                    유튜브 채널 ID(UC 로 시작)를 줄바꿈이나 쉼표로 구분해 넣으세요.
+                </p>
+
+                <form th:action="@{/influencer/seeds}" method="post" class="space-y-2 mt-2">
+                    <textarea name="channelIds" rows="4" required
+                              placeholder="UCxxxxxxxxxxxxxxxxxxxxxx"
+                              class="textarea textarea-sm textarea-bordered font-mono"></textarea>
+                    <button type="submit" class="btn btn-sm w-full">등록</button>
+                </form>
+
+                <div class="stat px-0 py-2">
+                    <div class="stat-title text-xs">수집 대상 채널</div>
+                    <div class="stat-value text-2xl" th:text="${channelCount}">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!--/* 캠페인 목록 */-->
+    <div class="card bg-base-100 shadow-sm mt-4">
+        <div class="card-body">
+            <h2 class="card-title text-lg">캠페인</h2>
+
+            <div th:if="${campaigns.isEmpty()}" class="alert alert-info">
+                <span>아직 캠페인이 없습니다.</span>
+            </div>
+
+            <div th:unless="${campaigns.isEmpty()}" class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>이름</th>
+                        <th>제품</th>
+                        <th class="text-right">목표 도달</th>
+                        <th class="text-right">구독자 구간</th>
+                        <th>상태</th>
+                        <th>조치</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="c : ${campaigns}">
+                        <td class="font-medium" th:text="${c.name}">이름</td>
+                        <td class="text-xs" th:text="${c.productCategory}">-</td>
+                        <td class="text-right font-mono text-xs">
+                            <span th:text="${#numbers.formatInteger(c.targetReachMin, 0, 'COMMA')}"></span>
+                            ~
+                            <span th:text="${#numbers.formatInteger(c.targetReachMax, 0, 'COMMA')}"></span>
+                        </td>
+                        <td class="text-right font-mono text-xs">
+                            <span th:text="${#numbers.formatInteger(c.subscriberMin, 0, 'COMMA')}"></span>
+                            ~
+                            <span th:text="${#numbers.formatInteger(c.subscriberMax, 0, 'COMMA')}"></span>
+                        </td>
+                        <td><span class="badge badge-sm" th:text="${c.status}">상태</span></td>
+                        <td class="whitespace-nowrap">
+                            <form class="inline"
+                                  th:action="@{/influencer/campaigns/{id}/score(id=${c.id})}"
+                                  method="post">
+                                <button type="submit" class="btn btn-xs btn-primary">채점 실행</button>
+                            </form>
+                            <a class="btn btn-xs btn-ghost"
+                               th:href="@{/influencer/grades(campaignId=${c.id})}">등급표</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>
