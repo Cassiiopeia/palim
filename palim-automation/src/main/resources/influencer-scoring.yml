@@ -1,0 +1,46 @@
+# 인플루언서 스코어링 루브릭 초기값.
+# 스펙: docs/superpowers/specs/2026-08-11-influencer-grading-design.md §5, §7
+# 이 값은 실측 감각 기반 초기값이다 — 캘리브레이션(정답셋 15~20개 대조) 후 조정한다.
+palim:
+  influencer:
+    scoring:
+      shorts-max-seconds: 60      # 이하 = 쇼츠로 분리, 점수 계산 제외
+      window-size: 50             # 관측 창: 최근 롱폼 N개
+      hard-filter:
+        max-days-since-upload: 90
+        min-longform-count: 5
+      rule:                       # 만점 합 70
+        reach-points: 14.0        # 캠페인 목표 도달 구간 대비 로그 감쇠
+        vsr:                      # 도달 효율 = 조회수 중앙값 / 구독자
+          curve: [[0.0, 0.0], [0.08, 2.0], [0.15, 5.0], [0.3, 9.0], [0.5, 14.0]]
+        momentum:                 # 6 + 5 + 3 = 14
+          trend-curve: [[0.0, 0.0], [0.7, 1.5], [0.9, 3.0], [1.2, 4.5], [1.5, 6.0]]
+          peak-curve: [[0.0, 0.0], [0.3, 1.0], [0.5, 2.5], [0.8, 4.0], [1.0, 5.0]]
+          crash-threshold: 0.5    # 미만 = 0점 + 급락 배지
+          crash-curve: [[0.5, 0.0], [0.8, 3.0]]
+        engagement:               # (좋아요 + 댓글×가중) / 조회수, 중앙값
+          comment-weight: 3
+          curve: [[0.0, 0.0], [0.015, 2.5], [0.03, 5.0], [0.05, 8.5], [0.08, 12.0]]
+        activity:                 # 5 + 3 = 8
+          uploads-points: 5.0
+          uploads-target: 12      # 90일 12회(주1회) = 만점
+          recency-curve: [[0.0, 3.0], [7.0, 3.0], [14.0, 2.25], [30.0, 1.5], [60.0, 0.75], [90.0, 0.0]]
+        stability:                # CV = (Q3-Q1)/중앙값, 낮을수록 좋음
+          curve: [[0.0, 8.0], [0.4, 8.0], [0.8, 5.0], [1.5, 2.0], [3.0, 0.0]]
+      rising:                     # 만점 합 100
+        vsr-heat-curve: [[1.0, 0.0], [1.5, 30.0]]
+        accel-curve: [[1.0, 0.0], [2.0, 25.0]]
+        velocity-curve: [[1.0, 0.0], [3.0, 20.0]]
+        burst-curve: [[1.0, 0.0], [2.0, 15.0]]
+        untapped-points: 10.0
+        untapped-max-paid-ratio: 0.05
+        untapped-max-subscribers: 100000
+        badge-threshold: 70.0     # 이상 = 라이징 배지 + 매일 스냅샷 대상
+      grade:
+        s: 85
+        a: 70
+        b: 55
+        c: 40
+      cpv:
+        default-coefficient: 25.0   # 구독자 1명당 추정 단가(원) — 업계 관행 추정 초기값
+        category-coefficients: {}   # 예: { beauty: 40.0 } — 자체 카테고리 코드 기준, 발주사 합의 후 채움
