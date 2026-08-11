@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<!--/*
+  채널 상세 — "왜 이 점수인지"를 설명하고 사람이 판정한다.
+
+  나쁜 소식(배지)을 점수보다 위에 둔다. 결정권자는 위험 신호를 먼저 봐야 한다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="mb-4">
+        <a th:href="@{/influencer/grades(campaignId=${campaign.id})}"
+           class="btn btn-ghost btn-sm">← 등급표</a>
+    </div>
+
+    <!--/* 위험 신호 먼저 */-->
+    <div th:if="${detail.hasBadge(T(kr.suhsaechan.palim.automation.influencer.scoring.Badge).CRASH)}"
+         class="alert alert-error mb-4">
+        <span><span class="font-semibold">알고리즘 이탈 의심</span> —
+            최근 영상 조회수가 직전 대비 절반 아래로 떨어졌습니다.
+            구독자 수는 그대로여도 단가는 구독자 기준으로 청구되므로 특히 손해가 큰 유형입니다.</span>
+    </div>
+    <div th:if="${detail.hasBadge(T(kr.suhsaechan.palim.automation.influencer.scoring.Badge).RISING)}"
+         class="alert alert-info mb-4">
+        <span><span class="font-semibold">라이징</span> —
+            조회수가 구독자보다 빠르게 늘고 있습니다. 단가가 오르기 전 구간입니다.</span>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-3">
+
+        <!--/* 왼쪽: 요약 + 심사 */-->
+        <div class="lg:col-span-1 space-y-4">
+
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body">
+                    <h2 class="card-title text-lg" th:text="${detail.title}">채널명</h2>
+                    <p class="text-sm text-base-content/60" th:text="${detail.handle}"></p>
+                    <a class="link link-primary text-sm" th:href="${detail.channelUrl}"
+                       target="_blank" rel="noopener noreferrer">유튜브에서 보기 ↗</a>
+
+                    <div class="stats stats-vertical shadow-none bg-base-200 mt-3">
+                        <div class="stat py-2">
+                            <div class="stat-title text-xs">구독자</div>
+                            <div class="stat-value text-xl" th:text="${detail.subscriberText()}">0</div>
+                        </div>
+                        <div class="stat py-2">
+                            <div class="stat-title text-xs">조회수 중앙값 (롱폼)</div>
+                            <div class="stat-value text-xl" th:text="${detail.medianViewsText()}">0</div>
+                            <div class="stat-desc text-xs">쇼츠 제외 · 평균이 아닌 중앙값</div>
+                        </div>
+                        <div class="stat py-2">
+                            <div class="stat-title text-xs">
+                                <span th:text="${detail.priceEstimated} ? '추정 단가' : '실제 견적'"></span>
+                            </div>
+                            <div class="stat-value text-xl"
+                                 th:text="${#numbers.formatInteger(detail.price, 0, 'COMMA')}">0</div>
+                            <div class="stat-desc text-xs">CPV <span th:text="${detail.cpv}">0</span>원</div>
+                        </div>
+                    </div>
+
+                    <!--/* 견적 입력 — 추정을 실측으로 바꾼다 */-->
+                    <form class="join mt-2"
+                          th:action="@{/influencer/campaigns/{c}/channels/{ch}/quote(c=${campaign.id},ch=${detail.channelId})}"
+                          method="post">
+                        <input type="number" name="quotedPrice" min="0" required
+                               placeholder="실제 견적(원)"
+                               class="input input-sm input-bordered join-item w-full">
+                        <button type="submit" class="btn btn-sm join-item">반영</button>
+                    </form>
+                </div>
+            </div>
+
+            <!--/* 심사 — 최종 판단은 사람이 한다 */-->
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body">
+                    <h3 class="font-semibold">내부 심사</h3>
+
+                    <div th:if="${detail.reviewed()}" class="alert alert-info py-2 text-sm">
+                        <span>
+                            <span class="badge badge-sm" th:classappend="${detail.decision.badgeClass()}"
+                                  th:text="${detail.decision.displayName()}">판정</span>
+                            <span th:text="${detail.reviewer}"></span> ·
+                            <span th:text="${detail.reviewedAtText}"></span>
+                            <span th:if="${detail.reviewNote != null}" class="block mt-1"
+                                  th:text="${detail.reviewNote}"></span>
+                        </span>
+                    </div>
+
+                    <p class="text-xs text-base-content/60">
+                        점수는 후보를 좁힐 뿐입니다. 아래 근거를 확인하고 직접 판단하세요.
+                    </p>
+
+                    <a class="btn btn-sm btn-outline w-full" th:href="${detail.webSearchUrl()}"
+                       target="_blank" rel="noopener noreferrer">웹에서 평판 확인 ↗</a>
+
+                    <form th:action="@{/influencer/campaigns/{c}/channels/{ch}/review(c=${campaign.id},ch=${detail.channelId})}"
+                          method="post" class="space-y-2 mt-2">
+                        <textarea name="note" maxlength="1000" rows="2"
+                                  placeholder="판단 근거 (나중에 기준을 손볼 때 가장 중요한 자료입니다)"
+                                  class="textarea textarea-sm textarea-bordered w-full"></textarea>
+                        <div class="join w-full">
+                            <button type="submit" name="decision" value="PROPOSE"
+                                    class="btn btn-sm btn-success join-item flex-1">제안</button>
+                            <button type="submit" name="decision" value="HOLD"
+                                    class="btn btn-sm btn-warning join-item flex-1">보류</button>
+                            <button type="submit" name="decision" value="EXCLUDE"
+                                    class="btn btn-sm btn-ghost join-item flex-1">제외</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!--/* 오른쪽: 점수 분해 + 최근 영상 */-->
+        <div class="lg:col-span-2 space-y-4">
+
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body">
+                    <div class="flex items-baseline gap-3">
+                        <h3 class="font-semibold">점수 분해</h3>
+                        <span class="text-3xl font-bold" th:text="${detail.total}">0</span>
+                        <span class="badge" th:classappend="|badge-lg|" th:text="${detail.grade}">A</span>
+                        <span th:unless="${detail.aiReviewed()}"
+                              class="badge badge-ghost badge-sm">AI 미평가 · 룰 점수만</span>
+                    </div>
+
+                    <div class="space-y-3 mt-3">
+                        <div th:each="item : ${detail.ruleItems}">
+                            <div class="flex justify-between text-sm">
+                                <span th:text="${item.label()}">항목</span>
+                                <span class="font-mono text-xs">
+                                    <span th:text="${#numbers.formatDecimal(item.score(), 1, 1)}">0</span>
+                                    / <span th:text="${#numbers.formatDecimal(item.max(), 1, 0)}">0</span>
+                                </span>
+                            </div>
+                            <progress class="progress progress-primary w-full h-2"
+                                      th:value="${item.percent()}" max="100"></progress>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-base-content/50 mt-2">
+                        만점은 현재 설정 기준의 표시값입니다. 배점은
+                        <a th:href="@{/settings/system}" class="link">설정 화면</a>에서 조정합니다.
+                    </p>
+                </div>
+            </div>
+
+            <!--/* 라이징 지수 — 캠페인과 무관한 선점 신호 */-->
+            <div class="card bg-base-100 shadow-sm" th:if="${!detail.risingItems.isEmpty()}">
+                <div class="card-body">
+                    <div class="flex items-baseline gap-3">
+                        <h3 class="font-semibold">라이징 지수</h3>
+                        <span class="text-2xl font-bold" th:text="${detail.risingTotal}">0</span>
+                        <span class="text-xs text-base-content/60">/ 100 · 캠페인과 무관한 성장 신호</span>
+                    </div>
+                    <div class="space-y-2 mt-2">
+                        <div th:each="item : ${detail.risingItems}">
+                            <div class="flex justify-between text-xs">
+                                <span th:text="${item.label()}">항목</span>
+                                <span class="font-mono">
+                                    <span th:text="${#numbers.formatDecimal(item.score(), 1, 1)}">0</span>
+                                    / <span th:text="${#numbers.formatDecimal(item.max(), 1, 0)}">0</span>
+                                </span>
+                            </div>
+                            <progress class="progress progress-secondary w-full h-1.5"
+                                      th:value="${item.percent()}" max="100"></progress>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body">
+                    <h3 class="font-semibold">최근 롱폼 영상</h3>
+                    <div class="overflow-x-auto">
+                        <table class="table table-xs">
+                            <thead>
+                            <tr>
+                                <th>제목</th>
+                                <th>게시일</th>
+                                <th class="text-right">조회</th>
+                                <th class="text-right">좋아요</th>
+                                <th class="text-right">댓글</th>
+                                <th>광고</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="video : ${detail.recentVideos}">
+                                <td class="max-w-xs truncate">
+                                    <a class="link link-hover" th:href="${video.url()}"
+                                       target="_blank" rel="noopener noreferrer"
+                                       th:text="${video.title()}">제목</a>
+                                </td>
+                                <td class="font-mono text-xs" th:text="${video.publishedAt()}">-</td>
+                                <td class="text-right font-mono text-xs"
+                                    th:text="${#numbers.formatInteger(video.viewCount(), 0, 'COMMA')}">0</td>
+                                <td class="text-right font-mono text-xs"
+                                    th:text="${#numbers.formatInteger(video.likeCount(), 0, 'COMMA')}">0</td>
+                                <td class="text-right font-mono text-xs"
+                                    th:text="${#numbers.formatInteger(video.commentCount(), 0, 'COMMA')}">0</td>
+                                <td>
+                                    <span th:if="${video.paidPromotion()}"
+                                          class="badge badge-xs badge-warning">유료</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

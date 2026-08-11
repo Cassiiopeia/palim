@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<!--/*
+  인플루언서 등급표.
+
+  이 표가 답하는 질문은 하나 — "같은 돈으로 누가 더 많이 도달하는가".
+  그래서 구독자보다 조회수와 CPV 를 앞에 세우고, 기본 정렬을 가성비순으로 둔다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div th:if="${campaigns.isEmpty()}" class="alert alert-info">
+        <span>등록된 캠페인이 없습니다. 캠페인을 먼저 만들어야 점수를 매길 수 있습니다 —
+            점수는 항상 "무슨 광고에 적합한가" 기준이기 때문입니다.</span>
+        <a th:href="@{/influencer/campaigns}" class="btn btn-sm btn-primary">캠페인 만들기</a>
+    </div>
+
+    <th:block th:unless="${campaigns.isEmpty()}">
+
+        <!--/* 캠페인 선택 + 정렬 토글 */-->
+        <div class="card bg-base-100 shadow-sm mb-4">
+            <div class="card-body py-4">
+                <form th:action="@{/influencer/grades}" method="get"
+                      class="flex flex-wrap items-end gap-3">
+                    <label class="form-control">
+                        <span class="label-text text-xs">캠페인</span>
+                        <select name="campaignId" class="select select-sm select-bordered"
+                                onchange="this.form.submit()">
+                            <option th:each="c : ${campaigns}" th:value="${c.id}"
+                                    th:text="${c.name}"
+                                    th:selected="${c.id == selectedCampaignId}">캠페인</option>
+                        </select>
+                    </label>
+
+                    <div role="tablist" class="tabs tabs-box tabs-sm">
+                        <a th:each="s : ${sorts}" role="tab" class="tab"
+                           th:classappend="${s == selectedSort} ? 'tab-active' : ''"
+                           th:href="@{/influencer/grades(campaignId=${selectedCampaignId},sort=${s})}"
+                           th:text="${s.displayName()}">정렬</a>
+                    </div>
+
+                    <p class="text-xs text-base-content/60 ml-auto">
+                        가성비순은 <span class="font-semibold">추정 단가 ÷ 조회수 중앙값</span>이
+                        낮은 순입니다. 총점 1위와 다른 채널이 올라오는 것이 정상입니다.
+                    </p>
+                </form>
+            </div>
+        </div>
+
+        <!--/* 심사 진행 현황 */-->
+        <div class="stats stats-horizontal shadow-sm bg-base-100 mb-4 w-full">
+            <div class="stat py-3">
+                <div class="stat-title text-xs">후보</div>
+                <div class="stat-value text-2xl" th:text="${rows.size()}">0</div>
+            </div>
+            <div class="stat py-3">
+                <div class="stat-title text-xs">제안</div>
+                <div class="stat-value text-2xl text-success"
+                     th:text="${reviewSummary != null and reviewSummary.containsKey(T(kr.suhsaechan.palim.automation.influencer.domain.ReviewDecision).PROPOSE)}
+                              ? ${reviewSummary.get(T(kr.suhsaechan.palim.automation.influencer.domain.ReviewDecision).PROPOSE)} : 0">0</div>
+            </div>
+            <div class="stat py-3">
+                <div class="stat-title text-xs">보류</div>
+                <div class="stat-value text-2xl text-warning"
+                     th:text="${reviewSummary != null and reviewSummary.containsKey(T(kr.suhsaechan.palim.automation.influencer.domain.ReviewDecision).HOLD)}
+                              ? ${reviewSummary.get(T(kr.suhsaechan.palim.automation.influencer.domain.ReviewDecision).HOLD)} : 0">0</div>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+
+                <div th:if="${rows.isEmpty()}" class="alert alert-info">
+                    <span>채점된 채널이 없습니다. 발굴·수집 배치가 돌았는지 확인하세요.</span>
+                </div>
+
+                <div th:unless="${rows.isEmpty()}" class="overflow-x-auto">
+                    <table class="table table-sm table-zebra">
+                        <thead>
+                        <tr>
+                            <th>채널</th>
+                            <th class="text-right">구독자</th>
+                            <th class="text-right">조회수 중앙값</th>
+                            <th class="text-right" title="조회수 중앙값 ÷ 구독자">도달률</th>
+                            <th class="text-right">추정 단가</th>
+                            <th class="text-right" title="단가 ÷ 조회수 — 낮을수록 가성비가 좋다">CPV</th>
+                            <th class="text-right">점수</th>
+                            <th>등급</th>
+                            <th>상태</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${rows}">
+                            <td class="max-w-xs">
+                                <a class="link link-hover font-medium"
+                                   th:href="@{/influencer/campaigns/{c}/channels/{ch}(c=${selectedCampaignId},ch=${row.channelId})}"
+                                   th:text="${row.title}">채널명</a>
+                                <p class="text-xs text-base-content/50" th:text="${row.handle}"></p>
+                            </td>
+                            <td class="text-right font-mono text-xs"
+                                th:text="${#numbers.formatInteger(row.subscriberCount, 0, 'COMMA')}">0</td>
+                            <td class="text-right font-mono text-xs font-semibold"
+                                th:text="${#numbers.formatInteger(row.medianViews, 0, 'COMMA')}">0</td>
+                            <!--/* 도달률이 0.1 미만이면 구독자만 남은 채널이다 — 눈에 띄게 표시한다. */-->
+                            <td class="text-right font-mono text-xs"
+                                th:classappend="${row.viewToSubscriberRatio().doubleValue() < 0.1} ? 'text-error font-semibold' : ''"
+                                th:text="${row.viewToSubscriberRatio()}">0.00</td>
+                            <td class="text-right font-mono text-xs">
+                                <span th:text="${#numbers.formatInteger(row.price, 0, 'COMMA')}">0</span>
+                                <span th:if="${row.priceEstimated}"
+                                      class="text-base-content/40" title="업계 관행 기반 추정치">추정</span>
+                            </td>
+                            <td class="text-right font-mono text-xs font-semibold"
+                                th:text="${row.estimatedCpv}">0</td>
+                            <td class="text-right font-mono text-xs">
+                                <span th:text="${row.total}">0</span>
+                                <span th:unless="${row.aiReviewed()}"
+                                      class="text-base-content/40 text-[10px]"
+                                      title="AI 심층 심사 전 — 룰 점수만 반영된 값">룰만</span>
+                            </td>
+                            <td>
+                                <span class="badge badge-sm" th:classappend="${row.gradeBadgeClass()}"
+                                      th:text="${row.grade}">A</span>
+                            </td>
+                            <td class="whitespace-nowrap">
+                                <span th:if="${row.hasBadge(T(kr.suhsaechan.palim.automation.influencer.scoring.Badge).CRASH)}"
+                                      class="badge badge-sm badge-error"
+                                      title="최근 조회수가 직전 대비 절반 아래로 떨어졌다 — 알고리즘 이탈 의심">이탈</span>
+                                <span th:if="${row.hasBadge(T(kr.suhsaechan.palim.automation.influencer.scoring.Badge).RISING)}"
+                                      class="badge badge-sm badge-primary"
+                                      title="폭발 조짐 — 단가가 오르기 전 구간">라이징</span>
+                                <span th:if="${row.decision != null}" class="badge badge-sm"
+                                      th:classappend="${row.decision.badgeClass()}"
+                                      th:text="${row.decision.displayName()}">판정</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+</th:block>
+</body>
+</html>

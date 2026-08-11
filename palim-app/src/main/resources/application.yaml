@@ -52,6 +52,33 @@ palim:
   notification:
     relay-delay: 30000
 
+  youtube:
+    # YouTube Data API v3 키 (Google Cloud Console 에서 발급).
+    # 저장소가 공개이므로 환경변수로만 주입한다. 없으면 기동은 되되 수집이 건너뛴다.
+    #
+    # 이 API 는 무료다 — 과금이 아니라 일 10,000 units 할당량으로 제한된다. 초과하면 403 이
+    # 떨어지고 태평양시 자정에 초기화되므로, 우리가 관리할 것은 비용이 아니라 예산 배분이다
+    # (검색 100 units vs 나머지 1 unit — youtube_quota_ledger 가 이를 기록한다).
+    #
+    # 키에는 서버 IP 제한을 걸어둔다. 유출되어도 남이 우리 할당량을 소모할 수 없다.
+    api-key: ${YOUTUBE_API_KEY:}
+    base-url: https://www.googleapis.com/youtube/v3
+
+  ai:
+    # OpenAI API 키. YouTube 와 달리 이쪽은 실제로 과금된다 —
+    # 반드시 사용량 하드 리밋을 걸어둔 키만 쓴다(05-INTEGRATION).
+    # 모델명은 여기가 아니라 시스템 설정(화면)에서 바꾼다.
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com/v1
+    timeout-seconds: 120
+
+  scripts:
+    # py 서브프로세스 실행 환경. 도커 이미지 레이아웃에 묶인 값이라 런타임 설정이 아니다.
+    python-executable: python3
+    directory: scripts
+    timeout-seconds: 90
+
+
   monitor:
     # 재고 정합성 대조. 본 시스템은 스스로를 재고의 유일한 기준으로 정의하므로
     # 자기 검산이 없으면 틀어진 상태로 장기간 운영된다.

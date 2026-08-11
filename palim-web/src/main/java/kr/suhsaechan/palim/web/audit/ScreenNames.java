@@ -22,6 +22,9 @@ final class ScreenNames {
     private static final Map<String, String> NAMES = new LinkedHashMap<>();
 
     static {
+        NAMES.put("/influencer/campaigns", "캠페인 관리");
+        NAMES.put("/influencer/grades", "인플루언서 등급표");
+        NAMES.put("/settings/system", "시스템 설정");
         NAMES.put("/settings/channels", "채널 설정");
         NAMES.put("/settings/notification", "알림 설정");
         NAMES.put("/settings/account", "계정 설정");

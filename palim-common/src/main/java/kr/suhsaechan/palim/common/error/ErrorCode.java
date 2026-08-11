@@ -34,6 +34,7 @@ import org.springframework.http.HttpStatus;
  *   <tr><td>{@code N}</td><td>알림</td></tr>
  *   <tr><td>{@code A}</td><td>인증</td></tr>
  *   <tr><td>{@code I}</td><td>인시던트</td></tr>
+ *   <tr><td>{@code Y}</td><td>인플루언서 · 유튜브</td></tr>
  * </table>
  *
  * <p>{@link #logLevel()} 을 코드가 직접 갖는 이유는, 전역 핸들러가 예외마다 if 분기로 레벨을
@@ -62,6 +63,22 @@ public enum ErrorCode {
 
     /** 트랜잭션 없이 변경 서비스를 호출했다. 설계 위반이므로 반드시 고쳐야 한다. */
     TRANSACTION_REQUIRED("C006", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
+
+    /**
+     * 설정 키가 등록되어 있지 않다.
+     *
+     * <p>정의({@code ConfigDefinitionProvider})에 없는 키를 읽었다는 뜻이므로 코드 결함이다.
+     */
+    CONFIG_NOT_FOUND("C007", HttpStatus.NOT_FOUND, LogLevel.ERROR),
+
+    /** 설정값 형식이 타입과 맞지 않는다. 화면 입력 오류이므로 사용자에게 되돌린다. */
+    CONFIG_VALUE_INVALID("C008", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 설정값이 허용 범위를 벗어났다. 배점에 음수가 들어가면 점수 체계가 무너진다. */
+    CONFIG_VALUE_OUT_OF_RANGE("C009", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 화면에서 편집할 수 없는 내부 설정을 바꾸려 했다. */
+    CONFIG_NOT_EDITABLE("C010", HttpStatus.FORBIDDEN, LogLevel.WARN),
 
     // ==================================================================
     // SKU · 재고 (S)
@@ -203,7 +220,58 @@ public enum ErrorCode {
     INCIDENT_NOT_FOUND("I001", HttpStatus.NOT_FOUND, LogLevel.WARN),
 
     /** 현재 상태에서 허용되지 않는 전이다 — 해결된 건 재해결, 확인된 건 재확인 등. */
-    INCIDENT_STATUS_INVALID("I002", HttpStatus.CONFLICT, LogLevel.WARN);
+    INCIDENT_STATUS_INVALID("I002", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    // ==================================================================
+    // 인플루언서 · 유튜브 (Y)
+    // ==================================================================
+
+    /** 일일 quota 소진. 오류가 아니라 정상 흐름 제어 — 커서를 저장하고 다음 실행에 재개한다. */
+    YOUTUBE_QUOTA_EXCEEDED("Y001", HttpStatus.TOO_MANY_REQUESTS, LogLevel.INFO),
+
+    /** YouTube API 호출 실패. 커서를 전진시키지 않고 다음 주기에 재시도한다. */
+    YOUTUBE_API_FAILED("Y002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /**
+     * 자막 수집 실패·차단. 메타+댓글 폴백으로 심사를 계속하는 예상된 상황이므로
+     * 5xx 가 아니라 404(자막이라는 리소스가 없음) + WARN 이다. 3회 연속 차단 시 별도 경고.
+     */
+    TRANSCRIPT_UNAVAILABLE("Y003", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    INFLUENCER_CHANNEL_NOT_FOUND("Y004", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    INFLUENCER_CAMPAIGN_NOT_FOUND("Y005", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    // ==================================================================
+    // AI (X)
+    // ==================================================================
+
+    /**
+     * API 키가 없다. 기동은 되되 AI 기능만 동작하지 않는다.
+     *
+     * <p>ERROR 로 남기는 이유는 <b>운영자가 조치해야 끝나는 상태</b>이기 때문이다. 심사는 수동
+     * 트리거라 이 로그가 쌓여 다른 기록을 묻을 일도 없다.
+     */
+    AI_NOT_CONFIGURED("X001", HttpStatus.SERVICE_UNAVAILABLE, LogLevel.ERROR),
+
+    /** AI 호출 실패. 재시도 1회 후 해당 항목은 미평가로 남긴다. */
+    AI_CALL_FAILED("X002", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 구조화 출력이 스키마를 벗어났다. 자유 텍스트 파싱으로 넘어가지 않는다. */
+    AI_RESPONSE_INVALID("X003", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 프롬프트 리소스를 찾을 수 없다 — 버전 설정과 파일이 어긋난 상태다. */
+    AI_PROMPT_NOT_FOUND("X004", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
+
+    /**
+     * 재실행 쿨다운 중이다.
+     *
+     * <p>오류가 아니라 의도된 차단이다 — 버튼 연타로 같은 심사가 반복되는 것을 막는다.
+     */
+    AI_RATE_LIMITED("X005", HttpStatus.TOO_MANY_REQUESTS, LogLevel.DEBUG),
+
+    /** 일일 호출 상한에 도달했다. 비용의 마지막 방어선이므로 넘기지 않는다. */
+    AI_DAILY_LIMIT_EXCEEDED("X006", HttpStatus.TOO_MANY_REQUESTS, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;

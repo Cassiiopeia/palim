@@ -10,6 +10,8 @@ dependencies {
     // 감사 로그 기록·조회. 인증 사건과 화면 조회·변경을 남긴다 (07-DECISIONS 018).
     implementation(project(":palim-audit"))
     implementation(project(":palim-auth"))
+    // 인플루언서 등급표·심사·설정 화면 (#41). 새 코드가 들어가는 활성 모듈이다.
+    implementation(project(":palim-automation"))
     implementation(project(":palim-channel"))
     // 매핑 등록 직후 재고 소급 반영을 호출한다 (F-04).
     implementation(project(":palim-collector"))

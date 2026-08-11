@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<!--/*
+  시스템 설정.
+
+  값을 바꾸면 재기동 없이 즉시 반영된다. 설명을 값 옆에 붙여 두는 것이 중요하다 —
+  "이 숫자를 올리면 무엇이 어떻게 되는지"를 모르면 조정할 수 없다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="alert alert-info mb-4">
+        <span>여기서 바꾼 값은 <span class="font-semibold">저장 즉시</span> 적용됩니다.
+            서버를 다시 시작할 필요가 없습니다. 점수 기준을 바꾸면 다음 채점부터 새 기준이 쓰입니다.</span>
+    </div>
+
+    <!--/* 카테고리 탭 */-->
+    <div role="tablist" class="tabs tabs-box mb-4">
+        <a th:each="entry : ${categories}" role="tab" class="tab"
+           th:classappend="${entry.key == selectedCategory} ? 'tab-active' : ''"
+           th:href="@{/settings/system(category=${entry.key})}"
+           th:text="${entry.value}">카테고리</a>
+    </div>
+
+    <div th:if="${configs.isEmpty()}" class="alert alert-warning">
+        <span>표시할 설정이 없습니다.</span>
+    </div>
+
+    <div class="space-y-3">
+        <div th:each="config : ${configs}" class="card bg-base-100 shadow-sm">
+            <div class="card-body py-4">
+                <form th:action="@{/settings/system}" method="post"
+                      class="flex flex-wrap items-start gap-4">
+                    <input type="hidden" name="configKey" th:value="${config.configKey}">
+                    <input type="hidden" name="category" th:value="${selectedCategory}">
+
+                    <div class="flex-1 min-w-64">
+                        <label class="font-medium" th:for="${config.configKey}"
+                               th:text="${config.displayName}">이름</label>
+                        <p class="text-xs text-base-content/60 mt-1"
+                           th:if="${config.description != null}"
+                           th:text="${config.description}">설명</p>
+                        <p class="text-[10px] text-base-content/30 font-mono mt-1"
+                           th:text="${config.configKey}">key</p>
+                    </div>
+
+                    <div class="w-full sm:w-80">
+                        <!--/* 숫자: 범위를 브라우저에서 1차로 막고 서버가 다시 검증한다 */-->
+                        <input th:if="${config.valueType.name() == 'INTEGER'}"
+                               type="number" step="1" name="configValue"
+                               th:id="${config.configKey}"
+                               th:value="${config.configValue}"
+                               th:min="${config.minValue}" th:max="${config.maxValue}"
+                               class="input input-sm input-bordered w-full font-mono">
+
+                        <input th:if="${config.valueType.name() == 'DECIMAL'}"
+                               type="number" step="0.001" name="configValue"
+                               th:id="${config.configKey}"
+                               th:value="${config.configValue}"
+                               th:min="${config.minValue}" th:max="${config.maxValue}"
+                               class="input input-sm input-bordered w-full font-mono">
+
+                        <!--/* 불린은 JSON 리터럴이라 select 로 true/false 를 그대로 보낸다 */-->
+                        <select th:if="${config.valueType.name() == 'BOOLEAN'}"
+                                name="configValue" th:id="${config.configKey}"
+                                class="select select-sm select-bordered w-full">
+                            <option value="true" th:selected="${config.configValue == 'true'}">사용</option>
+                            <option value="false" th:selected="${config.configValue == 'false'}">사용 안 함</option>
+                        </select>
+
+                        <input th:if="${config.valueType.name() == 'STRING'}"
+                               type="text" name="configValue"
+                               th:id="${config.configKey}"
+                               th:value="${config.configValue}"
+                               class="input input-sm input-bordered w-full font-mono">
+
+                        <!--/* 곡선·목록은 JSON 그대로 편집한다. 형식 오류는 저장 시 거부된다. */-->
+                        <textarea th:if="${config.valueType.name() == 'JSON'}"
+                                  name="configValue" th:id="${config.configKey}" rows="4"
+                                  class="textarea textarea-sm textarea-bordered w-full font-mono text-xs"
+                                  th:text="${config.configValue}"></textarea>
+
+                        <p th:if="${config.minValue != null}"
+                           class="text-[10px] text-base-content/40 mt-1">
+                            허용 범위 <span th:text="${config.minValue}"></span> ~
+                            <span th:text="${config.maxValue}"></span>
+                        </p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">저장</button>
+                        <a class="btn btn-sm btn-ghost"
+                           th:href="@{/settings/system/history(configKey=${config.configKey})}">이력</a>
+                    </div>
+                </form>
+
+                <p th:if="${config.updatedBy != null}"
+                   class="text-[10px] text-base-content/40">
+                    마지막 변경 <span th:text="${config.updatedBy}"></span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

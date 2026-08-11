@@ -29,6 +29,7 @@ dependencies {
     // 도메인 모듈은 implementation 으로 연결되어 컴파일 classpath 에 없으므로 테스트에만 추가한다.
     // 도메인 규칙 자체는 각 모듈에서 Spring 없는 단위 테스트로 검증한다(설계서 8장).
     testImplementation(project(":palim-audit"))
+    testImplementation(project(":palim-automation"))
     testImplementation(project(":palim-auth"))
     testImplementation(project(":palim-channel"))
     testImplementation(project(":palim-incident"))

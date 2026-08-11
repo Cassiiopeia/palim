@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!--/*
+  설정 변경 이력.
+
+  "언제부터 이상해졌나"의 답이 대개 여기 있다. 점수 순위가 갑자기 달라졌을 때
+  어떤 값이 언제 누구에 의해 바뀌었는지 확인하는 화면이다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="mb-4">
+        <a th:href="@{/settings/system}" class="btn btn-ghost btn-sm">← 설정</a>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="font-mono text-sm text-base-content/60" th:text="${configKey}">key</h2>
+
+            <div th:if="${histories.isEmpty()}" class="alert alert-info mt-2">
+                <span>아직 변경 이력이 없습니다. 최초 등록값 그대로입니다.</span>
+            </div>
+
+            <div th:unless="${histories.isEmpty()}" class="overflow-x-auto mt-2">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>변경 시각</th>
+                        <th>변경자</th>
+                        <th>이전 값</th>
+                        <th>새 값</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="history : ${histories}">
+                        <td class="font-mono text-xs whitespace-nowrap"
+                            th:text="${#temporals.format(history.changedAt, 'yyyy-MM-dd HH:mm')}">-</td>
+                        <td class="text-xs" th:text="${history.changedBy}">-</td>
+                        <td class="font-mono text-xs max-w-xs break-all text-base-content/50"
+                            th:text="${history.oldValue}">-</td>
+                        <td class="font-mono text-xs max-w-xs break-all font-semibold"
+                            th:text="${history.newValue}">-</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>

@@ -44,7 +44,23 @@ subprojects {
         "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
+    // 파라미터 이름을 클래스 파일에 남긴다. 없으면 Spring Data 의 명명 파라미터 @Query 가
+    // "provide names for method parameters" 로 실패한다 — 부트 플러그인이 붙는 모듈에만
+    // 자동 적용되므로 java-library 모듈까지 덮으려면 여기서 지정해야 한다.
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("-parameters")
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+
+        // 로컬에서 Gradle 배포판 다운로드가 막히는 환경이라 CI 로그가 유일한 진단 창구다.
+        // 축약된 스택트레이스로는 스키마 검증 실패 같은 원인을 알 수 없어 전문을 남긴다.
+        testLogging {
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            events("failed")
+            showStackTraces = true
+            showCauses = true
+        }
     }
 }
