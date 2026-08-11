@@ -52,6 +52,14 @@ palim:
   notification:
     relay-delay: 30000
 
+  youtube:
+    # YouTube Data API 키. 저장소가 공개이므로 환경변수로만 주입한다.
+    # 발급 시 사용량 하드 리밋을 걸어둔 키를 쓴다 — 초과 과금을 막는 유일한 장치다.
+    # 없으면 기동은 되되 수집 배치가 경고를 남기고 건너뛴다.
+    api-key: ${YOUTUBE_API_KEY:}
+    base-url: https://www.googleapis.com/youtube/v3
+
+
   monitor:
     # 재고 정합성 대조. 본 시스템은 스스로를 재고의 유일한 기준으로 정의하므로
     # 자기 검산이 없으면 틀어진 상태로 장기간 운영된다.
