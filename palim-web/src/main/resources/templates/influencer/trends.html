@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<!--/*
+  트렌드 보드.
+
+  급상승을 위에, 전체 빈도를 아래에 둔다 — "뭐가 많이 나오나"보다 "뭐가 새로 뜨나"가
+  캠페인 소재를 찾을 때 쓰이는 정보이기 때문이다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <div class="alert alert-info mb-4">
+        <span>
+            수집한 영상 제목에서 키워드를 세어 만든 보드입니다. 외부 서비스를 쓰지 않으므로
+            비용이 들지 않고, 발굴 대상이 유튜브라 유튜브에서 뽑은 말이 가장 정확합니다.
+            <span class="font-semibold">급상승 키워드는 발굴 검색 시드로 자동 추가</span>되어
+            그 분야 채널을 찾는 데 쓰입니다.
+        </span>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body py-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <form th:action="@{/influencer/trends}" method="get" class="flex items-end gap-2">
+                    <label class="form-control">
+                        <span class="label-text text-xs">카테고리</span>
+                        <select name="category" class="select select-sm select-bordered"
+                                onchange="this.form.submit()">
+                            <option th:each="entry : ${categories}" th:value="${entry.key}"
+                                    th:text="${entry.value}"
+                                    th:selected="${entry.key == selectedCategory}">전체</option>
+                        </select>
+                    </label>
+                </form>
+
+                <div class="text-sm">
+                    <span th:if="${weekStart != null}">
+                        집계 주차 <span class="font-mono font-semibold"
+                                    th:text="${weekStart}">-</span>
+                    </span>
+                    <span th:if="${weekStart == null}" class="text-base-content/60">
+                        아직 집계된 주가 없습니다
+                    </span>
+                </div>
+
+                <form th:action="@{/influencer/trends/aggregate}" method="post" class="ml-auto">
+                    <button type="submit" class="btn btn-sm">지난 주 집계 실행</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div th:if="${weekStart == null}" class="alert alert-warning">
+        <span>수집된 영상이 있어야 집계할 수 있습니다. 야간 배치가 돌았는지 확인하거나
+            캠페인 관리에서 채널을 먼저 등록하세요.</span>
+    </div>
+
+    <div th:unless="${weekStart == null}" class="grid gap-4 lg:grid-cols-2">
+
+        <!--/* 급상승 — 캠페인 소재를 찾을 때 실제로 보는 목록 */-->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-lg">급상승</h2>
+                <p class="text-xs text-base-content/60">
+                    전주 대비 크게 늘었거나 새로 등장한 말입니다. 이 목록이 발굴 시드로 들어갑니다.
+                </p>
+
+                <div th:if="${rising.isEmpty()}" class="alert alert-info mt-2">
+                    <span>급상승으로 판정된 키워드가 없습니다. 비교할 전주 데이터가 쌓이면
+                        나타납니다.</span>
+                </div>
+
+                <div th:unless="${rising.isEmpty()}" class="overflow-x-auto mt-2">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr>
+                            <th>키워드</th>
+                            <th class="text-right">이번 주</th>
+                            <th class="text-right">전주</th>
+                            <th class="text-right">증감</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${rising}">
+                            <td>
+                                <span th:text="${row.keyword()}">키워드</span>
+                                <!--/* 두 단어 묶음은 롱테일이라 발굴에 더 유용하다 */-->
+                                <span th:if="${row.phrase()}"
+                                      class="badge badge-xs badge-outline"
+                                      title="두 단어 묶음 — 검색 시드로 더 정확합니다">구</span>
+                            </td>
+                            <td class="text-right font-mono text-xs" th:text="${row.frequency()}">0</td>
+                            <td class="text-right font-mono text-xs text-base-content/50"
+                                th:text="${row.prevFrequency()}">0</td>
+                            <td class="text-right">
+                                <span class="badge badge-sm"
+                                      th:classappend="${row.isNew()} ? 'badge-primary' : 'badge-success'"
+                                      th:text="${row.growthText()}">+0%</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!--/* 전체 빈도 — 그 카테고리가 무엇으로 이루어져 있는지 */-->
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <h2 class="card-title text-lg">많이 나온 말</h2>
+                <p class="text-xs text-base-content/60">
+                    이 카테고리 영상이 주로 무엇을 다루는지 보여줍니다.
+                </p>
+
+                <div th:if="${rows.isEmpty()}" class="alert alert-info mt-2">
+                    <span>집계된 키워드가 없습니다.</span>
+                </div>
+
+                <div th:unless="${rows.isEmpty()}" class="overflow-x-auto mt-2">
+                    <table class="table table-sm table-zebra">
+                        <thead>
+                        <tr>
+                            <th>키워드</th>
+                            <th class="text-right">빈도</th>
+                            <th class="text-right">증감</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${rows}">
+                            <td>
+                                <span th:text="${row.keyword()}">키워드</span>
+                                <span th:if="${row.phrase()}"
+                                      class="badge badge-xs badge-outline">구</span>
+                            </td>
+                            <td class="text-right font-mono text-xs" th:text="${row.frequency()}">0</td>
+                            <td class="text-right text-xs"
+                                th:classappend="${row.up()} ? 'text-success' : 'text-base-content/40'"
+                                th:text="${row.growthText()}">+0%</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</th:block>
+</body>
+</html>
