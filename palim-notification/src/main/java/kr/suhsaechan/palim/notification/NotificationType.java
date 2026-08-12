@@ -38,7 +38,16 @@ public enum NotificationType {
     STOCK_PUSH_FAILURE("재고 전송 실패"),
 
     /** 재고 스냅샷과 이력 누적합 불일치 (설계서 5.3). */
-    STOCK_MISMATCH("재고 불일치");
+    STOCK_MISMATCH("재고 불일치"),
+
+    /**
+     * 라이징 인플루언서 주간 요약 (#43).
+     *
+     * <p>라이징은 <b>유통기한이 있는 정보</b>다 — 조회수가 먼저 터지고 구독자·단가가 따라오는
+     * 시차 안에서만 값이 있고, 2주 늦으면 이미 단가가 올라 있다. 화면을 열지 않아도 기회가
+     * 먼저 도달하도록 알림으로 민다.
+     */
+    RISING_INFLUENCER("라이징 인플루언서");
 
     private final String displayName;
 

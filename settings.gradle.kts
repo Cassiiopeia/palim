@@ -12,9 +12,9 @@ include("palim-channel")
 include("palim-mapping")
 include("palim-notification")
 include("palim-incident")
-include("palim-automation")
 
 // 조율 — 여러 도메인을 의존한다
+include("palim-automation")  // 외부(유튜브·AI) -> 내부 + 알림 (자동화 모듈)
 include("palim-collector")   // 외부 -> 내부 (채널 주문 수집)
 include("palim-monitor")     // 내부 -> 알림 (상태 점검)
 include("palim-web")

@@ -23,6 +23,7 @@ final class ScreenNames {
 
     static {
         NAMES.put("/influencer/campaigns", "캠페인 관리");
+        NAMES.put("/influencer/rising", "라이징 레이더");
         NAMES.put("/influencer/grades", "인플루언서 등급표");
         NAMES.put("/settings/system", "시스템 설정");
         NAMES.put("/settings/channels", "채널 설정");
