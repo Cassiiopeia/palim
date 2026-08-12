@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.connector.tenant.TenantFilters;
+import org.hibernate.annotations.Filter;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -27,6 +29,7 @@ import org.hibernate.type.SqlTypes;
  */
 @Getter
 @Entity
+@Filter(name = TenantFilters.TENANT_FILTER, condition = TenantFilters.TENANT_CONDITION)
 @Table(name = "connector")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Connector extends BaseTimeEntity {
