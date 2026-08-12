@@ -6,7 +6,7 @@
 
 **Architecture:** 새 모듈 `palim-connector`가 연동 엔진을 담는다. 도메인을 모른다. 원천(`SourceReader`) → 매핑/변환(`TransformEngine`) → 적재(`RecordWriter`)의 3단 파이프라인이고, TEST 실행은 스테이징 테이블에만 쓰고 LIVE 실행만 표준 테이블에 UPSERT 한다.
 
-**Tech Stack:** Java 25 · Spring Boot 4.1 · PostgreSQL(Flyway) · JPA + JdbcClient · Python 3(pandas) 서브프로세스 · Testcontainers
+**Tech Stack:** Java 25 · Spring Boot 4.1 · PostgreSQL(Flyway) · JPA + JdbcClient · Python 3(표준 `csv` + `openpyxl`) 서브프로세스 · Testcontainers
 
 ## Global Constraints
 
@@ -1282,6 +1282,22 @@ git commit -m "범용 데이터 연동 프레임워크와 물품 표준 모델 :
 ---
 
 ## Task 5: 엑셀 파서 py 스크립트
+
+> **구현 중 변경 (2026-08-12)** — 아래 코드는 pandas 기반 초안이다. 실제 구현은 **pandas 를
+> 쓰지 않는다**. 이유가 셋이다.
+>
+> 1. 필요한 기능이 "헤더를 읽고 각 행을 문자열 dict 로" 뿐인데 pandas 는 수십 MB 다.
+>    타입을 추론했다가 `dtype=str` 로 되돌리는 낭비도 있다
+> 2. 개발 환경이 Homebrew Python 3.14 + EXTERNALLY-MANAGED 라 `pip install` 이 막히고,
+>    3.14 용 pandas 휠도 불확실하다
+> 3. **CSV 는 표준 `csv` 모듈로 처리하고 엑셀일 때만 `openpyxl` 을 지연 import** 하면,
+>    CSV 만 쓰는 환경에서는 외부 의존이 아예 없다 — 테스트가 어디서든 돈다
+>
+> 또한 `Dockerfile` 에 python3 도 `scripts/` 복사도 없어 **py 스크립트가 운영에서 돌 수 없는
+> 상태**였다(기존 `youtube_transcript.py` 포함). 이 태스크에서 함께 고쳤다.
+>
+> `ConnectorScriptProperties` 의 prefix 는 계획의 `palim.connector.script` 가 아니라
+> **기존 `palim.scripts` 를 재사용**한다 — 설정 원본이 둘로 갈리면 어긋난다.
 
 **Files:**
 - Create: `scripts/parse_stock_excel.py`

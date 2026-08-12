@@ -19,7 +19,7 @@
 │  모듈 오케스트레이션 · OpenAI 호출(구조화 출력)             │
 │                                                         │
 │   ProcessBuilder ──▶ scripts/  (py, 손발)                │
-│                      ├ parse_excel.py   (pandas 파싱)    │
+│                      ├ parse_stock_excel.py (openpyxl)   │
 │                      ├ video_fetch.py   (yt-dlp·자막)    │
 │                      └ ...모듈별 추가                     │
 └─────────────────────────────────────────────────────────┘
@@ -27,7 +27,7 @@
 ```
 
 **역할 분담 원칙**: 판단·흐름·화면·알림·AI 호출은 Java. py 는 **Java 에 대체재가 없는 지점**만
-(pandas 엑셀 파싱, yt-dlp). AI 호출을 py 로 우회하지 않는다.
+(openpyxl 엑셀 파싱, yt-dlp). AI 호출을 py 로 우회하지 않는다.
 
 py 호출 규약(인자 배열·JSON stdout·타임아웃·스레드풀)은 04-CONVENTIONS 에 있다. 이 규약을
 지키면 추후 py 서버 분리 시 ProcessBuilder 호출부를 HTTP 로 바꾸는 것으로 끝난다.

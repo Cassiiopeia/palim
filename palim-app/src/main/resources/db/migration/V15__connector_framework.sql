@@ -153,3 +153,111 @@ CREATE TABLE unit_conversion
 -- NULL != NULL 이라 전역 규칙이 무한히 중복 등록된다 (PostgreSQL 15+).
 CREATE UNIQUE INDEX ux_unit_conversion
     ON unit_conversion (tenant_id, item_ref, from_unit, to_unit) NULLS NOT DISTINCT;
+
+-- ------------------------------------------------------------
+-- 실행 계층
+-- ------------------------------------------------------------
+
+-- 실행 1건. mapping_version 을 값으로 박아 두어 정의가 바뀌어도 과거 실행을 설명할 수 있다.
+CREATE TABLE connector_run
+(
+    id              uuid        NOT NULL,
+    tenant_id       uuid        NOT NULL,
+    connector_id    uuid        NOT NULL,
+    mapping_id      uuid        NOT NULL,
+    -- 정의를 바꿔도 과거 실행이 어느 버전으로 돌았는지 남는다.
+    mapping_version integer     NOT NULL,
+    run_mode        varchar(10) NOT NULL,
+    trigger_type    varchar(20) NOT NULL,
+    status          varchar(20) NOT NULL,
+    total_count     integer     NOT NULL DEFAULT 0,
+    success_count   integer     NOT NULL DEFAULT 0,
+    failed_count    integer     NOT NULL DEFAULT 0,
+    error_summary   varchar(1000),
+    started_at      timestamptz NOT NULL,
+    finished_at     timestamptz,
+    created_at      timestamptz,
+    updated_at      timestamptz,
+    CONSTRAINT pk_connector_run PRIMARY KEY (id)
+);
+CREATE INDEX ix_connector_run_connector
+    ON connector_run (connector_id, started_at DESC);
+-- 동시 실행 차단. RUNNING 은 커넥터당 하나뿐이다 — cron 과 수동 실행이 겹치는 순간은
+-- 반드시 오고, 겹치면 같은 원천을 두 번 적재한다.
+CREATE UNIQUE INDEX ux_connector_run_running
+    ON connector_run (connector_id) WHERE status = 'RUNNING';
+
+-- 실패한 행을 원본째 보존한다. 화면에서 그 행만 보고 고칠 수 있다.
+-- 보존기간 제한과 정리 배치는 두지 않는다(설계 9-6, 오너 판단).
+CREATE TABLE connector_run_error
+(
+    id         uuid        NOT NULL,
+    tenant_id  uuid        NOT NULL,
+    run_id     uuid        NOT NULL,
+    row_number integer     NOT NULL,
+    source_row jsonb       NOT NULL,
+    error_code varchar(50) NOT NULL,
+    message    varchar(1000),
+    created_at timestamptz,
+    updated_at timestamptz,
+    CONSTRAINT pk_connector_run_error PRIMARY KEY (id)
+);
+CREATE INDEX ix_connector_run_error_run ON connector_run_error (run_id, row_number);
+
+-- TEST 실행 결과. 운영 테이블에 닿지 않으므로 부담 없이 테스트할 수 있다.
+CREATE TABLE connector_staging
+(
+    id          uuid         NOT NULL,
+    tenant_id   uuid         NOT NULL,
+    run_id      uuid         NOT NULL,
+    row_number  integer      NOT NULL,
+    natural_key varchar(500) NOT NULL,
+    payload     jsonb        NOT NULL,
+    created_at  timestamptz,
+    updated_at  timestamptz,
+    CONSTRAINT pk_connector_staging PRIMARY KEY (id)
+);
+CREATE INDEX ix_connector_staging_run ON connector_staging (run_id, row_number);
+
+-- 커스텀 모델 데이터. 런타임 DDL 없이 모델이 늘어도 테이블 수는 그대로다.
+CREATE TABLE custom_record
+(
+    id              uuid         NOT NULL,
+    tenant_id       uuid         NOT NULL,
+    target_model_id uuid         NOT NULL,
+    run_id          uuid,
+    -- 자연키가 없으면 UPSERT 자체가 성립하지 않는다.
+    natural_key     varchar(500) NOT NULL,
+    payload         jsonb        NOT NULL,
+    created_at      timestamptz,
+    updated_at      timestamptz,
+    CONSTRAINT pk_custom_record PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX ux_custom_record_natural
+    ON custom_record (tenant_id, target_model_id, natural_key);
+CREATE INDEX ix_custom_record_run ON custom_record (run_id);
+-- 커스텀 모델은 컬럼이 없어 payload 안을 조건으로 찾는 것 외에 방법이 없다.
+CREATE INDEX ix_custom_record_payload ON custom_record USING gin (payload);
+
+-- LIVE 되돌리기용. UPSERT 직전 값을 남긴다. 가장 최근 실행 하나만 되돌릴 수 있다.
+CREATE TABLE connector_undo_log
+(
+    id           uuid         NOT NULL,
+    tenant_id    uuid         NOT NULL,
+    run_id       uuid         NOT NULL,
+    table_name   varchar(63)  NOT NULL,
+    natural_key  varchar(500) NOT NULL,
+    -- NULL 이면 그 행은 이번 실행이 처음 만든 것이므로 되돌리기는 삭제다.
+    previous_row jsonb,
+    created_at   timestamptz,
+    updated_at   timestamptz,
+    CONSTRAINT pk_connector_undo_log PRIMARY KEY (id)
+);
+CREATE INDEX ix_connector_undo_log_run ON connector_undo_log (run_id);
+-- 같은 자연키의 undo 는 실행당 하나만 남긴다.
+--
+-- 원천 파일에 같은 키가 두 번 나오는 것은 흔한 일이고, 그대로 두면 두 번째 undo 행의
+-- previous_row 는 "이번 실행이 방금 쓴 값"이 된다. 복원하면 최초 상태가 아니라 중간 상태로
+-- 되돌아가며, 되돌리기를 신뢰할 수 없게 된다. 기록 시 ON CONFLICT DO NOTHING 으로 첫 값만 남긴다.
+CREATE UNIQUE INDEX ux_connector_undo_log_key
+    ON connector_undo_log (run_id, table_name, natural_key);
