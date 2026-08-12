@@ -3485,6 +3485,29 @@ git commit -m "범용 데이터 연동 프레임워크와 물품 표준 모델 :
 
 ---
 
+## Phase 1 완료 기록 (2026-08-12)
+
+12개 태스크 전부 완료. `./gradlew build` **362건 통과**, CI 성공.
+
+**계획과 달라진 것 6가지** — 전부 실제로 돌려보고 드러난 것이다.
+
+| # | 발견 | 대응 |
+|---|---|---|
+| 1 | `ErrorCodeIntegrationTest` 에 허용 접두사가 하드코딩돼 있어 `K` 추가 전엔 실패 | Task 1 에 Step 3-1 추가 |
+| 2 | **`Dockerfile` 에 python3 도 `scripts/` 복사도 없어 py 스크립트가 운영에서 못 돌았다**(기존 `youtube_transcript.py` 포함) | Dockerfile 에 python3 · openpyxl · `COPY scripts/` 추가 |
+| 3 | pandas 가 과하고 Python 3.14 에서 설치도 막힘 | CSV 는 표준 `csv`, 엑셀만 `openpyxl` 지연 import — CSV 만 쓰면 외부 의존이 없다 |
+| 4 | **엑셀 날짜가 `2027-01-01T00:00:00` 으로 옴**(openpyxl 이 date 를 datetime 으로 읽음) | `DATE` 파싱이 날짜·일시 양쪽을 받도록. 안 그러면 유통기한 필드가 전량 실패 |
+| 5 | 테스트에서 `scripts` 상대경로가 안 맞음(Gradle 이 모듈 디렉터리를 작업 디렉터리로 삼음) | `IntegrationTest` 가 저장소 루트를 찾아 절대경로로 주입 |
+| 6 | `UnitConversionRepository` 를 `Optional` 로 두면 품목별·전역 규칙이 둘 다 있을 때 예외 | `List` 로 받아 첫 행만 사용 |
+
+**검증에서 잡은 것 2가지** (설계 리뷰로는 안 잡히고 코드를 봐야 나온 것)
+
+- `connector_run_error.message` 가 `varchar(1000)` 인데 절단이 없어 **실패 행 기록이 실행 전체를 죽일 수 있었다**(PostgreSQL 22001). `ColumnText.truncate` 추가
+- 원천에 같은 자연키가 두 번 오면 undo 로그가 2개 쌓여 **복원이 중간 상태로 갔다**. 부분 유니크 인덱스 + `ON CONFLICT DO NOTHING`
+
+**자연키는 절단이 아니라 해시 축약**으로 갔다. 단순 절단이면 앞부분이 같은 서로 다른 행이 하나로
+합쳐져 UPSERT 가 남의 데이터를 덮어쓴다 — 조용히 사라지는 유형이라 더 위험하다.
+
 ## Phase 1 이후
 
 이 계획의 범위 밖이며 각각 별도 계획으로 만든다.
