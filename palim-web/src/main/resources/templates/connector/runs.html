@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!--/*
+  실행 이력.
+
+  사용한 매핑 버전을 함께 보여준다 — "지난달 데이터가 왜 이런가"에 답하려면 그때 어떤 정의로
+  돌았는지가 필요하다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="flex gap-2 mb-4">
+        <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 목록</a>
+        <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}" class="btn btn-ghost btn-sm">
+            매핑 편집
+        </a>
+    </div>
+
+    <div th:if="${runs.isEmpty()}" class="card bg-base-100 shadow-sm">
+        <div class="card-body items-center text-center py-10">
+            <p class="text-base-content/70">아직 실행 기록이 없습니다.</p>
+            <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}" class="btn btn-sm mt-2">
+                매핑 화면으로
+            </a>
+        </div>
+    </div>
+
+    <div th:unless="${runs.isEmpty()}" class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>시작</th>
+                        <th>모드</th>
+                        <th>매핑</th>
+                        <th>결과</th>
+                        <th>건수</th>
+                        <th>소요</th>
+                        <th class="text-right">동작</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="r, it : ${runs}">
+                        <td class="whitespace-nowrap text-xs" th:text="${r.startedAt}">시각</td>
+                        <td>
+                            <span class="badge badge-sm"
+                                  th:classappend="${r.isTest()} ? 'badge-ghost' : 'badge-primary'"
+                                  th:text="${r.isTest()} ? '테스트' : '적재'">모드</span>
+                        </td>
+                        <td class="text-xs" th:text="|v${r.mappingVersion}|">v1</td>
+                        <td>
+                            <span class="badge badge-sm"
+                                  th:classappend="${r.status == 'SUCCEEDED'} ? 'badge-success'
+                                                : (${r.status == 'PARTIAL'} ? 'badge-warning'
+                                                : (${r.status == 'ROLLED_BACK'} ? 'badge-ghost' : 'badge-error'))"
+                                  th:text="${r.status}">상태</span>
+                            <div th:if="${r.errorSummary != null}"
+                                 class="text-xs text-error mt-1" th:text="${r.errorSummary}">사유</div>
+                        </td>
+                        <td class="text-xs">
+                            <span th:text="|${r.successCount} / ${r.totalCount}|">0/0</span>
+                            <span th:if="${r.failedCount > 0}" class="text-error"
+                                  th:text="|(실패 ${r.failedCount})|">실패</span>
+                        </td>
+                        <td class="text-xs">
+                            <span th:if="${r.elapsedSeconds() != null}"
+                                  th:text="|${r.elapsedSeconds()}초|">0초</span>
+                        </td>
+                        <td class="text-right whitespace-nowrap">
+                            <a class="btn btn-ghost btn-xs"
+                               th:href="@{/connectors/{id}/runs/{runId}(id=${connector.id},runId=${r.id})}">
+                                상세
+                            </a>
+                            <!--/*
+                              되돌리기는 가장 최근 실행에만 연다. 그 이전까지 거슬러 오르면 이후
+                              실행들과 뒤엉켜 어떤 상태로 돌아가는지 설명할 수 없다.
+                            */-->
+                            <form th:if="${it.index == 0 and !r.rolledBack()}"
+                                  th:action="@{/connectors/{id}/runs/{runId}/rollback(id=${connector.id},runId=${r.id})}"
+                                  method="post" class="inline">
+                                <button type="submit" class="btn btn-ghost btn-xs text-error">
+                                    되돌리기
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

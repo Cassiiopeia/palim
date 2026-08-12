@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
+import kr.suhsaechan.palim.connector.tenant.TenantFilters;
+import org.hibernate.annotations.Filter;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,6 +24,7 @@ import lombok.NoArgsConstructor;
  */
 @Getter
 @Entity
+@Filter(name = TenantFilters.TENANT_FILTER, condition = TenantFilters.TENANT_CONDITION)
 @Table(name = "unit_conversion")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UnitConversion extends BaseTimeEntity {
