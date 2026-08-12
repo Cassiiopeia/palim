@@ -45,13 +45,13 @@
 |---|---|---|
 | yt-dlp | 영상·자막 다운로드 | `scripts/video_fetch.py` — Docker 이미지에 포함, 버전 고정 |
 | 음성→텍스트 | 자막 없는 영상 | OpenAI 음성 API 호출 (로컬 모델 안 씀) |
-| pandas/openpyxl | 엑셀 파싱·정규화 | `scripts/parse_excel.py` — 표준 스키마(JSON) 출력 |
+| openpyxl | 엑셀 파싱·정규화 | `scripts/parse_stock_excel.py` — 표준 스키마(JSON) 출력. CSV 는 표준 `csv` 모듈이라 의존이 없다 |
 
 ## 엑셀 업로드 입력 경계 (공통)
 
 ```
 [업로드 xlsx] → (py) 헤더+샘플 → AI 컬럼 매핑 추론(1회, 구조화 출력)
-             → (py) pandas 전체 파싱 → 표준 스키마 JSON
+             → (py) openpyxl 전체 파싱 → 표준 스키마 JSON
              → (Java) 집계·저장 — 숫자 계산은 전부 코드, AI 는 분류·코멘트만
 ```
 
