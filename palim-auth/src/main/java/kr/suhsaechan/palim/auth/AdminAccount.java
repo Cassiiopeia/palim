@@ -68,32 +68,63 @@ public class AdminAccount extends BaseTimeEntity {
     @Column(name = "last_login_ip", length = 45)
     private String lastLoginIp;
 
+    /**
+     * 초기 비밀번호를 쓰고 있는가.
+     *
+     * <p>환경변수 없이 기동하면 기본 계정이 만들어지는데, 기본값은 공개된 값이라 그대로 두면
+     * 누구나 들어올 수 있다. 이 플래그가 참인 동안 <b>비밀번호 변경 외 모든 화면을 막는다.</b>
+     *
+     * <p>계정을 못 쓰게 막는 대신 변경을 강제하는 이유는, 잠가버리면 발주자도 못 들어와
+     * 시스템 자체가 무용지물이 되기 때문이다.
+     */
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
+
     @Version
     private Long version;
 
-    private AdminAccount(String username, String passwordHash) {
+    private AdminAccount(String username, String passwordHash, boolean passwordChangeRequired) {
         this.id = UuidV7.generate();
         this.username = username;
         this.passwordHash = passwordHash;
         this.enabled = true;
         this.failedLoginCount = 0;
+        this.passwordChangeRequired = passwordChangeRequired;
     }
 
     public static AdminAccount create(String username, String encodedPassword) {
+        return create(username, encodedPassword, false);
+    }
+
+    /**
+     * 계정을 만든다.
+     *
+     * @param passwordChangeRequired 초기 비밀번호로 만든 계정이면 true — 최초 로그인에서
+     *                               변경을 강제한다
+     */
+    public static AdminAccount create(String username, String encodedPassword,
+                                      boolean passwordChangeRequired) {
         if (username == null || username.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_USERNAME);
         }
         if (encodedPassword == null || encodedPassword.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_PASSWORD);
         }
-        return new AdminAccount(username, encodedPassword);
+        return new AdminAccount(username, encodedPassword, passwordChangeRequired);
     }
 
+    /**
+     * 비밀번호를 바꾼다.
+     *
+     * <p>변경과 동시에 강제 플래그를 내린다. 두 동작을 분리하면 <b>변경했는데도 계속 막히는</b>
+     * 상태가 생길 수 있고, 그때 사용자는 시스템이 고장 났다고 판단한다.
+     */
     public void changePassword(String encodedPassword) {
         if (encodedPassword == null || encodedPassword.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_PASSWORD);
         }
         this.passwordHash = encodedPassword;
+        this.passwordChangeRequired = false;
     }
 
     public void disable() {

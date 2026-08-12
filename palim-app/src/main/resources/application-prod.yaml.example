@@ -5,7 +5,13 @@
 # (GitHub Actions 에서는 Secrets → env). 여기에는 플레이스홀더 외 실제 값을 절대 쓰지 않는다.
 #
 # 필요한 환경변수: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
-#                  PALIM_CRYPTO_MASTER_KEY, ADMIN_USERNAME, ADMIN_PASSWORD, TELEGRAM_BOT_TOKEN
+#                  PALIM_CRYPTO_MASTER_KEY, TELEGRAM_BOT_TOKEN
+#
+# ADMIN_USERNAME · ADMIN_PASSWORD 는 선택이다 (#51).
+#   - 지정하면 그 값으로 관리자 계정을 만든다.
+#   - 비우면 admin/admin 으로 만들되 최초 로그인에서 비밀번호 변경을 강제한다.
+#     변경 전까지 다른 화면은 사용할 수 없으므로, 지정하지 않아도 안전하게 기동한다.
+#   - 이미 계정이 있으면 어느 쪽이든 덮어쓰지 않는다.
 
 spring:
   datasource:

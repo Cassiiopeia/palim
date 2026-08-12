@@ -4,6 +4,21 @@
 <body>
 <th:block th:fragment="content">
 
+    <!--/*
+      강제 변경 안내.
+
+      이유 없이 다른 화면이 막히면 사용자는 고장으로 판단한다. 무엇이 문제이고 무엇을 하면
+      풀리는지를 화면이 직접 말해야 한다.
+    */-->
+    <div th:if="${changeRequired}" class="alert alert-warning max-w-lg mb-4" role="alert">
+        <span>
+            <span class="font-semibold">초기 비밀번호를 사용 중입니다.</span><br>
+            이 화면은 인터넷에서 접근할 수 있고 초기 비밀번호는 공개된 값이므로,
+            지금 변경해야 합니다. <span class="font-semibold">변경 전까지 다른 화면은
+            사용할 수 없습니다.</span>
+        </span>
+    </div>
+
     <div class="card bg-base-100 shadow-sm max-w-lg">
         <div class="card-body">
             <h2 class="card-title text-base">비밀번호 변경</h2>
@@ -16,10 +31,17 @@
               새 비밀번호를 저장·생성 제안하고, 현재 비밀번호 칸에 자동완성을 넣지 않는다.
             */-->
             <form th:action="@{/settings/account/password}" method="post" class="space-y-3 mt-2">
+                <!--/*
+                  강제 변경이어도 현재 비밀번호를 묻는다. 자동 통과시키면 세션만 잡은 공격자가
+                  비밀번호를 바꿔 발주자를 자기 시스템에서 쫓아낼 수 있다.
+                */-->
                 <fieldset class="fieldset">
                     <label class="label text-xs" for="currentPassword">현재 비밀번호</label>
                     <input id="currentPassword" name="currentPassword" type="password" required
                            autocomplete="current-password" class="input input-bordered w-full">
+                    <p th:if="${changeRequired}" class="text-xs text-base-content/60 mt-1">
+                        지금 로그인할 때 쓴 초기 비밀번호를 입력하세요.
+                    </p>
                 </fieldset>
 
                 <fieldset class="fieldset">
