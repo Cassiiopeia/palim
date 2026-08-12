@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!--/*
+  실행 상세.
+
+  실패 행은 원본째로 보여준다 — 행 번호와 에러 코드만 있으면 사람이 원본 파일을 다시 열어
+  대조해야 하는데, 원천이 API 라면 그 시점 데이터를 다시 볼 방법이 없다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="flex gap-2 mb-4">
+        <a th:href="@{/connectors/{id}/runs(id=${connector.id})}" class="btn btn-ghost btn-sm">
+            ← 실행 이력
+        </a>
+        <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}" class="btn btn-ghost btn-sm">
+            매핑 편집
+        </a>
+    </div>
+
+    <div th:if="${run != null}" class="stats bg-base-100 shadow-sm mb-4">
+        <div class="stat">
+            <div class="stat-title">모드</div>
+            <div class="stat-value text-lg" th:text="${run.isTest()} ? '테스트' : '실제 적재'">모드</div>
+            <div class="stat-desc" th:text="|매핑 v${run.mappingVersion}|">v1</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">성공</div>
+            <div class="stat-value text-lg text-success" th:text="${run.successCount}">0</div>
+            <div class="stat-desc" th:text="|전체 ${run.totalCount}건|">전체</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">실패</div>
+            <div class="stat-value text-lg"
+                 th:classappend="${run.failedCount > 0} ? 'text-error' : ''"
+                 th:text="${run.failedCount}">0</div>
+            <div class="stat-desc" th:text="${run.status}">상태</div>
+        </div>
+    </div>
+
+    <div th:if="${run != null and run.errorSummary != null}" class="alert alert-error mb-4">
+        <span th:text="${run.errorSummary}">사유</span>
+    </div>
+
+    <!--/* 실패 행 — 사람이 여기서 원인을 찾아 고친다 */-->
+    <div th:unless="${errors.isEmpty()}" class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body p-0">
+            <div class="p-4 pb-0">
+                <h2 class="card-title text-base">실패한 행</h2>
+                <p class="text-sm text-base-content/70">
+                    나머지 행은 정상 적재됐습니다. 한 행 때문에 전체를 버리지 않습니다.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th class="w-16">행</th>
+                        <th class="w-48">사유</th>
+                        <th>원본</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="e : ${errors}">
+                        <td th:text="${e.rowNumber}">1</td>
+                        <td>
+                            <div class="badge badge-error badge-sm" th:text="${e.errorCode}">코드</div>
+                            <div class="text-xs mt-1" th:text="${e.message}">메시지</div>
+                        </td>
+                        <td>
+                            <code class="text-xs break-all" th:text="${e.sourceRow}">{}</code>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!--/* 테스트 적재 결과 — 확정 전에 "이 값이 이렇게 들어갑니다"를 확인한다 */-->
+    <div th:unless="${staging.isEmpty()}" class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0">
+            <div class="p-4 pb-0">
+                <h2 class="card-title text-base">변환 결과 미리보기</h2>
+                <p class="text-sm text-base-content/70">
+                    실제 적재였다면 <span class="font-medium">중복 판정 기준</span>으로 쓰였을 값도 함께 보여줍니다.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th class="w-16">행</th>
+                        <th class="w-64">중복 판정 기준</th>
+                        <th>변환 결과</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="s : ${staging}">
+                        <td th:text="${s.rowNumber}">1</td>
+                        <td><code class="text-xs break-all" th:text="${s.naturalKey}">key</code></td>
+                        <td><code class="text-xs break-all" th:text="${s.payload}">{}</code></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div th:if="${errors.isEmpty() and staging.isEmpty()}" class="card bg-base-100 shadow-sm">
+        <div class="card-body items-center text-center py-10">
+            <p class="text-base-content/70">표시할 상세 내역이 없습니다.</p>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
