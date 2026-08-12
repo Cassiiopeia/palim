@@ -166,7 +166,7 @@ Cloudflare Tunnel 뒤에서는 애플리케이션보다 **Cloudflare Access 정�
 자리다. 애플리케이션에 구현하면 `X-Forwarded-For` 신뢰 문제를 다시 떠안는다. 발주자가 고정
 IP 를 쓰는지 확인된 뒤(P-02 인증정보 전달 시점) Cloudflare 설정으로 처리한다.
 
-## 비밀번호 정책 (구현 필요 — 후속)
+## 비밀번호 정책 (구현 완료)
 
 **채택(축소)** — 레거시 비밀번호 검증기 개념.
 
@@ -192,5 +192,6 @@ IP 를 쓰는지 확인된 뒤(P-02 인증정보 전달 시점) Cloudflare 설�
 | SBOM·Dependabot·CodeQL·secret scanning·push protection | 완료 (#22) |
 | 커밋 AI 흔적·사내 자료 CI 차단 (`guard` 잡) | 완료 (#22) |
 | 입력 필터 거부 · 파일 입출력 규칙 | 문서화 완료 — 엑셀 기능(F-07) 구현 시 적용 |
-| 비밀번호 정책 + 변경 화면 | **후속 — #22 잔여** |
+| 비밀번호 정책 + 변경 화면 | 완료 — `/settings/account`, `PasswordPolicy` |
+| 기본 계정 + 최초 변경 강제 | 완료 (#51) — 환경변수 없이 기동 시 admin/admin 생성, 변경 전까지 다른 화면 차단 |
 | 접속 IP 제한 | 보류 — Cloudflare Access 로, P-02 이후 |

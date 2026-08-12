@@ -34,6 +34,10 @@ public class AccountController {
         model.addAttribute("title", "계정 설정");
         model.addAttribute("username", principal.getName());
         model.addAttribute("minLength", PasswordPolicy.MIN_LENGTH);
+        // 초기 비밀번호 사용 중이면 화면이 "왜 지금 바꿔야 하는지"를 설명해야 한다.
+        // 이유 없이 다른 화면이 막히면 사용자는 고장으로 판단한다.
+        model.addAttribute("changeRequired",
+                accountAdminService.isPasswordChangeRequired(principal.getName()));
         return "settings/account";
     }
 
@@ -48,9 +52,18 @@ public class AccountController {
             return REDIRECT;
         }
 
+        boolean wasRequired = accountAdminService.isPasswordChangeRequired(principal.getName());
+
         try {
             accountAdminService.changePassword(principal.getName(), currentPassword, newPassword);
-            redirectAttributes.addFlashAttribute("flashSuccess", "비밀번호를 변경했습니다.");
+            redirectAttributes.addFlashAttribute("flashSuccess", wasRequired
+                    ? "비밀번호를 변경했습니다. 이제 모든 화면을 사용할 수 있습니다."
+                    : "비밀번호를 변경했습니다.");
+            // 초기 비밀번호는 이미 노출됐을 수 있으므로, 강제 변경이었다면 대시보드로 보내
+            // 정상 사용이 시작됐음을 분명히 한다.
+            if (wasRequired) {
+                return "redirect:/";
+            }
         } catch (BusinessException exception) {
             log.warn("비밀번호 변경 실패 — {}", exception.getErrorCode().name());
             redirectAttributes.addFlashAttribute("flashError",

@@ -27,6 +27,14 @@ public class AccountAdminService {
     private final AdminAccountService adminAccountService;
     private final WebAuditRecorder webAuditRecorder;
 
+    /** 초기 비밀번호를 쓰는 중인가 — 화면이 강제 변경 안내를 띄울지 판단한다. */
+    @Transactional(readOnly = true)
+    public boolean isPasswordChangeRequired(String username) {
+        return adminAccountService.findByUsername(username)
+                .map(account -> account.isPasswordChangeRequired())
+                .orElse(false);
+    }
+
     @Transactional
     public void changePassword(String username, String currentPassword, String newPassword) {
         try {

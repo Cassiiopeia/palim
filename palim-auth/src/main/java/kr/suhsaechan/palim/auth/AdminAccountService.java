@@ -31,9 +31,20 @@ public class AdminAccountService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AdminAccount createIfAbsent(String username, String rawPassword) {
+        return createIfAbsent(username, rawPassword, false);
+    }
+
+    /**
+     * 계정이 없으면 만든다.
+     *
+     * @param passwordChangeRequired 초기 비밀번호로 만드는 경우 true — 최초 로그인에서 변경을
+     *                               강제한다(#51)
+     */
+    public AdminAccount createIfAbsent(String username, String rawPassword,
+                                       boolean passwordChangeRequired) {
         return adminAccountRepository.findByUsername(username)
-                .orElseGet(() -> adminAccountRepository.save(
-                        AdminAccount.create(username, passwordEncoder.encode(rawPassword))));
+                .orElseGet(() -> adminAccountRepository.save(AdminAccount.create(
+                        username, passwordEncoder.encode(rawPassword), passwordChangeRequired)));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
