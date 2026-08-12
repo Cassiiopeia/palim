@@ -21,6 +21,7 @@ import kr.suhsaechan.palim.connector.run.RunMode;
 import kr.suhsaechan.palim.connector.run.RunRequest;
 import kr.suhsaechan.palim.connector.run.RunStatus;
 import kr.suhsaechan.palim.connector.run.RunTrigger;
+import kr.suhsaechan.palim.connector.unit.UnitConversionRepository;
 import kr.suhsaechan.palim.web.connector.ConnectorAdminService;
 import kr.suhsaechan.palim.web.connector.FieldMappingForm;
 import kr.suhsaechan.palim.web.connector.UnitConversionAdminService;
@@ -43,6 +44,7 @@ class UnitConversionAdminIntegrationTest extends IntegrationTest {
 
     @Autowired private UnitConversionAdminService unitService;
     @Autowired private ConnectorAdminService adminService;
+    @Autowired private UnitConversionRepository conversionRepository;
     @Autowired private ConnectorRunner runner;
     @Autowired private TargetModelRepository targetModelRepository;
 
@@ -83,6 +85,42 @@ class UnitConversionAdminIntegrationTest extends IntegrationTest {
 
         List<?> rules = unitService.list();
         assertThat(rules).hasSizeGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("품목별 규칙이 전역 규칙보다 앞선다")
+    void 품목별_규칙이_우선한다() {
+        // 우선순위는 JPQL 의 order by 가 만든다. 모의 객체로는 증명되지 않으므로 실제 DB 로
+        // 확인한다 — 순서가 뒤집히면 품목별 예외를 등록해도 전역 배율로 환산되고,
+        // 그 오류는 수량이 이상해질 때까지 드러나지 않는다.
+        String from = "P" + UUID.randomUUID().toString().substring(0, 6);
+        String item = "ITEM-" + UUID.randomUUID();
+
+        unitService.create(null, from, "EA", new BigDecimal("10"));
+        unitService.create(item, from, "EA", new BigDecimal("5"));
+
+        assertThat(conversionRepository.findRule(TENANT, item, from, "EA"))
+                .as("품목별 규칙이 있으면 그것을 쓴다")
+                .contains(new BigDecimal("5.000000"));
+
+        assertThat(conversionRepository.findRule(TENANT, "다른품목-" + UUID.randomUUID(),
+                from, "EA"))
+                .as("품목별 규칙이 없는 품목은 전역 규칙으로 떨어진다")
+                .contains(new BigDecimal("10.000000"));
+    }
+
+    @Test
+    @DisplayName("품목을 비워 등록한 규칙은 전역 규칙과 같은 것으로 본다")
+    void 빈_품목은_전역과_같다() {
+        // 화면에서 품목 칸을 비우면 null 또는 공백 문자열이 올라온다. 이것들이 서로 다른
+        // 규칙으로 저장되면 전역 규칙이 여러 벌 생기고 중복 검사가 뚫린다.
+        String from = "B" + UUID.randomUUID().toString().substring(0, 6);
+
+        unitService.create(null, from, "EA", new BigDecimal("10"));
+
+        assertThatThrownBy(() -> unitService.create("   ", from, "EA", new BigDecimal("20")))
+                .as("공백 품목은 전역 규칙과 같은 범위다")
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test

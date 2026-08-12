@@ -1,7 +1,6 @@
 package kr.suhsaechan.palim.connector.unit;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
@@ -44,13 +43,12 @@ public class UnitConverter {
         }
 
         String from = unit.trim();
-        // 품목별 규칙이 앞에 오도록 리포지토리가 정렬해 준다. 첫 값만 쓴다.
-        List<BigDecimal> factors = repository.findFactors(tenantId, itemRef, from, defaultUnit);
-        if (factors.isEmpty()) {
-            throw new BusinessException(ErrorCode.UNIT_CONVERSION_NOT_FOUND, from, defaultUnit);
-        }
+        // 품목별 규칙이 앞에 오도록 리포지토리가 정렬해 준다. findRule 이 첫 값만 돌려주고
+        // itemRef 정규화도 거기서 한다 — findFactors 를 직접 부르면 정규화를 건너뛴다.
+        BigDecimal factor = repository.findRule(tenantId, itemRef, from, defaultUnit)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.UNIT_CONVERSION_NOT_FOUND, from, defaultUnit));
 
-        return new ConvertedQuantity(quantity, from,
-                quantity.multiply(factors.getFirst()), defaultUnit);
+        return new ConvertedQuantity(quantity, from, quantity.multiply(factor), defaultUnit);
     }
 }

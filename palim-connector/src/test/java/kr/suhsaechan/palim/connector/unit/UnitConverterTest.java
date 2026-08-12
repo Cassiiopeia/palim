@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test;
  * <p>실패 조건을 <b>좁게</b> 잡는 것이 핵심이다. "규칙이 없으면 무조건 실패"로 만들면 단위
  * 개념이 없는 원천이 통째로 막히는데, 실측한 두 원천 모두 단위 컬럼이 없다. 반대로 아무 때나
  * 1:1 로 넘기면 BOX 12개가 EA 12개로 둔갑하고 대사 결과가 이상해질 때까지 아무도 모른다.
+ *
+ * <p>품목별 규칙이 전역보다 앞선다는 것은 여기서 검증하지 않는다. 그 순서는 JPQL 의
+ * {@code order by} 가 만드는 것이라 모의 객체로는 증명되지 않는다 —
+ * {@code UnitConversionAdminIntegrationTest} 가 실제 DB 로 확인한다.
  */
 class UnitConverterTest {
 
@@ -45,7 +49,7 @@ class UnitConverterTest {
 
         assertThat(result.baseQuantity()).isEqualByComparingTo("120");
         assertThat(result.baseUnit()).isEqualTo("EA");
-        verify(repository, never()).findFactors(any(), any(), any(), any());
+        verify(repository, never()).findRule(any(), any(), any(), any());
     }
 
     @Test
@@ -64,14 +68,14 @@ class UnitConverterTest {
                 new BigDecimal("5"), "EA", "EA");
 
         assertThat(result.baseQuantity()).isEqualByComparingTo("5");
-        verify(repository, never()).findFactors(any(), any(), any(), any());
+        verify(repository, never()).findRule(any(), any(), any(), any());
     }
 
     @Test
     @DisplayName("규칙이 있으면 환산하고 원본도 함께 남긴다")
     void 규칙으로_환산한다() {
-        when(repository.findFactors(TENANT, "A-001", "BOX", "EA"))
-                .thenReturn(List.of(new BigDecimal("12")));
+        when(repository.findRule(TENANT, "A-001", "BOX", "EA"))
+                .thenReturn(Optional.of(new BigDecimal("12")));
 
         ConvertedQuantity result = converter.convert(TENANT, "A-001",
                 new BigDecimal("12"), "BOX", "EA");
@@ -86,7 +90,7 @@ class UnitConverterTest {
     @Test
     @DisplayName("단위가 명시됐는데 규칙이 없으면 실패시킨다")
     void 규칙이_없으면_실패() {
-        when(repository.findFactors(TENANT, "A-001", "BOX", "EA")).thenReturn(List.of());
+        when(repository.findRule(TENANT, "A-001", "BOX", "EA")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> converter.convert(TENANT, "A-001",
                 new BigDecimal("12"), "BOX", "EA"))
@@ -95,23 +99,24 @@ class UnitConverterTest {
     }
 
     @Test
-    @DisplayName("품목별 규칙이 전역 규칙보다 앞선다")
-    void 품목별_규칙이_우선한다() {
-        // 리포지토리가 품목별을 앞에 두고 정렬해 돌려준다. 첫 값만 쓴다.
-        when(repository.findFactors(TENANT, "A-001", "BOX", "EA"))
-                .thenReturn(List.of(new BigDecimal("6"), new BigDecimal("12")));
+    @DisplayName("앞뒤 공백이 있는 단위도 규칙을 찾는다")
+    void 공백을_다듬어_조회한다() {
+        when(repository.findRule(TENANT, "A-001", "BOX", "EA"))
+                .thenReturn(Optional.of(new BigDecimal("12")));
 
         ConvertedQuantity result = converter.convert(TENANT, "A-001",
-                new BigDecimal("2"), "BOX", "EA");
+                new BigDecimal("2"), "  BOX  ", "EA");
 
-        assertThat(result.baseQuantity()).isEqualByComparingTo("12");
+        assertThat(result.baseQuantity()).isEqualByComparingTo("24");
+        assertThat(result.unit()).as("다듬은 단위를 남겨야 나중에 같은 값으로 조회된다")
+                .isEqualTo("BOX");
     }
 
     @Test
     @DisplayName("소수 배율도 정확히 환산한다")
     void 소수_배율() {
-        when(repository.findFactors(TENANT, "A-001", "G", "KG"))
-                .thenReturn(List.of(new BigDecimal("0.001")));
+        when(repository.findRule(TENANT, "A-001", "G", "KG"))
+                .thenReturn(Optional.of(new BigDecimal("0.001")));
 
         ConvertedQuantity result = converter.convert(TENANT, "A-001",
                 new BigDecimal("2500"), "G", "KG");
