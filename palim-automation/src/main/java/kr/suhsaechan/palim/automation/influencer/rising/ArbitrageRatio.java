@@ -30,10 +30,11 @@ public final class ArbitrageRatio {
     /**
      * 기준 계수.
      *
-     * <p>{@code 구독자^0.85 × 0.55} 가 "그 규모에서 평범한 조회수"가 되도록 맞춘 값이다.
-     * 구독자 10만이면 기대 조회수 약 1.9만(VSR 0.19)으로, 국내 평균대(0.15~0.30)의 중간이다.
+     * <p>구독자 10만에서 기대 조회수가 2만(VSR 0.20)이 되도록 맞춘 값이다 — 국내 평균대
+     * (0.15~0.30)의 중간이다. 지수를 곱하고 남는 자릿수를 메우는 값이라 지수를 바꾸면 이 값도
+     * 함께 다시 잡아야 한다({@code 100000^0.85 ≈ 17,783} → {@code × 1.125 ≈ 20,000}).
      */
-    private static final double BASE_COEFFICIENT = 0.55;
+    private static final double BASE_COEFFICIENT = 1.125;
 
     private ArbitrageRatio() {
     }

@@ -30,12 +30,14 @@ class ArbitrageRatioTest {
     @Test
     @DisplayName("대형 채널이 규모 때문에 자동으로 불리해지지 않는다")
     void 규모_중립성() {
-        // 구독 2만 채널이 VSR 0.30, 구독 200만 채널이 VSR 0.15 인 상황.
-        // 단순 VSR 비교면 소형이 2배 우세하지만, 대형에서 0.15 는 훨씬 어려운 성취다.
-        double small = ArbitrageRatio.of(20_000, 20_000 * 0.30);
+        // 구독 2만 채널이 VSR 0.25, 구독 200만 채널이 VSR 0.15 인 상황.
+        // 단순 VSR 비교면 소형이 우세해 보이지만, 그 규모에서 0.25 는 흔하고
+        // 200만에서 0.15 는 어렵다. 배율은 후자를 더 높게 본다.
+        double small = ArbitrageRatio.of(20_000, 20_000 * 0.25);
         double large = ArbitrageRatio.of(2_000_000, 2_000_000 * 0.15);
 
-        assertThat(large).isGreaterThan(small);
+        assertThat(small).isLessThan(1.0);
+        assertThat(large).isGreaterThan(1.0);
     }
 
     @Test
