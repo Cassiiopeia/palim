@@ -34,4 +34,23 @@ public interface UnitConversionRepository extends JpaRepository<UnitConversion, 
                                           String toUnit) {
         return findFactors(tenantId, itemRef, fromUnit, toUnit).stream().findFirst();
     }
+
+    /**
+     * 같은 <b>범위</b>의 규칙이 이미 있는지.
+     *
+     * <p>{@link #findFactors} 를 중복 검사에 쓰면 안 된다. 그쪽은 전역 규칙까지 함께 찾으므로,
+     * 전역 규칙이 하나라도 있으면 <b>품목별 예외 규칙을 만들 수 없게 된다</b> — 품목별의 존재
+     * 이유가 "전역과 다르게"인데 그것을 막는 셈이다.
+     */
+    @Query("""
+            select count(c) > 0 from UnitConversion c
+            where c.tenantId = :tenantId
+              and ((:itemRef is null and c.itemRef is null) or c.itemRef = :itemRef)
+              and c.fromUnit = :fromUnit
+              and c.toUnit = :toUnit
+            """)
+    boolean existsRule(@Param("tenantId") UUID tenantId,
+                       @Param("itemRef") String itemRef,
+                       @Param("fromUnit") String fromUnit,
+                       @Param("toUnit") String toUnit);
 }

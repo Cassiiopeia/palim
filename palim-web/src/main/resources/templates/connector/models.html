@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!--/*
+  목표 모델 목록.
+
+  기본 제공과 커스텀의 차이를 분명히 보여준다 — 커스텀 위에는 대사·리포트가 자동으로 붙지 않는다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <p class="text-sm text-base-content/70 mb-4">
+        데이터를 어디에 담을지 정하는 정의입니다. 연동을 만들 때 이 중 하나를 고릅니다.
+    </p>
+
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>이름</th>
+                        <th>코드</th>
+                        <th>구분</th>
+                        <th>저장</th>
+                        <th>필드</th>
+                        <th>중복 판정 기준</th>
+                        <th class="text-right"></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="m : ${models}">
+                        <td class="font-medium" th:text="${m.name}">이름</td>
+                        <td><code class="text-xs" th:text="${m.code}">코드</code></td>
+                        <td>
+                            <span class="badge badge-sm"
+                                  th:classappend="${m.isCustom()} ? 'badge-ghost' : 'badge-primary'"
+                                  th:text="${m.isCustom()} ? '커스텀' : '기본 제공'">구분</span>
+                        </td>
+                        <td class="text-xs" th:text="${m.storage}">TABLE</td>
+                        <td th:text="${fieldCounts[m.id]}">0</td>
+                        <td class="text-xs" th:text="${#strings.listJoin(m.naturalKeyFields, ', ')}">키</td>
+                        <td class="text-right">
+                            <a class="btn btn-ghost btn-xs"
+                               th:href="@{/connectors/models/{id}(id=${m.id})}">필드 보기</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title text-base">커스텀 모델 만들기</h2>
+            <p class="text-sm text-base-content/70">
+                기본 제공 모델에 담기지 않는 데이터를 위한 것입니다.
+                <span class="font-medium">대사·리포트 같은 기능은 자동으로 붙지 않고</span>,
+                수집·변환·저장·조회까지만 됩니다.
+            </p>
+            <form th:action="@{/connectors/models}" method="post"
+                  class="flex flex-wrap gap-3 items-end mt-2">
+                <label class="form-control">
+                    <div class="label py-1"><span class="label-text text-xs">이름</span></div>
+                    <input type="text" name="name" required class="input input-bordered input-sm w-48">
+                </label>
+                <label class="form-control">
+                    <div class="label py-1"><span class="label-text text-xs">코드</span></div>
+                    <input type="text" name="code" required pattern="[a-z0-9_]+"
+                           class="input input-bordered input-sm w-48" placeholder="hr_employee">
+                </label>
+                <label class="form-control">
+                    <div class="label py-1">
+                        <span class="label-text text-xs">중복 판정 기준 (쉼표로 구분)</span>
+                    </div>
+                    <input type="text" name="naturalKeys" required
+                           class="input input-bordered input-sm w-72" placeholder="external_id">
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">만들기</button>
+            </form>
+            <p class="text-xs text-base-content/60 mt-1">
+                중복 판정 기준이 없으면 재실행이 매번 새 행을 만듭니다. 그 상태로는 자동화를 켤 수 없습니다.
+            </p>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
