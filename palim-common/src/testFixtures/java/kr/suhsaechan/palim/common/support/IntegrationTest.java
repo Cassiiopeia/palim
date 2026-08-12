@@ -1,6 +1,8 @@
 package kr.suhsaechan.palim.common.support;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Base64;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -43,5 +45,21 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("palim.crypto.master-key", () -> TEST_MASTER_KEY);
         registry.add("palim.admin.password", () -> "test-admin-password");
+        registry.add("palim.scripts.directory", IntegrationTest::scriptsDirectory);
+    }
+
+    /**
+     * py 스크립트 위치.
+     *
+     * <p>운영 이미지는 {@code WORKDIR=/app} 이라 {@code scripts} 상대경로가 맞지만, Gradle 은
+     * <b>각 모듈 디렉터리</b>를 작업 디렉터리로 삼는다. 그대로 두면 테스트에서 스크립트를 찾지
+     * 못해 파싱이 통째로 실패한다. 저장소 루트를 찾아 절대경로로 넘긴다.
+     */
+    private static String scriptsDirectory() {
+        Path current = Path.of("").toAbsolutePath();
+        while (current != null && !Files.isDirectory(current.resolve("scripts"))) {
+            current = current.getParent();
+        }
+        return current == null ? "scripts" : current.resolve("scripts").toString();
     }
 }
