@@ -42,12 +42,16 @@ class RisingSignalIntegrationTest extends IntegrationTest {
         YoutubeClient stubYoutubeClient() {
             StubYoutubeClient stub = new StubYoutubeClient();
 
-            // 폭발 중인 채널: 구독 3만인데 조회수가 그 2배로 돈다(VSR 2.0 — 알고리즘 외부 확산)
-            // 최근 영상이 직전보다 훨씬 잘 돌도록 앞쪽 10편을 크게 잡는다.
+            // 폭발 중인 채널.
+            //
+            // 라이징의 핵심 신호는 "조회수가 구독자를 넘어서는 상태"다 — 알고리즘이 비구독자에게
+            // 뿌리고 있다는 뜻이며, 구독자 유입이 그 뒤를 따른다. 그래서 구독 3만에 조회수가
+            // 5만~12만이 되도록 잡는다(VSR 2.8). 최근 10편이 직전 10편보다 크게 잘 돌아
+            // 가속도 신호도 함께 잡히는 구성이다.
             var hot = new java.util.ArrayList<>(
-                    StubYoutubeClient.longforms("ch-hot-recent", LATEST, 10, 60_000, 4_000, 800));
+                    StubYoutubeClient.longforms("ch-hot-recent", LATEST, 10, 120_000, 8_000, 1_600));
             hot.addAll(StubYoutubeClient.longforms("ch-hot-old",
-                    LATEST.minus(java.time.Duration.ofDays(40)), 15, 20_000, 1_000, 150));
+                    LATEST.minus(java.time.Duration.ofDays(40)), 10, 50_000, 2_500, 400));
             stub.withChannel("ch-hot", "합성 급상승 채널", "KR", 30_000, hot);
 
             // 정체 채널: 조회수가 구독자의 20% 수준으로 평범하다
