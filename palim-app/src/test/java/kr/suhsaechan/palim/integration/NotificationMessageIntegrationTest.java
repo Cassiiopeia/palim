@@ -17,6 +17,7 @@ import kr.suhsaechan.palim.notification.payload.LowStockPayload;
 import kr.suhsaechan.palim.notification.payload.NewOrderPayload;
 import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
+import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
 import kr.suhsaechan.palim.notification.payload.UnmappedProductPayload;
@@ -62,6 +63,10 @@ class NotificationMessageIntegrationTest extends IntegrationTest {
                             new DailyReportPayload.ChannelSummary("네이버", 8, 158_400L)),
                     List.of(new DailyReportPayload.TopSku("SKU-003", "상위 상품", 9)),
                     3, 1, List.of());
+            case RISING_INFLUENCER -> new RisingInfluencerPayload(2, 7,
+                    List.of(new RisingInfluencerPayload.RisingChannel(
+                            "합성 캠핑 채널", 42_000, 180_000, 87.0, 3.2, 3)),
+                    Instant.parse("2026-08-04T00:00:00Z"));
         };
     }
 

@@ -57,6 +57,8 @@ public class ScoringService {
     private final InfluencerScoreRepository scoreRepository;
     private final ChannelCategoryRepository categoryRepository;
     private final ScoringPropertiesProvider propertiesProvider;
+    private final kr.suhsaechan.palim.automation.influencer.rising.RisingSignalService
+            risingSignalService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -92,9 +94,10 @@ public class ScoringService {
         java.util.Set<Badge> badges = new java.util.LinkedHashSet<>(ruleScore.badges());
         if (rising.risingBadge()) {
             badges.add(Badge.RISING);
-            // 폭발 조짐이 있는 채널은 매일 본다 — 며칠만 늦어도 단가가 오른다.
-            channel.changeTier(RefreshTier.RISING);
         }
+        // 감지·해제와 갱신 티어 조정은 신호 서비스가 맡는다 — 상태 전이가 한 곳에 모여야
+        // "언제부터 라이징인지"가 어긋나지 않는다.
+        risingSignalService.apply(channel, rising, metrics, rising.risingBadge());
 
         CpvEstimate cpv = CpvEstimator.estimate(channel.getSubscriberCount(),
                 primaryCategoryCode(channel), metrics.medianViews(), props.cpv());

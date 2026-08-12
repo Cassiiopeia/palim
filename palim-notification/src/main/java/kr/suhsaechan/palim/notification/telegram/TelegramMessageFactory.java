@@ -12,6 +12,7 @@ import kr.suhsaechan.palim.notification.payload.LowStockPayload;
 import kr.suhsaechan.palim.notification.payload.NewOrderPayload;
 import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
+import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
 import kr.suhsaechan.palim.notification.payload.UnmappedProductPayload;
@@ -54,6 +55,9 @@ public class TelegramMessageFactory {
                     stockMismatch(outboxService.readPayload(outbox, StockMismatchPayload.class));
             case DAILY_REPORT ->
                     dailyReport(outboxService.readPayload(outbox, DailyReportPayload.class));
+            case RISING_INFLUENCER ->
+                    risingInfluencer(
+                            outboxService.readPayload(outbox, RisingInfluencerPayload.class));
         };
     }
 
@@ -221,6 +225,47 @@ public class TelegramMessageFactory {
                 재고 기준값과 변동 이력이 어긋났습니다. 이력을 확인해 원인을 찾아야 합니다."""
                 .formatted(payload.skuCode(), payload.productName(),
                         payload.snapshotQuantity(), payload.historySum(), payload.difference());
+    }
+
+    /**
+     * 라이징 인플루언서 주간 요약 (#43).
+     *
+     * <p>차익배율을 채널명 바로 옆에 둔다 — 지수(100점)는 여러 신호의 합이라 얼마나 이득인지를
+     * 직관적으로 말해주지 않지만, "3.2배"는 같은 돈으로 3배 도달한다는 뜻이라 바로 읽힌다.
+     *
+     * <p>경과일을 붙이는 이유는 라이징이 유통기한 있는 정보이기 때문이다. 감지된 지 오래된
+     * 채널은 이미 단가가 올랐을 수 있어 같은 지수라도 값이 다르다.
+     */
+    private String risingInfluencer(RisingInfluencerPayload payload) {
+        StringBuilder builder = new StringBuilder()
+                .append("🚀 라이징 인플루언서\n\n")
+                .append("이번 주 신규 ").append(payload.detectedCount()).append("명")
+                .append(" / 레이더 총 ").append(payload.activeCount()).append("명\n");
+
+        if (payload.channels().isEmpty()) {
+            builder.append("\n새로 감지된 채널이 없습니다.");
+            return builder.toString();
+        }
+
+        builder.append('\n');
+        int rank = 1;
+        for (RisingInfluencerPayload.RisingChannel channel : payload.channels()) {
+            builder.append(rank++).append(". ").append(channel.title())
+                    .append("\n   규모 대비 ")
+                    .append(String.format("%.1f", channel.arbitrageRatio())).append("배")
+                    .append(" · 구독 ").append(compact(channel.subscriberCount()))
+                    .append(" · 조회 ").append(compact(channel.medianViews()))
+                    .append("\n   지수 ").append(Math.round(channel.risingScore()))
+                    .append(" · 감지 ").append(channel.daysSinceDetected()).append("일째\n");
+        }
+
+        builder.append("\n단가가 오르기 전 구간입니다. 등급표에서 확인하세요.");
+        return builder.toString();
+    }
+
+    /** 큰 수를 만 단위로 줄인다. 메시지에서 자릿수를 세게 만들지 않기 위해서다. */
+    private String compact(long value) {
+        return value >= 10_000 ? "%.1f만".formatted(value / 10_000.0) : String.valueOf(value);
     }
 
     private String dailyReport(DailyReportPayload payload) {

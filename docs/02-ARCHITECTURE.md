@@ -38,7 +38,7 @@ py 호출 규약(인자 배열·JSON stdout·타임아웃·스레드풀)은 04-C
 
 | 모듈 | 역할 |
 |---|---|
-| `palim-automation` *(신설 예정)* | 자동화 모듈 도메인 — 작업 정의·실행 이력·결과물 |
+| `palim-automation` | 자동화 모듈 — 유튜브·AI 연동, 수집·채점, 실행 이력. **조율 계층**이다(외부 API 를 내부로 들이고 알림까지 낸다). 알림은 `palim-notification` Outbox 경유 |
 | `palim-web` | 화면·컨트롤러 (동결 화면 제외) |
 | `palim-app` | 부트스트랩·조립 |
 
