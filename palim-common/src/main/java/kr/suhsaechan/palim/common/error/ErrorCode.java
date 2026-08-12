@@ -35,6 +35,8 @@ import org.springframework.http.HttpStatus;
  *   <tr><td>{@code A}</td><td>인증</td></tr>
  *   <tr><td>{@code I}</td><td>인시던트</td></tr>
  *   <tr><td>{@code Y}</td><td>인플루언서 · 유튜브</td></tr>
+ *   <tr><td>{@code X}</td><td>AI 호출</td></tr>
+ *   <tr><td>{@code K}</td><td>데이터 연동(커넥터)</td></tr>
  * </table>
  *
  * <p>{@link #logLevel()} 을 코드가 직접 갖는 이유는, 전역 핸들러가 예외마다 if 분기로 레벨을
@@ -271,7 +273,71 @@ public enum ErrorCode {
     AI_RATE_LIMITED("X005", HttpStatus.TOO_MANY_REQUESTS, LogLevel.DEBUG),
 
     /** 일일 호출 상한에 도달했다. 비용의 마지막 방어선이므로 넘기지 않는다. */
-    AI_DAILY_LIMIT_EXCEEDED("X006", HttpStatus.TOO_MANY_REQUESTS, LogLevel.WARN);
+    AI_DAILY_LIMIT_EXCEEDED("X006", HttpStatus.TOO_MANY_REQUESTS, LogLevel.WARN),
+
+    /** 커넥터를 찾을 수 없다. */
+    CONNECTOR_NOT_FOUND("K001", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    /** 같은 커넥터가 이미 실행 중이다. cron 과 수동 실행이 겹치는 순간은 반드시 온다. */
+    CONNECTOR_ALREADY_RUNNING("K002", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /** 원천에 접근할 수 없다(파일 없음·API 응답 없음). */
+    CONNECTOR_SOURCE_UNREACHABLE("K003", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /**
+     * 확정되지 않은 매핑으로 실제 적재를 시도했다.
+     *
+     * <p>{@code DRAFT} 로도 <b>테스트 실행은 가능하다</b> — 확정 전 검증이 그 목적이다.
+     * 실제 데이터를 넣는 것만 막는다. 확정 이력이 없으면 나중에 되돌릴 근거가 없다.
+     */
+    MAPPING_NOT_ACTIVE("K004", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /** 매핑 버전을 찾을 수 없다. */
+    MAPPING_NOT_FOUND("K005", HttpStatus.NOT_FOUND, LogLevel.WARN),
+
+    /**
+     * 원천 양식이 바뀌었다.
+     *
+     * <p>이 시스템의 최악 실패는 양식이 바뀌었는데 조용히 잘못된 데이터가 들어가는 것이다.
+     * 다만 과민하면 사람이 감지를 꺼버리므로, <b>매핑에 실제로 쓰는 필드</b>가 사라졌을 때만
+     * 막는다. 컬럼 추가는 경고로 지나간다.
+     */
+    SCHEMA_DRIFT_DETECTED("K006", HttpStatus.CONFLICT, LogLevel.ERROR),
+
+    /** 필수 목표 필드에 값이 없다. 행 단위 실패이므로 나머지 행은 계속 적재된다. */
+    REQUIRED_FIELD_MISSING("K007", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /** 값을 목표 필드 타입으로 변환할 수 없다. */
+    FIELD_TYPE_MISMATCH("K008", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /**
+     * 단위가 명시됐는데 환산 규칙이 없다.
+     *
+     * <p>조용히 1:1 로 넘기면 BOX 12개가 EA 12개로 둔갑하고, 그 오류는 대사 결과가
+     * 이상해질 때까지 아무도 모른다. 단위가 <b>비어 있는</b> 경우는 실패가 아니다 —
+     * 단위 개념이 없는 원천이 흔하다.
+     */
+    UNIT_CONVERSION_NOT_FOUND("K009", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /** py 훅 실행이 실패했다. */
+    HOOK_EXECUTION_FAILED("K010", HttpStatus.INTERNAL_SERVER_ERROR, LogLevel.ERROR),
+
+    /** py 훅이 시간 내에 끝나지 않았다. 좀비 프로세스가 쌓이면 서버가 죽는다. */
+    HOOK_TIMEOUT("K011", HttpStatus.GATEWAY_TIMEOUT, LogLevel.ERROR),
+
+    /** 사용 중인 목표 모델은 삭제할 수 없다. */
+    TARGET_MODEL_IN_USE("K012", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /** 자연키 구성 필드가 비어 UPSERT 대상을 특정할 수 없다. */
+    NATURAL_KEY_INCOMPLETE("K013", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /**
+     * 마지막 실행이 아닌 것을 되돌리려 했다.
+     *
+     * <p>그 이전까지 거슬러 오르면 이후 실행들과 뒤엉켜 어떤 상태로 돌아가는지 아무도
+     * 설명할 수 없게 된다.
+     */
+    ROLLBACK_NOT_ALLOWED("K014", HttpStatus.CONFLICT, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;

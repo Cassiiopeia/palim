@@ -201,6 +201,17 @@ error.NATURAL_KEY_INCOMPLETE=Deduplication key fields are empty: {0}
 error.ROLLBACK_NOT_ALLOWED=Only the most recent run can be rolled back.
 ```
 
+- [ ] **Step 3-1: 접두사 화이트리스트에 `K` 추가**
+
+`ErrorCodeIntegrationTest.접두사_규칙을_지킨다()` 에 허용 접두사 목록이 하드코딩돼 있다.
+새 접두사를 쓰면 이 테스트가 먼저 실패한다.
+
+```java
+List<Character> allowed = List.of('C', 'S', 'O', 'M', 'H', 'N', 'A', 'I', 'Y', 'X', 'K');
+```
+
+`ErrorCode` javadoc 의 접두사 표에도 한 줄 추가한다 (`{@code K}` — 데이터 연동(커넥터)).
+
 - [ ] **Step 4: 기존 ErrorCode 검증 테스트로 확인**
 
 `ErrorCodeIntegrationTest` 가 `values()` 를 순회해 코드 중복과 메시지 누락을 자동 검사한다. 새 코드를 추가했으므로 이 테스트가 곧 검증이다.
