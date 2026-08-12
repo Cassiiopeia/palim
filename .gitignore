@@ -82,3 +82,4 @@ application-prod.yaml
 application-prod.yml
 application-dev.yaml
 application-dev.yml
+.gstack/

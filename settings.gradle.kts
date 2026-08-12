@@ -13,6 +13,9 @@ include("palim-mapping")
 include("palim-notification")
 include("palim-incident")
 
+// 연동 — 외부 데이터를 표준 모델로 들이는 범용 엔진. 도메인을 모른다.
+include("palim-connector")
+
 // 조율 — 여러 도메인을 의존한다
 include("palim-automation")  // 외부(유튜브·AI) -> 내부 + 알림 (자동화 모듈)
 include("palim-collector")   // 외부 -> 내부 (채널 주문 수집)

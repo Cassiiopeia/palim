@@ -13,6 +13,47 @@
 
 비밀값 주입: 로컬 `.env`(gitignore) → 운영은 AWS SSM Parameter Store / Secrets Manager.
 
+## 운영 환경 (2026-08 기준)
+
+| 항목 | 값 |
+|---|---|
+| 호스트 | 시놀로지 NAS (`suh-project.synology.me`, SSH 2022) |
+| 컨테이너 | `palim` — `ghcr.io/cassiiopeia/palim:<커밋 SHA>` |
+| 포트 | 호스트 `8095` → 컨테이너 `8080` |
+| DB | **NAS 공용 PostgreSQL 14.15** 의 `palim` 데이터베이스, 전용 계정 `palim` |
+| 네트워크 | `postgres_default` — DB 컨테이너와 같은 네트워크라 `postgres:5432` 로 붙는다 |
+| 외부 노출 | DSM 역방향 프록시 → `https://palim.suhsaechan.kr` |
+
+**DB 는 여러 프로젝트가 공유한다.** 그래서 두 가지를 지킨다 — 커넥션 풀 상한을 10 으로 묶고,
+`palim` 전용 계정만 쓴다(공용 관리자 계정을 쓰면 남의 DB 까지 접근 가능해진다).
+
+**PostgreSQL 은 14 다.** 15+ 전용 문법을 쓰면 테스트는 통과하고 배포에서만 죽는다.
+자세한 것은 `CLAUDE.md` 「운영 PostgreSQL 은 14 다」 참고.
+
+## 배포 — main push 자동
+
+`.github/workflows/build.yml` 하나가 검사·빌드·이미지·배포를 순서대로 한다.
+
+```
+guard(커밋 검사) → build(테스트) → image(GHCR 푸시) → deploy(NAS)
+                                    main 에서만 ──────┘
+```
+
+- **운영 설정은 저장소에 없다.** CI 가 Secret `APPLICATION_PROD_YML` 로
+  `application-prod.yaml` 을 만들어 jar 에 넣는다. 그 내용에는 `${환경변수}` 자리표시자만
+  있고, 리터럴 비밀값이 섞이면 워크플로가 검사해서 실패시킨다
+- **비밀값은 이미지에 굽지 않는다.** 배포 시 `docker run -e` 로 주입한다 — 이미지를 받을 수
+  있는 사람이 비밀을 꺼낼 수 없어야 하기 때문이다
+- **배포 태그는 `latest` 가 아니라 커밋 SHA** 다. `latest` 는 다음 배포에 덮여
+  "지금 서버에 뭐가 떠 있나"를 되짚을 수 없다
+- 기동 확인은 `/actuator/health` 가 `UP` 이 될 때까지 최대 200초. 실패하면 컨테이너 로그를
+  출력하고 워크플로를 실패시킨다
+
+필요한 GitHub Secrets: `APPLICATION_PROD_YML`, `PALIM_DB_PASSWORD`,
+`PALIM_CRYPTO_MASTER_KEY`, `SERVER_HOST`, `SERVER_USER`, `SERVER_PASSWORD`.
+
+**롤백**은 이전 커밋 SHA 태그로 `docker run` 을 다시 하면 된다.
+
 ## 빌드 · 배포 — Docker 단일 이미지
 
 ```

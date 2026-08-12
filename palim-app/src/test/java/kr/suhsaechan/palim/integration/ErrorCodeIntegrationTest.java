@@ -64,7 +64,7 @@ class ErrorCodeIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("코드 접두사가 정의된 도메인 문자 중 하나다")
     void 접두사_규칙을_지킨다() {
-        List<Character> allowed = List.of('C', 'S', 'O', 'M', 'H', 'N', 'A', 'I', 'Y', 'X');
+        List<Character> allowed = List.of('C', 'S', 'O', 'M', 'H', 'N', 'A', 'I', 'Y', 'X', 'K');
 
         for (ErrorCode errorCode : ErrorCode.values()) {
             assertThat(errorCode.code())

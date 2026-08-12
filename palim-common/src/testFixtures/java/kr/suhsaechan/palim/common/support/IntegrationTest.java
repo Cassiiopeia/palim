@@ -1,6 +1,8 @@
 package kr.suhsaechan.palim.common.support;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Base64;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -20,8 +22,16 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest
 public abstract class IntegrationTest {
 
+    /**
+     * 운영과 <b>같은 메이저 버전</b>을 쓴다.
+     *
+     * <p>여기가 운영보다 높으면 상위 버전 전용 문법이 테스트를 통과하고 배포에서만 죽는다.
+     * 실제로 {@code NULLS NOT DISTINCT}(PostgreSQL 15+)를 쓴 마이그레이션이 17 컨테이너에서는
+     * 멀쩡히 돌다가 운영(14)에 올리는 순간 Flyway 가 문법 오류로 멈췄다. 운영 DB 를 올리기 전에는
+     * 이 값을 올리지 않는다.
+     */
     private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:17-alpine");
+            new PostgreSQLContainer<>("postgres:14-alpine");
 
     /**
      * 테스트 전용 마스터키.
@@ -43,5 +53,21 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("palim.crypto.master-key", () -> TEST_MASTER_KEY);
         registry.add("palim.admin.password", () -> "test-admin-password");
+        registry.add("palim.scripts.directory", IntegrationTest::scriptsDirectory);
+    }
+
+    /**
+     * py 스크립트 위치.
+     *
+     * <p>운영 이미지는 {@code WORKDIR=/app} 이라 {@code scripts} 상대경로가 맞지만, Gradle 은
+     * <b>각 모듈 디렉터리</b>를 작업 디렉터리로 삼는다. 그대로 두면 테스트에서 스크립트를 찾지
+     * 못해 파싱이 통째로 실패한다. 저장소 루트를 찾아 절대경로로 넘긴다.
+     */
+    private static String scriptsDirectory() {
+        Path current = Path.of("").toAbsolutePath();
+        while (current != null && !Files.isDirectory(current.resolve("scripts"))) {
+            current = current.getParent();
+        }
+        return current == null ? "scripts" : current.resolve("scripts").toString();
     }
 }

@@ -67,10 +67,13 @@ new ProcessBuilder(List.of("python3", script, arg1, arg2))   // O — 인자 배
 
 ### 6. AI 호출 경계를 지킨다
 
-- AI 에는 필요한 컬럼만 보낸다 — 개인 식별자·전화번호는 마스킹 후 전송
 - AI 출력은 항상 **구조화 출력(json_schema)** 으로 받아 코드가 검증한다. AI 출력 문자열에 따라
   임의 동작을 실행하지 않는다 (프롬프트 인젝션 방어)
 - API 키는 사용량 한도(hard limit)를 걸어둔 키만 쓴다
+- **반복 처리(리포트·분석·배치)에는 필요한 컬럼만 보낸다** — 개인 식별자·전화번호는 마스킹
+- **연동 정의를 만들 때는 원본 파일 전체를 보낸다.** 컬럼 구조와 값 모양을 봐야 매핑 초안이
+  쓸모 있기 때문이다. 대신 AI 는 **정의 생성 시 1회만** 호출하고, 확정된 정의로 도는 반복
+  실행에는 개입하지 않는다 — 매일 도는 경로로는 데이터가 한 번도 나가지 않는다
 
 ### 7. 시각에 `LocalDateTime` 을 쓰지 않는다
 
@@ -94,6 +97,25 @@ new ProcessBuilder(List.of("python3", script, arg1, arg2))   // O — 인자 배
 
 컴포넌트 `boolean success` 가 있으면 `success()` 는 accessor 로 취급된다. `of()`·`from()` 처럼
 겹치지 않는 이름을 쓴다.
+
+### 운영 PostgreSQL 은 **14** 다 — 15+ 문법을 쓰면 배포에서만 죽는다
+
+운영 DB 는 NAS 의 공용 PostgreSQL **14.15** 이고, 다른 프로젝트 20여 개가 같은 인스턴스를
+쓰므로 우리 사정으로 올릴 수 없다. 마이그레이션은 **PG14 문법만** 쓴다.
+
+| 쓰면 안 되는 것 | 대신 |
+|---|---|
+| `NULLS NOT DISTINCT` (15+) | 자연키 컬럼을 `NOT NULL DEFAULT ''`(정수는 `0`)로 두고 평범한 유니크 인덱스 |
+| `MERGE` (15+) | `INSERT ... ON CONFLICT` |
+| `ANY_VALUE` (16+), `JSON_TABLE` (17+) | 쓰지 않는다 |
+
+**Testcontainers 도 `postgres:14-alpine` 으로 고정되어 있다.** 이 값을 올리면 상위 버전 전용
+문법이 테스트를 통과하고 배포에서만 터진다 — 실제로 그렇게 한 번 겪었다. `docker-compose.yml`
+의 로컬 DB 도 같은 버전이다. 셋은 항상 같이 움직인다.
+
+자연키에 `COALESCE` 표현식 인덱스를 쓰는 것도 피한다. `StandardModelWriter` 가
+`ON CONFLICT` 컬럼 목록을 평문으로 조립하므로 표현식 인덱스와 매칭되지 않아
+**적재 첫 실행에서** `no unique or exclusion constraint matching` 으로 죽는다.
 
 ### `JdbcClient` 에는 `Instant` 를 바인딩할 수 없다
 

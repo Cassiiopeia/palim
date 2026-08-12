@@ -6,6 +6,9 @@ dependencies {
     // palim-common 이 spring-boot-starter-data-jpa 와 starter-json 을 api 로 노출한다.
     api(project(":palim-common"))
 
+    // 표준 모델 위에 도메인 기능을 얹는다. 연동 엔진은 도메인을 모르므로 방향은 한쪽뿐이다.
+    api(project(":palim-connector"))
+
     // 라이징 주간 알림. 텔레그램 봇 API 를 직접 부르지 않고 Outbox 를 거친다 —
     // 발송 실패가 재시도·이력 관리 체계 안에 남아야 한다(05-INTEGRATION).
     implementation(project(":palim-notification"))

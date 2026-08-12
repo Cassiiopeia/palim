@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<!--/*
+  매핑 편집기.
+
+  왼쪽(원천 필드)은 파일을 올려야 채워지고, 오른쪽(목표 필드)은 항상 보인다 —
+  무엇을 채워야 하는지 먼저 알아야 어떤 파일을 올릴지 판단할 수 있다.
+
+  AI 초안 버튼은 없다. 수동만으로 전 과정이 완주되어야 한다는 것이 설계 원칙이며,
+  AI 는 나중에 붙는 보조 기능이다.
+*/-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="flex gap-2 mb-4">
+        <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 목록</a>
+        <a th:href="@{/connectors/{id}/runs(id=${connector.id})}" class="btn btn-ghost btn-sm">
+            실행 이력
+        </a>
+    </div>
+
+    <!--/* 1단계 — 원천 파일에서 컬럼 읽기 */-->
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="card-title text-base">1. 원천 파일 올리기</h2>
+            <p class="text-sm text-base-content/70">
+                헤더를 읽어 컬럼 목록을 뽑습니다. 이 단계에서는 저장되지 않습니다.
+            </p>
+            <form th:action="@{/connectors/{id}/schema(id=${connector.id})}" method="post"
+                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end mt-2">
+                <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                       class="file-input file-input-bordered file-input-sm">
+                <label class="form-control">
+                    <div class="label py-0"><span class="label-text text-xs">헤더 행</span></div>
+                    <input type="number" name="headerRow" min="1" value="1"
+                           th:value="${headerRow} ?: 1" class="input input-bordered input-sm w-20">
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">컬럼 읽기</button>
+            </form>
+        </div>
+    </div>
+
+    <!--/* 2단계 — 좌우 연결 */-->
+    <div th:if="${schema != null}" class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="card-title text-base">2. 필드 연결</h2>
+            <p class="text-sm text-base-content/70">
+                원천 컬럼 <span class="font-medium" th:text="${schema.fields.size()}">0</span>개,
+                전체 <span class="font-medium" th:text="${schema.totalCount}">0</span>건을 읽었습니다.
+                연결하지 않은 컬럼은 버려지지 않고 <code class="text-xs">attributes</code> 에 보존됩니다.
+            </p>
+
+            <form th:action="@{/connectors/{id}/mapping(id=${connector.id})}" method="post"
+                  class="mt-2">
+                <input type="hidden" name="schemaFields" th:each="f : ${schema.fields}"
+                       th:value="${f}">
+
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr>
+                            <th class="w-1/4">목표 필드</th>
+                            <th class="w-1/4">원천 컬럼</th>
+                            <th class="w-1/4">변환</th>
+                            <th class="w-1/4">변환 값</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="tf, it : ${targetFields}">
+                            <td>
+                                <input type="hidden" name="targetKeys" th:value="${tf.fieldKey}">
+                                <div class="font-medium" th:text="${tf.displayName}">표시명</div>
+                                <div class="text-xs text-base-content/60">
+                                    <span th:text="${tf.fieldKey}">key</span>
+                                    <span class="badge badge-xs badge-ghost ml-1"
+                                          th:text="${tf.dataType}">STRING</span>
+                                    <span th:if="${tf.required}" class="badge badge-xs badge-error ml-1">
+                                        필수
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <select name="sourceFields" class="select select-bordered select-sm w-full">
+                                    <option value="">— 연결 안 함 —</option>
+                                    <option th:each="f : ${schema.fields}" th:value="${f}"
+                                            th:text="${f}"
+                                            th:selected="${existing[tf.fieldKey] != null
+                                                          and existing[tf.fieldKey].sourceField == f}">컬럼</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="transformTypes" class="select select-bordered select-sm w-full">
+                                    <option th:each="t : ${transformTypes}" th:value="${t}"
+                                            th:text="${t}">NONE</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" name="params"
+                                       class="input input-bordered input-sm w-full"
+                                       placeholder="패턴·기본값 등">
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex justify-end mt-4">
+                    <button type="submit" class="btn btn-primary btn-sm">매핑 저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!--/* 3단계 — 테스트 실행. 스테이징에만 쓰므로 운영 데이터에 닿지 않는다 */-->
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="card-title text-base">3. 테스트 실행</h2>
+            <p class="text-sm text-base-content/70">
+                실제 테이블에 <span class="font-medium">쓰지 않습니다.</span>
+                변환 결과와 실패 행만 확인합니다.
+            </p>
+            <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
+                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end mt-2">
+                <input type="hidden" name="mode" value="TEST">
+                <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                       class="file-input file-input-bordered file-input-sm">
+                <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
+                <button type="submit" class="btn btn-outline btn-sm">테스트 실행</button>
+            </form>
+        </div>
+    </div>
+
+    <!--/* 4단계 — 확정과 실제 적재 */-->
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title text-base">4. 확정하고 적재</h2>
+            <p class="text-sm text-base-content/70">
+                확정하면 이 매핑 버전이 실행 기록에 남습니다. 정의를 나중에 바꿔도
+                과거 데이터가 어느 버전으로 들어왔는지 설명할 수 있습니다.
+            </p>
+
+            <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post"
+                  class="mt-2">
+                <button type="submit" class="btn btn-secondary btn-sm">매핑 확정</button>
+            </form>
+
+            <div class="divider my-2"></div>
+
+            <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
+                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
+                <input type="hidden" name="mode" value="LIVE">
+                <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                       class="file-input file-input-bordered file-input-sm">
+                <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
+                <button type="submit" class="btn btn-primary btn-sm">실제 적재</button>
+                <span class="text-xs text-base-content/60">확정된 매핑이 있어야 실행됩니다.</span>
+            </form>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
