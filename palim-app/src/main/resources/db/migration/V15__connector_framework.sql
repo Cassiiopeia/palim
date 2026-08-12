@@ -136,12 +136,17 @@ CREATE UNIQUE INDEX ux_connector_field_map_target
     ON connector_field_map (mapping_id, target_field_key);
 CREATE INDEX ix_connector_field_map_mapping ON connector_field_map (mapping_id, sort_order);
 
--- 단위 환산. item_ref 가 NULL 이면 전역 규칙이다.
+-- 단위 환산. item_ref 가 빈 문자열이면 전역 규칙이다.
+--
+-- "전역"을 NULL 이 아니라 빈 문자열로 표현하는 이유 — 유니크 인덱스에서 NULL 은 서로 다른
+-- 값으로 취급되어(NULL != NULL) 전역 규칙이 무한히 중복 등록된다. PostgreSQL 15 의
+-- NULLS NOT DISTINCT 로 막을 수 있지만 운영 DB 가 14 라 쓸 수 없고, 애초에 이 컬럼에서
+-- "값 없음"과 "빈 값"을 구분할 실익이 없다. NOT NULL 로 두면 DB 버전을 타지 않는다.
 CREATE TABLE unit_conversion
 (
     id         uuid           NOT NULL,
     tenant_id  uuid           NOT NULL,
-    item_ref   varchar(255),
+    item_ref   varchar(255)   NOT NULL DEFAULT '',
     from_unit  varchar(20)    NOT NULL,
     to_unit    varchar(20)    NOT NULL,
     factor     numeric(19, 6) NOT NULL,
@@ -149,10 +154,8 @@ CREATE TABLE unit_conversion
     updated_at timestamptz,
     CONSTRAINT pk_unit_conversion PRIMARY KEY (id)
 );
--- 전역 규칙(item_ref IS NULL)과 품목별 규칙이 공존한다. NULLS NOT DISTINCT 가 없으면
--- NULL != NULL 이라 전역 규칙이 무한히 중복 등록된다 (PostgreSQL 15+).
 CREATE UNIQUE INDEX ux_unit_conversion
-    ON unit_conversion (tenant_id, item_ref, from_unit, to_unit) NULLS NOT DISTINCT;
+    ON unit_conversion (tenant_id, item_ref, from_unit, to_unit);
 
 -- ------------------------------------------------------------
 -- 실행 계층

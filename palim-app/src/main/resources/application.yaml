@@ -25,6 +25,14 @@ spring:
     virtual:
       enabled: true
 
+  servlet:
+    multipart:
+      # 기본값은 파일 1MB / 요청 10MB 다. 재고·주문 엑셀은 수만 행이면 그 선을 쉽게 넘고,
+      # 넘는 순간 화면에서 업로드가 실패한다. 파싱은 임시 파일로 하므로 크기를 키워도
+      # 힙에 얹히지 않는다.
+      max-file-size: 50MB
+      max-request-size: 60MB
+
   messages:
     # 에러 메시지는 errors.properties(한국어) / errors_en.properties(영문) 두 파일에 모은다.
     # 새 ErrorCode 를 추가하면 두 파일에 한 줄씩 더하면 되고, 이 설정은 손대지 않는다.

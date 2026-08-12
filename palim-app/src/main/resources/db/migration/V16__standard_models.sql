@@ -65,13 +65,13 @@ CREATE TABLE std_stock_snapshot
     base_at            timestamptz    NOT NULL,
     source             varchar(50)    NOT NULL,
     collected_at       timestamptz,
-    -- 위치
-    warehouse_code     varchar(50),
+    -- 위치. warehouse_code 는 자연키라 NOT NULL 이다 (아래 인덱스 주석 참고).
+    warehouse_code     varchar(50)    NOT NULL DEFAULT '',
     warehouse_name     varchar(100),
     location_code      varchar(50),
     zone_code          varchar(50),
-    -- 로트
-    lot_code           varchar(100),
+    -- 로트. lot_code 도 자연키다.
+    lot_code           varchar(100)   NOT NULL DEFAULT '',
     expiry_date        date,
     manufacture_date   date,
     serial_no          varchar(100),
@@ -100,11 +100,13 @@ CREATE TABLE std_stock_snapshot
     CONSTRAINT pk_std_stock_snapshot PRIMARY KEY (id)
 );
 -- 자연키. 같은 구간을 두 번 가져와도 중복이 생기지 않는다.
--- 창고·로트가 없는 원천이 흔하므로 NULLS NOT DISTINCT 가 없으면 NULL != NULL 이라
--- 재실행마다 같은 행이 새로 쌓인다 (PostgreSQL 15+).
+--
+-- 창고·로트가 없는 원천이 흔하다. 이 컬럼들을 NULL 허용으로 두면 유니크 인덱스에서
+-- NULL != NULL 이라 재실행마다 같은 행이 새로 쌓인다. PostgreSQL 15 의 NULLS NOT DISTINCT
+-- 로 막을 수 있지만 운영 DB 가 14 다. 자연키 구성 컬럼은 전부 NOT NULL 로 두고 "값 없음"을
+-- 빈 문자열로 표현한다 — DB 버전을 타지 않고, 자연키에서 NULL 과 빈 값을 구분할 실익도 없다.
 CREATE UNIQUE INDEX ux_std_stock_snapshot_natural
-    ON std_stock_snapshot (tenant_id, source, base_at, item_ref, warehouse_code, lot_code)
-    NULLS NOT DISTINCT;
+    ON std_stock_snapshot (tenant_id, source, base_at, item_ref, warehouse_code, lot_code);
 CREATE INDEX ix_std_stock_snapshot_run ON std_stock_snapshot (run_id);
 CREATE INDEX ix_std_stock_snapshot_lookup
     ON std_stock_snapshot (tenant_id, base_at DESC, source);
@@ -127,9 +129,10 @@ CREATE TABLE std_stock_movement
     to_warehouse   varchar(50),
     from_location  varchar(50),
     to_location    varchar(50),
-    lot_code       varchar(100),
+    lot_code       varchar(100)   NOT NULL DEFAULT '',
     expiry_date    date,
-    document_no    varchar(100),
+    -- 자연키다. 전표번호가 없는 원천이 흔해 빈 문자열로 받는다.
+    document_no    varchar(100)   NOT NULL DEFAULT '',
     document_name  varchar(255),
     reference_no   varchar(100),
     operator       varchar(100),
@@ -138,10 +141,9 @@ CREATE TABLE std_stock_movement
     updated_at     timestamptz,
     CONSTRAINT pk_std_stock_movement PRIMARY KEY (id)
 );
--- 전표번호·로트가 비는 원천이 있으므로 여기도 NULLS NOT DISTINCT 가 필요하다.
+-- 전표번호·로트가 비는 원천이 있다. 스냅샷과 같은 이유로 자연키 컬럼은 NOT NULL 이다.
 CREATE UNIQUE INDEX ux_std_stock_movement_natural
-    ON std_stock_movement (tenant_id, document_no, item_ref, occurred_at, lot_code)
-    NULLS NOT DISTINCT;
+    ON std_stock_movement (tenant_id, document_no, item_ref, occurred_at, lot_code);
 CREATE INDEX ix_std_stock_movement_run ON std_stock_movement (run_id);
 CREATE INDEX ix_std_stock_movement_lookup
     ON std_stock_movement (tenant_id, occurred_at DESC, item_ref);
@@ -154,7 +156,8 @@ CREATE TABLE std_outbound_order
     tenant_id        uuid           NOT NULL,
     run_id           uuid,
     order_no         varchar(100)   NOT NULL,
-    order_line_no    integer,
+    -- 자연키다. 단품 주문은 행번호가 없으므로 0 을 "행 구분 없음"으로 쓴다.
+    order_line_no    integer        NOT NULL DEFAULT 0,
     ordered_at       timestamptz,
     channel          varchar(100),
     item_ref         varchar(255)   NOT NULL,
@@ -174,9 +177,9 @@ CREATE TABLE std_outbound_order
     updated_at       timestamptz,
     CONSTRAINT pk_std_outbound_order PRIMARY KEY (id)
 );
--- 단품 주문은 행번호가 없어 NULL 이다. 그 주문이 재수집마다 중복되지 않아야 한다.
+-- 단품 주문(행번호 0)이 재수집마다 중복되지 않아야 한다.
 CREATE UNIQUE INDEX ux_std_outbound_order_natural
-    ON std_outbound_order (tenant_id, order_no, order_line_no, item_ref) NULLS NOT DISTINCT;
+    ON std_outbound_order (tenant_id, order_no, order_line_no, item_ref);
 CREATE INDEX ix_std_outbound_order_run ON std_outbound_order (run_id);
 
 -- 표준 모델 4종을 target_model 에 등록한다. 화면이 이 목록에서 고른다.

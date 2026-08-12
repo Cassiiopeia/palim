@@ -1,11 +1,16 @@
 package kr.suhsaechan.palim.connector.write;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.connector.key.NaturalKeyBuilder;
+import kr.suhsaechan.palim.connector.model.FieldDataType;
+import kr.suhsaechan.palim.connector.model.TargetField;
+import kr.suhsaechan.palim.connector.model.TargetFieldRepository;
 import kr.suhsaechan.palim.connector.model.TargetModel;
 import kr.suhsaechan.palim.connector.run.RunMode;
 import kr.suhsaechan.palim.connector.transform.MappedRow;
@@ -30,6 +35,7 @@ public class StandardModelWriter implements RecordWriter {
 
     private final JdbcClient jdbcClient;
     private final NaturalKeyBuilder keyBuilder;
+    private final TargetFieldRepository fieldRepository;
 
     @Override
     public RunMode mode() {
@@ -42,15 +48,66 @@ public class StandardModelWriter implements RecordWriter {
                              List<MappedRow> chunk) {
         String table = model.getTableName();
         List<String> keyFields = model.getNaturalKeyFields();
+        Map<String, FieldDataType> types = fieldTypes(model);
         int written = 0;
 
         for (MappedRow row : chunk) {
+            Map<String, Object> keyParams = naturalKeyParams(row, keyFields, types);
             String naturalKey = keyBuilder.build(row.values(), keyFields);
-            saveUndoSnapshot(tenantId, runId, table, keyFields, naturalKey, row);
-            upsert(tenantId, runId, table, keyFields, row);
+            saveUndoSnapshot(tenantId, runId, table, keyFields, keyParams, naturalKey);
+            upsert(tenantId, runId, table, keyFields, keyParams, row);
             written++;
         }
         return WriteResult.of(written);
+    }
+
+    /** 모델의 필드 타입. 자연키 빈 값을 타입에 맞게 채우는 데 쓴다. */
+    private Map<String, FieldDataType> fieldTypes(TargetModel model) {
+        return fieldRepository.findByTargetModelIdOrderBySortOrder(model.getId()).stream()
+                .collect(Collectors.toMap(TargetField::getFieldKey, TargetField::getDataType,
+                        (first, second) -> first));
+    }
+
+    /**
+     * 자연키 바인딩 값.
+     *
+     * <p>표준 모델의 자연키 컬럼은 전부 {@code NOT NULL} 이다 — 유니크 인덱스에서 NULL 이 서로
+     * 다른 값으로 취급되면 창고·로트가 빈 원천이 재실행마다 같은 행을 새로 쌓기 때문이다.
+     * 그래서 <b>값이 없으면 타입에 맞는 빈 값으로 바꿔 넘긴다.</b> 그대로 {@code null} 을
+     * 넘기면 적재가 제약 위반으로 죽는다.
+     *
+     * <p>이 정규화는 UPSERT 와 undo 스냅샷 조회가 <b>같은 값</b>을 써야 성립한다. 한쪽만
+     * 정규화하면 저장은 빈 문자열로 되고 조회는 {@code null} 로 되어 undo 로그가 조용히 비고,
+     * 그 사실은 되돌리기를 눌러본 뒤에야 드러난다.
+     */
+    private Map<String, Object> naturalKeyParams(MappedRow row, List<String> keyFields,
+                                                 Map<String, FieldDataType> types) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        for (String field : keyFields) {
+            Object converted = SqlValues.toParameter(row.values().get(field));
+            params.put(field, converted != null ? converted : emptyValue(types.get(field)));
+        }
+        return params;
+    }
+
+    /**
+     * 타입별 "값 없음" 표현.
+     *
+     * <p>날짜·시각은 채우지 않는다. 없는 시점을 지어내면 그 행이 언제 것인지 영영 알 수 없게
+     * 되므로, {@code NOT NULL} 제약이 거부하게 두는 편이 낫다. 시점은 자연키의 뼈대라 비어 있는
+     * 것 자체가 매핑이 잘못됐다는 신호다.
+     */
+    private Object emptyValue(FieldDataType type) {
+        if (type == null) {
+            return "";
+        }
+        return switch (type) {
+            case STRING -> "";
+            case INTEGER -> 0;
+            case DECIMAL -> BigDecimal.ZERO;
+            case BOOLEAN -> false;
+            case DATE, TIMESTAMP -> null;
+        };
     }
 
     /**
@@ -63,9 +120,10 @@ public class StandardModelWriter implements RecordWriter {
      * 복원이 최초 상태가 아니라 중간 상태로 간다.
      */
     private void saveUndoSnapshot(UUID tenantId, UUID runId, String table, List<String> keyFields,
-                                  String naturalKey, MappedRow row) {
+                                  Map<String, Object> keyParams, String naturalKey) {
+        // 자연키 컬럼이 NOT NULL 이므로 NULL 안전 비교가 필요 없다. 등호를 써야 인덱스를 탄다.
         String keyCondition = keyFields.stream()
-                .map(field -> "t." + field + " IS NOT DISTINCT FROM :" + field)
+                .map(field -> "t." + field + " = :" + field)
                 .reduce((a, b) -> a + " AND " + b)
                 .orElseThrow();
 
@@ -85,15 +143,19 @@ public class StandardModelWriter implements RecordWriter {
                 .param("tableName", table)
                 .param("naturalKey", naturalKey);
 
-        for (String field : keyFields) {
-            spec = spec.param(field, SqlValues.toParameter(row.values().get(field)));
+        for (Map.Entry<String, Object> entry : keyParams.entrySet()) {
+            spec = spec.param(entry.getKey(), entry.getValue());
         }
         spec.update();
     }
 
     private void upsert(UUID tenantId, UUID runId, String table, List<String> keyFields,
-                        MappedRow row) {
-        List<String> valueColumns = List.copyOf(row.values().keySet());
+                        Map<String, Object> keyParams, MappedRow row) {
+        // 자연키는 정규화된 값으로 덮어쓴다. 매핑되지 않은 자연키 컬럼도 여기서 채워지므로
+        // INSERT 에 빠져 DB 기본값에 맡기는 경로가 없어진다 — undo 조회 값과 어긋나지 않는다.
+        Map<String, Object> values = new LinkedHashMap<>(row.values());
+        values.putAll(keyParams);
+        List<String> valueColumns = List.copyOf(values.keySet());
 
         var spec = jdbcClient.sql(upsertSql(table, valueColumns, keyFields))
                 .param("id", UuidV7.generate())
@@ -101,7 +163,7 @@ public class StandardModelWriter implements RecordWriter {
                 .param("runId", runId)
                 .param("attributes", SqlValues.toJson(row.attributes()));
 
-        for (Map.Entry<String, Object> entry : row.values().entrySet()) {
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
             spec = spec.param(entry.getKey(), SqlValues.toParameter(entry.getValue()));
         }
         spec.update();

@@ -90,6 +90,26 @@ jobs:
       - name: Gradle 설정
         uses: gradle/actions/setup-gradle@v4
 
+      # 운영 설정을 Secret 에서 만들어 jar 에 넣는다. 이 파일은 gitignore 대상이라
+      # 저장소에 없고, 내용에는 ${환경변수} 자리표시자만 있어 이미지가 유출돼도
+      # 비밀값이 함께 나가지 않는다. 실제 값은 배포 시 docker run -e 로 주입한다.
+      - name: 운영 설정 생성
+        env:
+          APPLICATION_PROD_YML: ${{ secrets.APPLICATION_PROD_YML }}
+        run: |
+          if [ -z "$APPLICATION_PROD_YML" ]; then
+            echo "::error::APPLICATION_PROD_YML secret 이 비어 있습니다."
+            exit 1
+          fi
+          printf '%s\n' "$APPLICATION_PROD_YML" \
+            > palim-app/src/main/resources/application-prod.yaml
+          # 자리표시자만 있어야 한다. 실제 비밀이 섞여 들어오면 이미지에 굽히므로 막는다.
+          if grep -nE '^[[:space:]]*(password|master-key|.*token):[[:space:]]*[^$#[:space:]]' \
+               palim-app/src/main/resources/application-prod.yaml; then
+            echo "::error::운영 설정에 리터럴 비밀값이 있습니다. \${환경변수} 로만 두십시오."
+            exit 1
+          fi
+
       - name: 실행 가능 jar 생성
         run: ./gradlew :palim-app:bootJar
 
@@ -121,3 +141,74 @@ jobs:
           tags: |
             ghcr.io/cassiiopeia/palim:${{ github.sha }}
             ghcr.io/cassiiopeia/palim:latest
+
+  deploy:
+    name: NAS 배포
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # latest 가 아니라 SHA 태그로 배포한다. latest 는 다음 배포에 덮이므로
+      # "지금 서버에 뭐가 떠 있나"를 나중에 되짚을 수 없다.
+      IMAGE_REF: ghcr.io/cassiiopeia/palim:${{ github.sha }}
+      GHCR_USER: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DB_PASSWORD: ${{ secrets.PALIM_DB_PASSWORD }}
+      MASTER_KEY: ${{ secrets.PALIM_CRYPTO_MASTER_KEY }}
+    steps:
+      - name: SSH 배포
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 2022
+          timeout: 60s
+          command_timeout: 600s
+          envs: IMAGE_REF,GHCR_USER,GHCR_TOKEN,DB_PASSWORD,MASTER_KEY
+          script: |
+            set -euo pipefail
+            # 시놀로지는 docker 가 PATH 에 없다.
+            D=/var/packages/ContainerManager/target/usr/bin/docker
+
+            echo "$GHCR_TOKEN" | "$D" login ghcr.io -u "$GHCR_USER" --password-stdin
+            "$D" pull "$IMAGE_REF"
+
+            # DB 는 NAS 의 공용 PostgreSQL 을 쓴다. 같은 네트워크에 붙어야 컨테이너
+            # 이름으로 접속할 수 있다 — 호스트 포트를 거치면 방화벽 설정에 묶인다.
+            "$D" rm -f palim >/dev/null 2>&1 || true
+            "$D" run -d --name palim \
+              --restart unless-stopped \
+              --network postgres_default \
+              -p 8095:8080 \
+              -e TZ=Asia/Seoul \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              -e DB_HOST=postgres \
+              -e DB_PORT=5432 \
+              -e DB_NAME=palim \
+              -e DB_USER=palim \
+              -e DB_PASSWORD="$DB_PASSWORD" \
+              -e PALIM_CRYPTO_MASTER_KEY="$MASTER_KEY" \
+              -v /etc/localtime:/etc/localtime:ro \
+              "$IMAGE_REF"
+
+            "$D" logout ghcr.io >/dev/null 2>&1 || true
+
+            # 기동 확인. Flyway 마이그레이션이 끝나야 UP 이 되므로 넉넉히 기다린다.
+            # 시놀로지에는 curl 이 없는 경우가 많아 wget 을 쓴다.
+            for i in $(seq 1 40); do
+              if wget -q -O - "http://127.0.0.1:8095/actuator/health" 2>/dev/null \
+                   | grep -q '"status":"UP"'; then
+                echo "기동 확인 ($((i * 5))초)"
+                "$D" image prune -af >/dev/null 2>&1 || true
+                exit 0
+              fi
+              sleep 5
+            done
+
+            echo "::error::기동 확인 실패 — 아래는 컨테이너 로그다"
+            "$D" logs --tail 120 palim
+            exit 1

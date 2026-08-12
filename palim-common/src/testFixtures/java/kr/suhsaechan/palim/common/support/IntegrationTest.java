@@ -22,8 +22,16 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest
 public abstract class IntegrationTest {
 
+    /**
+     * 운영과 <b>같은 메이저 버전</b>을 쓴다.
+     *
+     * <p>여기가 운영보다 높으면 상위 버전 전용 문법이 테스트를 통과하고 배포에서만 죽는다.
+     * 실제로 {@code NULLS NOT DISTINCT}(PostgreSQL 15+)를 쓴 마이그레이션이 17 컨테이너에서는
+     * 멀쩡히 돌다가 운영(14)에 올리는 순간 Flyway 가 문법 오류로 멈췄다. 운영 DB 를 올리기 전에는
+     * 이 값을 올리지 않는다.
+     */
     private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:17-alpine");
+            new PostgreSQLContainer<>("postgres:14-alpine");
 
     /**
      * 테스트 전용 마스터키.

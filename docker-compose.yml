@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # 운영과 같은 메이저 버전을 쓴다. 로컬만 높이면 상위 버전 전용 문법이 여기서는 멀쩡히
+    # 돌다가 배포에서만 죽는다 — 실제로 NULLS NOT DISTINCT(PG15+)가 그렇게 통과했다.
+    image: postgres:14-alpine
     container_name: palim-postgres
     restart: unless-stopped
     environment:
