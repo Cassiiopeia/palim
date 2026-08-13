@@ -256,11 +256,16 @@
                 </div>
             </details>
 
+            <!--/* 누르면 무슨 일이 일어나는지 버튼이 말해 준다.
+
+                   테스트 키는 확인만 하고 끝나지만 정식 키는 그 자리에서 저장된다. 같은 버튼이
+                   상황에 따라 다르게 동작하는데 이름이 같으면, 누르기 전에는 무엇이 일어날지
+                   알 수 없다. */-->
             <div class="card-actions justify-end items-center gap-3">
-                <span class="text-sm text-base-content/60">
+                <span class="text-sm text-base-content/60" id="submitHint">
                     인증부터 데이터 조회까지 한 번에 확인합니다
                 </span>
-                <button type="submit" class="btn btn-primary">연결 테스트</button>
+                <button type="submit" class="btn btn-primary" id="submitButton">연결 확인하기</button>
             </div>
         </div>
     </form>
@@ -336,86 +341,40 @@
         </div>
     </div>
 
-    <!--/* ⑥ 통과했을 때만 저장을 연다. 실패한 설정을 저장하면 실행 시점에야 드러난다. */-->
-    <form th:if="${report != null and report.success}" th:action="@{/connectors/connect/save}"
-          method="post" th:object="${form}" class="card bg-base-100 shadow-sm mt-6 border border-success">
-        <div class="card-body gap-4">
-            <h2 class="card-title">연동으로 저장</h2>
-            <div class="text-sm text-base-content/70">
-                저장하면 매핑 화면으로 넘어갑니다. 어떤 항목을 어디에 담을지 정하는 단계입니다.
+    <!--/* ⑥ 확인한 뒤에 할 일.
+
+           정식 키로 확인했다면 그 자리에서 저장되어 이미 다음 화면으로 넘어간 뒤다. 여기 남는
+           것은 테스트 키로 확인한 경우뿐이고, 그때 할 일은 «저장»이 아니라 «정식 키를 받아
+           오는 것»이다. 테스트 키는 방금 조회에 성공하면서 죽었으므로, 저장해 두면 매일
+           실패하는 연동이 하나 생기고 사용자는 왜 안 되는지 알 수 없다. */-->
+    <div th:if="${needsLiveKey}" class="card bg-base-100 shadow-sm mt-6 border border-warning">
+        <div class="card-body gap-3">
+            <h2 class="card-title">거의 다 됐습니다 — 정식 인증키만 받으면 끝납니다</h2>
+
+            <div class="text-sm leading-relaxed">
+                방금 쓰신 <b>테스트 인증키는 이번 조회에 성공하면서 만료됐습니다.</b>
+                이카운트가 그렇게 정해 둔 것이라 <b>정상입니다.</b> 연결에 문제가 있는 것이
+                아닙니다.
+            </div>
+            <div class="text-sm leading-relaxed">
+                매일 자동으로 가져오려면 <b>정식 인증키</b>가 필요합니다. 테스트 검증을 마쳤으므로
+                이제 발급받을 수 있습니다.
             </div>
 
-            <input type="hidden" th:field="*{preset}">
-            <input type="hidden" th:field="*{sandbox}">
-            <input type="hidden" th:field="*{userId}">
-            <input type="hidden" th:field="*{companyCode}">
-            <input type="hidden" th:field="*{loginUrl}">
-            <input type="hidden" th:field="*{fetchUrl}">
-            <input type="hidden" th:field="*{fetchBody}">
-            <input type="hidden" th:field="*{rowsPath}">
+            <ol class="list-decimal ml-5 space-y-1 text-sm">
+                <li>이카운트 → <b>Self-Customizing</b> → <b>정보관리</b> → <b>API인증키발급</b></li>
+                <li><b>[키발급]</b> 에서 정식 인증키를 발급받습니다</li>
+                <li>위에서 <b>「정식 인증키」</b> 를 고르고, 받은 키를 넣은 뒤 다시 누릅니다</li>
+            </ol>
 
-            <div class="grid gap-4 md:grid-cols-2">
-                <label class="form-control">
-                    <div class="label"><span class="label-text">이름</span></div>
-                    <input type="text" th:field="*{name}" required class="input input-bordered"
-                           placeholder="예: 전산재고 일일 스냅샷">
-                    <div class="label">
-                        <span class="label-text-alt text-base-content/60">목록에 보일 이름입니다.</span>
-                    </div>
-                </label>
-                <label class="form-control">
-                    <div class="label"><span class="label-text">코드</span></div>
-                    <input type="text" th:field="*{code}" required class="input input-bordered"
-                           pattern="[a-z0-9\-_]+" placeholder="erp-stock-daily">
-                    <div class="label">
-                        <span class="label-text-alt text-base-content/60">
-                            영문 소문자·숫자·하이픈. 만든 뒤에는 바꾸지 않습니다.
-                        </span>
-                    </div>
-                </label>
-            </div>
-
-            <label class="form-control max-w-md">
-                <div class="label"><span class="label-text">받은 데이터를 담을 곳</span></div>
-                <select th:field="*{targetModelCode}" class="select select-bordered">
-                    <option value="std_stock_snapshot">재고 스냅샷 — 재고 대조에 쓰는 것</option>
-                    <option value="std_item">품목 — 상품 기본 정보</option>
-                    <option value="std_stock_movement">입출고 이력</option>
-                    <option value="std_outbound_order">출고 주문</option>
-                </select>
-                <div class="label">
-                    <span class="label-text-alt text-base-content/60">
-                        재고 수량을 담으려면 <b>재고 스냅샷</b>입니다. 품목에는 수량 칸이 없습니다.
-                    </span>
+            <div class="alert py-2">
+                <div class="text-xs">
+                    허용 ID 와 접속 IP 는 이미 등록되어 있어 다시 하지 않아도 됩니다.
+                    정식 키를 넣고 누르면 <b>확인과 저장이 한 번에</b> 끝납니다.
                 </div>
-            </label>
-
-            <label class="form-control max-w-xs">
-                <div class="label"><span class="label-text">기준 단위</span></div>
-                <input type="text" th:field="*{defaultUnit}" class="input input-bordered">
-                <div class="label">
-                    <span class="label-text-alt text-base-content/60">
-                        원천에 단위 칸이 없을 때 이 값으로 봅니다.
-                    </span>
-                </div>
-            </label>
-
-            <label class="form-control">
-                <div class="label"><span class="label-text">인증키 다시 입력</span></div>
-                <input type="password" th:field="*{secret}" required class="input input-bordered"
-                       autocomplete="off">
-                <div class="label">
-                    <span class="label-text-alt text-base-content/60">
-                        화면에 남겨두지 않기 때문에 저장할 때 한 번 더 필요합니다.
-                    </span>
-                </div>
-            </label>
-
-            <div class="card-actions justify-end">
-                <button type="submit" class="btn btn-primary">연동 만들기</button>
             </div>
         </div>
-    </form>
+    </div>
 
     <!--/* 시스템을 바꾸면 안내 문구만 갈아 끼운다.
 
@@ -454,6 +413,29 @@
         }
         select.addEventListener('change', apply);
         apply();
+      })();
+
+      // 키 종류에 따라 버튼이 하는 일이 다르다. 테스트 키는 확인에서 끝나고, 정식 키는 그
+      // 자리에서 저장까지 간다. 누르기 전에 알 수 있어야 한다.
+      (function () {
+        var stages = document.querySelectorAll('input[name="sandbox"]');
+        var button = document.getElementById('submitButton');
+        var hint = document.getElementById('submitHint');
+        if (!stages.length || !button) { return; }
+        function applyStage() {
+          var live = false;
+          stages.forEach(function (input) {
+            if (input.checked && input.value === 'false') { live = true; }
+          });
+          button.textContent = live ? '연결하고 저장하기' : '연결 확인하기';
+          if (hint) {
+            hint.textContent = live
+              ? '확인되면 그대로 저장하고 다음 단계로 넘어갑니다'
+              : '확인만 합니다. 저장은 정식 인증키를 받은 뒤입니다';
+          }
+        }
+        stages.forEach(function (input) { input.addEventListener('change', applyStage); });
+        applyStage();
       })();
     </script>
 
