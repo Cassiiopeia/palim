@@ -87,3 +87,7 @@ application-prod.yml
 application-dev.yaml
 application-dev.yml
 .gstack/
+
+# 로컬 전용 작업 메모. 발주사 시스템 접속 정보처럼 저장소에 절대 들어가면 안 되는 것을
+# 여기 둔다. CI guard 가 추적 여부를 검사한다. 지우지 말 것.
+.local/
