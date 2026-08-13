@@ -57,6 +57,8 @@ public class ConnectionController {
                     "secretLabel", preset.getSecretLabel(),
                     "issueGuide", preset.getIssueGuide(),
                     "keyStages", preset.hasKeyStages(),
+                    "ipGuide", preset.getIpAllowlistGuide(),
+                    "needsIp", preset.needsIpAllowlist(),
                     "manual", preset.needsManualEndpoint()));
         }
         model.addAttribute("presetMeta", meta);
