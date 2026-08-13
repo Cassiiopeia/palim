@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
-import kr.suhsaechan.palim.connector.tenant.TenantFilters;
+import kr.suhsaechan.palim.common.tenant.TenantFilters;
 import org.hibernate.annotations.Filter;
 import lombok.AccessLevel;
 import lombok.Getter;

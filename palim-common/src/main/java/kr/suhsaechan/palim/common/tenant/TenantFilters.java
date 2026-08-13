@@ -1,4 +1,4 @@
-package kr.suhsaechan.palim.connector.tenant;
+package kr.suhsaechan.palim.common.tenant;
 
 /**
  * 필터 이름 상수.

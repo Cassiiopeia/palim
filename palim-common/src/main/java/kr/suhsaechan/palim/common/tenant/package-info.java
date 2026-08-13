@@ -15,7 +15,7 @@
                 name = TenantFilters.TENANT_PARAM,
                 type = java.util.UUID.class,
                 resolver = TenantIdResolver.class))
-package kr.suhsaechan.palim.connector.tenant;
+package kr.suhsaechan.palim.common.tenant;
 
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
