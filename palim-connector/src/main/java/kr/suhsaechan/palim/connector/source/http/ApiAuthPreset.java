@@ -87,6 +87,31 @@ public enum ApiAuthPreset {
         return hint;
     }
 
+    /**
+     * 「회사/계정 코드」 칸에 붙일 이름.
+     *
+     * <p>같은 자리에 들어가는 값이지만 시스템마다 부르는 말이 다르다. 화면이 상대 시스템에서
+     * 쓰는 말을 그대로 보여줘야 사용자가 어디서 가져올 값인지 안다.
+     */
+    public String getAccountLabel() {
+        return switch (this) {
+            case ECOUNT -> "회사코드";
+            case ONEWMS -> "계정정보 (회사코드)";
+            case CUSTOM_FORM -> "계정·회사 코드 (필요할 때만)";
+        };
+    }
+
+    /**
+     * 그 값이 실제로 들어갈 파라미터 이름.
+     *
+     * <p>지역 조회 방식은 {@code companyCode} 로 지역을 찾고, 폼 로그인 방식은 {@code domain}
+     * 으로 로그인 폼에 보낸다. 화면은 칸 하나만 보여주고 여기서 갈라 준다 — 사용자가 두 이름의
+     * 차이를 알 이유가 없다.
+     */
+    public String getAccountParam() {
+        return flow == AuthFlow.ZONE_SESSION ? "companyCode" : "domain";
+    }
+
     /** 사용자가 입력한 값이 기본값을 덮는다. 기본값이 맞지 않는 환경에서도 쓸 수 있어야 한다. */
     public Map<String, String> mergeDefaults(Map<String, String> params) {
         Map<String, String> merged = new LinkedHashMap<>(defaults);

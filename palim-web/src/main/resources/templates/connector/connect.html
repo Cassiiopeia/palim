@@ -25,17 +25,33 @@
 
             <label class="form-control max-w-md">
                 <div class="label"><span class="label-text">연동할 시스템</span></div>
-                <select th:field="*{preset}" class="select select-bordered">
+                <select th:field="*{preset}" id="presetSelect" class="select select-bordered">
                     <option th:each="p : ${presets}" th:value="${p}"
                             th:text="${p.label}">시스템</option>
                 </select>
             </label>
 
             <!--/* 시스템마다 필요한 값이 다르다. 무엇을 준비해야 하는지 미리 알려준다. */-->
-            <div class="text-sm text-base-content/70 -mt-2">
-                <div th:each="p : ${presets}" th:if="${p.name() == form.preset?.name()}"
-                     th:text="${p.hint}">안내</div>
-            </div>
+            <div class="text-sm text-base-content/70 -mt-2" id="presetHint"
+                 th:text="${form.preset != null} ? ${form.preset.hint} : ''">안내</div>
+
+            <!--/* 칸 이름만 바꾼다. 폼을 제출하면 연결 테스트가 실행되고, 그러면
+                   1회용 인증키가 소진된다. 서버 왕복 없이 화면만 갱신한다. */-->
+            <script th:inline="javascript">
+              (function () {
+                var meta = /*[[${presetMeta}]]*/ {};
+                var select = document.getElementById('presetSelect');
+                if (!select) { return; }
+                select.addEventListener('change', function () {
+                  var info = meta[select.value];
+                  if (!info) { return; }
+                  document.getElementById('accountLabel').textContent = info.label;
+                  document.getElementById('presetHint').textContent = info.hint;
+                  var manual = document.getElementById('manualEndpoint');
+                  if (manual) { manual.open = info.manual; }
+                });
+              })();
+            </script>
 
             <label class="label cursor-pointer justify-start gap-3 max-w-md">
                 <input type="checkbox" th:field="*{sandbox}" class="checkbox">
@@ -49,9 +65,13 @@
 
             <div class="grid gap-4 md:grid-cols-2">
                 <label class="form-control">
-                    <div class="label"><span class="label-text">회사코드</span></div>
-                    <input type="text" th:field="*{companyCode}" class="input input-bordered"
-                           placeholder="지역 조회 방식일 때 필요">
+                    <!--/* 같은 자리에 들어가는 값이지만 시스템마다 부르는 말이 다르다.
+                           상대가 쓰는 말 그대로 보여줘야 어디서 가져올 값인지 안다. */-->
+                    <div class="label">
+                        <span class="label-text" id="accountLabel"
+                              th:text="${form.preset != null} ? ${form.preset.accountLabel} : '회사코드'">회사코드</span>
+                    </div>
+                    <input type="text" th:field="*{companyCode}" class="input input-bordered">
                 </label>
 
                 <label class="form-control">
@@ -73,11 +93,11 @@
                 </div>
             </label>
 
-            <div class="collapse collapse-arrow bg-base-200">
-                <input type="checkbox">
-                <div class="collapse-title font-medium">
+            <details id="manualEndpoint" class="collapse collapse-arrow bg-base-200"
+                     th:open="${form.preset != null and form.preset.needsManualEndpoint()}">
+                <summary class="collapse-title font-medium">
                     접속 주소 직접 지정 (기본값을 바꿔야 할 때만)
-                </div>
+                </summary>
                 <div class="collapse-content grid gap-4">
                     <label class="form-control">
                         <div class="label"><span class="label-text">로그인 주소</span></div>
@@ -86,10 +106,6 @@
                     <label class="form-control">
                         <div class="label"><span class="label-text">조회 주소</span></div>
                         <input type="text" th:field="*{fetchUrl}" class="input input-bordered">
-                    </label>
-                    <label class="form-control">
-                        <div class="label"><span class="label-text">계정(회사) 코드</span></div>
-                        <input type="text" th:field="*{domain}" class="input input-bordered">
                     </label>
                     <label class="form-control">
                         <div class="label"><span class="label-text">조회 요청 본문</span></div>
@@ -107,7 +123,7 @@
                                placeholder="rows">
                     </label>
                 </div>
-            </div>
+            </details>
 
             <div class="card-actions justify-end">
                 <button type="submit" class="btn btn-primary">연결 테스트</button>

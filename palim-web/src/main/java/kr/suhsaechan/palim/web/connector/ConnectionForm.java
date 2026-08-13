@@ -59,15 +59,16 @@ public class ConnectionForm {
     public ProbeRequest toProbeRequest() {
         Map<String, String> params = new LinkedHashMap<>();
         putIfPresent(params, "userId", userId);
+        // 화면은 「회사/계정 코드」 칸 하나만 보여주고, 값이 갈 자리는 프리셋이 정한다.
+        // 사용자가 companyCode 와 domain 의 차이를 알 이유가 없다.
+        putIfPresent(params, preset.getAccountParam(), companyCode);
         if (preset.getFlow() == ApiAuthPreset.AuthFlow.ZONE_SESSION) {
-            putIfPresent(params, "companyCode", companyCode);
             putIfPresent(params, "baseDate", baseDate);
         } else {
             putIfPresent(params, "loginUrl", loginUrl);
             putIfPresent(params, "fetchUrl", fetchUrl);
             putIfPresent(params, "fetchBody", fetchBody);
             putIfPresent(params, "rowsPath", rowsPath);
-            putIfPresent(params, "domain", domain);
             putIfPresent(params, "useridField", useridField);
             putIfPresent(params, "passwordField", passwordField);
             putIfPresent(params, "tokenField", tokenField);
