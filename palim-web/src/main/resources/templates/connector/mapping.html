@@ -1,51 +1,55 @@
 <!DOCTYPE html>
-<!--/*
-  매핑 편집기.
+<!--/* 칸 연결 화면.
 
-  왼쪽(원천 필드)은 파일을 올려야 채워지고, 오른쪽(목표 필드)은 항상 보인다 —
-  무엇을 채워야 하는지 먼저 알아야 어떤 파일을 올릴지 판단할 수 있다.
+       이 화면의 전부는 «고를 때 실제 값이 보이는 것» 이다. PROD_CD·BAL_QTY 라는 이름만으로는
+       누구도 무엇을 골라야 할지 모르지만, 112 · 9,451 을 보면 안다.
 
-  AI 초안 버튼은 없다. 수동만으로 전 과정이 완주되어야 한다는 것이 설계 원칙이며,
-  AI 는 나중에 붙는 보조 기능이다.
-*/-->
+       표준 항목을 «전부» 보여주되 성격별로 묶는다. 숨기면 있는 줄도 모르고 넘어가고, 한 줄로
+       늘어놓으면 위에서부터 훑다가 포기한다.
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${title}, ~{::content})}">
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div class="flex gap-2 mb-4">
-        <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 목록</a>
-        <a th:href="@{/connectors/{id}/runs(id=${connector.id})}" class="btn btn-ghost btn-sm">
-            실행 이력
-        </a>
+    <div th:if="${flashError}" class="alert alert-error mb-6">
+        <span class="text-sm" th:text="${flashError}">오류</span>
+    </div>
+    <div th:if="${flashSuccess}" class="alert alert-success mb-6">
+        <span class="text-sm" th:text="${flashSuccess}">완료</span>
     </div>
 
-    <!--/* 1단계 — 원천에서 칸 목록 얻기.
+    <ul class="steps steps-horizontal w-full mb-8 text-sm">
+        <li class="step step-success">시스템 연결</li>
+        <li class="step step-primary">칸 연결</li>
+        <li th:classappend="${schema != null} ? 'step-primary'" class="step">시험 실행</li>
+        <li class="step">매일 자동</li>
+    </ul>
 
-           스스로 가져오는 원천(API)은 이 단계가 없다. 칸 이름을 이미 알기 때문이다.
-           그런데도 파일을 요구하면 사용자는 «이미 받아온 자료를 엑셀로 다시 만들어» 올려야
-           한다. 실제로 그 상태였다. */-->
-    <div class="card bg-base-100 shadow-sm mb-4" th:if="${fetchesItself}">
-        <div class="card-body gap-2">
-            <h2 class="card-title text-base">1. 저쪽에서 칸 목록 받기</h2>
-            <p class="text-sm text-base-content/70">
-                화면을 열 때마다 <b>새로 받아옵니다.</b> 상대가 칸을 바꾸면 여기서 바로 드러납니다.
+    <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight" th:text="${connector.name}">연동</h1>
+            <p class="text-sm text-base-content/70 mt-0.5" th:if="${schema != null}">
+                저쪽에서 <b th:text="${#lists.size(schema.fields)} + '개 칸'">칸</b> 받아왔습니다
             </p>
-            <div th:if="${schema != null}" class="flex flex-wrap gap-1 mt-1">
-                <span class="badge badge-outline font-mono text-xs"
-                      th:each="f : ${schema.fields}" th:text="${f}">칸</span>
-            </div>
+        </div>
+        <div class="flex gap-2">
+            <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">목록</a>
+            <a th:href="@{/connectors/{id}/runs(id=${connector.id})}"
+               class="btn btn-ghost btn-sm">실행 이력</a>
         </div>
     </div>
 
-    <div class="card bg-base-100 shadow-sm mb-4" th:unless="${fetchesItself}">
-        <div class="card-body">
-            <h2 class="card-title text-base">1. 원천 파일 올리기</h2>
+    <!--/* 파일 원천만 업로드 단계가 있다. API 는 칸 이름을 이미 안다. */-->
+    <div class="card bg-base-100 border border-base-300 mb-6" th:unless="${fetchesItself}">
+        <div class="card-body gap-3">
+            <h2 class="card-title text-base">원천 파일 올리기</h2>
             <p class="text-sm text-base-content/70">
-                헤더를 읽어 컬럼 목록을 뽑습니다. 이 단계에서는 저장되지 않습니다.
+                헤더를 읽어 칸 목록을 뽑습니다. 이 단계에서는 저장되지 않습니다.
             </p>
             <form th:action="@{/connectors/{id}/schema(id=${connector.id})}" method="post"
-                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end mt-2">
+                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
                 <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
                        class="file-input file-input-bordered file-input-sm">
                 <label class="form-control">
@@ -53,119 +57,160 @@
                     <input type="number" name="headerRow" min="1" value="1"
                            th:value="${headerRow} ?: 1" class="input input-bordered input-sm w-20">
                 </label>
-                <button type="submit" class="btn btn-primary btn-sm">컬럼 읽기</button>
+                <button type="submit" class="btn btn-primary btn-sm">칸 읽기</button>
             </form>
         </div>
     </div>
 
-    <!--/* 2단계 — 좌우 연결 */-->
-    <div th:if="${schema != null}" class="card bg-base-100 shadow-sm mb-4">
-        <div class="card-body">
-            <h2 class="card-title text-base">2. 필드 연결</h2>
-            <p class="text-sm text-base-content/70">
-                원천 컬럼 <span class="font-medium" th:text="${schema.fields.size()}">0</span>개,
-                전체 <span class="font-medium" th:text="${schema.totalCount}">0</span>건을 읽었습니다.
-                연결하지 않은 컬럼은 버려지지 않고 <code class="text-xs">attributes</code> 에 보존됩니다.
-            </p>
+    <div th:if="${fetchesItself} and ${schema != null}" class="alert mb-6">
+        <div class="text-sm">
+            화면을 열 때마다 <b>최신 값을 다시 받아옵니다.</b>
+            상대가 칸을 바꾸면 여기서 바로 드러납니다.
+        </div>
+    </div>
 
-            <form th:action="@{/connectors/{id}/mapping(id=${connector.id})}" method="post"
-                  class="mt-2">
-                <input type="hidden" name="schemaFields" th:each="f : ${schema.fields}"
-                       th:value="${f}">
+    <form th:if="${schema != null}"
+          th:action="@{/connectors/{id}/mapping(id=${connector.id})}" method="post">
 
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                        <tr>
-                            <th class="w-1/4">목표 필드</th>
-                            <th class="w-1/4">원천 컬럼</th>
-                            <th class="w-1/4">변환</th>
-                            <th class="w-1/4">변환 값</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="tf, it : ${targetFields}">
-                            <td>
-                                <input type="hidden" name="targetKeys" th:value="${tf.fieldKey}">
-                                <div class="font-medium" th:text="${tf.displayName}">표시명</div>
-                                <div class="text-xs text-base-content/60">
-                                    <span th:text="${tf.fieldKey}">key</span>
-                                    <span class="badge badge-xs badge-ghost ml-1"
-                                          th:text="${tf.dataType}">STRING</span>
-                                    <span th:if="${tf.required}" class="badge badge-xs badge-error ml-1">
-                                        필수
-                                    </span>
-                                </div>
-                            </td>
-                            <td>
-                                <select name="sourceFields" class="select select-bordered select-sm w-full">
-                                    <option value="">— 연결 안 함 —</option>
+        <input type="hidden" name="schemaFields" th:each="f : ${schema.fields}" th:value="${f}">
+
+        <!--/* 성격별 묶음. 스물아홉 개를 한 줄로 늘어놓으면 읽히지 않는다. */-->
+        <section class="mb-8" th:each="g : ${groups}">
+            <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-base font-semibold" th:text="${g.title}">묶음</h2>
+                <span class="text-xs text-base-content/60" th:if="${g.hint}"
+                      th:text="${g.hint}">안내</span>
+                <div class="flex-1 h-px bg-base-300"></div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr class="text-xs">
+                        <th class="w-1/4">우리 항목</th>
+                        <th class="w-1/3">저쪽 칸</th>
+                        <th>실제로 들어올 값</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="r : ${g.rows}">
+                        <td>
+                            <input type="hidden" name="targetKeys" th:value="${r.targetKey}">
+                            <span class="font-medium" th:text="${r.label}">항목</span>
+                            <span th:if="${r.required}" class="text-error font-bold">*</span>
+                        </td>
+
+                        <td>
+                            <!--/* 저쪽에 있을 수 없는 값은 고르게 하지 않는다. 물어볼 이유가
+                                   없는 것을 물으면 사람은 답을 찾느라 화면을 떠난다. */-->
+                            <span th:if="${r.auto}" class="badge badge-primary badge-outline">자동</span>
+                            <input th:if="${r.auto}" type="hidden" name="sourceFields" value="">
+
+                            <div th:unless="${r.auto}" class="flex flex-wrap gap-2 items-center">
+                                <select name="sourceFields"
+                                        class="select select-bordered select-sm w-full max-w-52 font-mono">
+                                    <option value="" th:selected="${r.mode == 'NONE'}">연결 안 함</option>
                                     <option th:each="f : ${schema.fields}" th:value="${f}"
                                             th:text="${f}"
-                                            th:selected="${existing[tf.fieldKey] != null
-                                                          and existing[tf.fieldKey].sourceField == f}">컬럼</option>
+                                            th:selected="${r.picked != null and r.picked == f}">칸</option>
                                 </select>
-                            </td>
-                            <td>
-                                <select name="transformTypes" class="select select-bordered select-sm w-full">
-                                    <option th:each="t : ${transformTypes}" th:value="${t}"
-                                            th:text="${t}">NONE</option>
-                                </select>
-                            </td>
-                            <td>
-                                <input type="text" name="params"
-                                       class="input input-bordered input-sm w-full"
-                                       placeholder="패턴·기본값 등">
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+                                <span th:if="${r.constant != null}" class="badge badge-ghost badge-sm">
+                                    직접 입력
+                                </span>
+                            </div>
 
-                <div class="flex justify-end mt-4">
-                    <button type="submit" class="btn btn-primary btn-sm">매핑 저장</button>
-                </div>
-            </form>
-        </div>
-    </div>
+                            <input type="hidden" name="transformTypes"
+                                   th:value="${r.constant != null} ? 'CONSTANT' : 'NONE'">
+                            <input type="hidden" name="params" th:value="${r.constant} ?: ''">
+                        </td>
 
-    <!--/* 3단계 — 테스트 실행. 스테이징에만 쓰므로 운영 데이터에 닿지 않는다 */-->
-    <div class="card bg-base-100 shadow-sm mb-4">
-        <div class="card-body">
-            <h2 class="card-title text-base">3. 테스트 실행</h2>
-            <p class="text-sm text-base-content/70">
-                실제 테이블에 <span class="font-medium">쓰지 않습니다.</span>
-                변환 결과와 실패 행만 확인합니다.
+                        <td>
+                            <span th:if="${r.preview != null and !r.auto}"
+                                  class="font-mono text-xs text-base-content/70 tabular-nums"
+                                  th:text="${r.preview}">값</span>
+                            <span th:if="${r.auto}" class="text-xs text-primary"
+                                  th:text="${r.preview}">시스템이 채웁니다</span>
+                            <span th:if="${r.preview == null and !r.auto}"
+                                  class="text-xs text-base-content/40">—</span>
+
+                            <!--/* 추천으로 채워진 줄은 표시를 남긴다. 사람이 직접 고른 것과
+                                   구분되지 않으면 «이건 내가 안 골랐는데» 가 생긴다. */-->
+                            <div th:if="${r.suggested}" class="text-xs text-base-content/50 mt-0.5"
+                                 th:text="${#strings.listJoin(r.reasons, ' · ')}">근거</div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!--/* 우리 표준에 자리가 없는 칸.
+
+               보관은 원래도 하고 있었지만 화면이 말하지 않아 없는 것과 같았다. 자료를 버리지
+               않는 것과, 버리지 않았다는 사실을 «사람이 아는 것» 은 다른 문제다. */-->
+        <section class="mb-8" th:if="${not #lists.isEmpty(leftovers)}">
+            <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-base font-semibold">우리 항목에 없는 칸</h2>
+                <span class="text-xs text-base-content/60">
+                    <b th:text="${#lists.size(leftovers)}">0</b>개 — 버려지지 않고 보관됩니다
+                </span>
+                <div class="flex-1 h-px bg-base-300"></div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <tbody>
+                    <tr th:each="l : ${leftovers}">
+                        <td class="w-1/4 font-mono text-sm" th:text="${l.sourceField}">칸</td>
+                        <td class="font-mono text-xs text-base-content/70 tabular-nums"
+                            th:text="${l.preview} ?: '—'">값</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-xs text-base-content/60 mt-2">
+                연결하지 않은 칸도 값은 그대로 남습니다. 다만 대조·집계에는 쓰지 않습니다.
             </p>
-            <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
-                  enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end mt-2">
-                <input type="hidden" name="mode" value="TEST">
-                <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
-                       th:unless="${fetchesItself}"
-                       class="file-input file-input-bordered file-input-sm">
-                <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
-                <button type="submit" class="btn btn-outline btn-sm"
-                        th:text="${fetchesItself} ? '지금 가져와서 시험 실행' : '테스트 실행'">테스트 실행</button>
-            </form>
+        </section>
+
+        <div class="flex justify-end gap-2">
+            <button type="submit" class="btn btn-primary">연결 저장</button>
         </div>
-    </div>
+    </form>
 
-    <!--/* 4단계 — 확정과 실제 적재 */-->
-    <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <h2 class="card-title text-base">4. 확정하고 적재</h2>
-            <p class="text-sm text-base-content/70">
-                확정하면 이 매핑 버전이 실행 기록에 남습니다. 정의를 나중에 바꿔도
-                과거 데이터가 어느 버전으로 들어왔는지 설명할 수 있습니다.
-            </p>
+    <div class="divider my-8"></div>
 
-            <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post"
-                  class="mt-2">
-                <button type="submit" class="btn btn-secondary btn-sm">매핑 확정</button>
+    <!--/* 진짜 자료에 넣기 전에 «따로 마련된 자리» 에 먼저 담고 눈으로 본다. */-->
+    <section class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">시험 삼아 받아보기</h2>
+            <span class="text-xs text-base-content/60">진짜 자료에는 넣지 않습니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
+              enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
+            <input type="hidden" name="mode" value="TEST">
+            <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                   th:unless="${fetchesItself}"
+                   class="file-input file-input-bordered file-input-sm">
+            <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
+            <button type="submit" class="btn btn-outline btn-sm"
+                    th:text="${fetchesItself} ? '지금 가져와서 시험 실행' : '시험 실행'">시험 실행</button>
+        </form>
+    </section>
+
+    <section>
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">확정하고 담기</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <p class="text-sm text-base-content/70 mb-3">
+            확정하면 이 연결이 실행 기록에 남습니다. 나중에 바꿔도
+            <b>과거 자료가 어느 기준으로 들어왔는지</b> 설명할 수 있습니다.
+        </p>
+        <div class="flex flex-wrap gap-2 items-end">
+            <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post">
+                <button type="submit" class="btn btn-secondary btn-sm">연결 확정</button>
             </form>
-
-            <div class="divider my-2"></div>
-
             <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
                   enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
                 <input type="hidden" name="mode" value="LIVE">
@@ -175,10 +220,10 @@
                 <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
                 <button type="submit" class="btn btn-primary btn-sm"
                         th:text="${fetchesItself} ? '지금 가져와서 담기' : '실제 적재'">실제 적재</button>
-                <span class="text-xs text-base-content/60">확정된 매핑이 있어야 실행됩니다.</span>
             </form>
+            <span class="text-xs text-base-content/60">확정된 연결이 있어야 담을 수 있습니다.</span>
         </div>
-    </div>
+    </section>
 
 </div>
 </body>

@@ -54,6 +54,7 @@ public class ConnectorController {
     private final ConnectorRunner runner;
     private final RollbackService rollbackService;
     private final ErrorMessageResolver errorMessages;
+    private final MappingViewAssembler assembler;
 
     @GetMapping("/connectors")
     public String list(Model model) {
@@ -105,9 +106,11 @@ public class ConnectorController {
         model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
 
         // 스스로 가져오는 원천은 칸 목록을 이미 알 수 있다. 파일을 올리라고 할 이유가 없다.
+        SourceSchema schema = null;
         if (adminService.fetchesItself(connector)) {
             try {
-                model.addAttribute("schema", adminService.readSchema(connector));
+                schema = adminService.readSchema(connector);
+                model.addAttribute("schema", schema);
             } catch (BusinessException e) {
                 // 원천에 닿지 못해도 화면은 열려야 한다. 무엇이 막혔는지 보여주고, 사용자가
                 // 연결 설정을 고치러 갈 수 있어야 한다.
@@ -115,7 +118,22 @@ public class ConnectorController {
                         e.messageArgs()));
             }
         }
+        addMappingView(model, id, connector, schema);
         return "connector/mapping";
+    }
+
+    /**
+     * 화면이 그릴 것을 채운다.
+     *
+     * <p>표준 항목 · 저장된 연결 · 자동 추천 · 값 미리보기를 한 덩어리로 만든다. 화면이 이
+     * 셋을 각각 받아 맞춰 보게 하면 템플릿에 판단이 들어가고, 그 판단은 테스트할 수 없다.
+     */
+    private void addMappingView(Model model, UUID id, Connector connector, SourceSchema schema) {
+        String modelCode = adminService.targetModelCode(connector);
+        Map<String, ConnectorFieldMap> existing = existingByTarget(id);
+        model.addAttribute("groups", assembler.assemble(
+                adminService.targetFields(id), existing, schema, modelCode));
+        model.addAttribute("leftovers", assembler.leftovers(schema, existing));
     }
 
     /** 파일 업로드 → 원천 필드 추출. 매핑 화면을 채워 다시 보여준다. */
@@ -136,6 +154,8 @@ public class ConnectorController {
             model.addAttribute("existing", existingByTarget(id));
             model.addAttribute("schema", schema);
             model.addAttribute("headerRow", headerRow);
+            model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
+            addMappingView(model, id, connector, schema);
             return "connector/mapping";
 
         } catch (BusinessException e) {

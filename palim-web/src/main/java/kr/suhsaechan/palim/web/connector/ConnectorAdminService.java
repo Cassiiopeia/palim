@@ -108,6 +108,14 @@ public class ConnectorAdminService {
                 new SourceContext(connector.getId(), null, 1, null, connector.getSourceConfig()));
     }
 
+    /** 담을 표준 모델 코드. 자동 추천이 어느 항목 목록을 볼지 정하는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public String targetModelCode(Connector connector) {
+        return targetModelRepository.findById(connector.getTargetModelId())
+                .map(TargetModel::getCode)
+                .orElse("");
+    }
+
     /** 이 원천이 파일 없이 스스로 자료를 가져올 수 있는가. 화면이 업로드 칸을 감출지 정한다. */
     public boolean fetchesItself(Connector connector) {
         return connector.getSourceType() != SourceType.UPLOAD;
