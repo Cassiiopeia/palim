@@ -53,6 +53,8 @@ public class ConnectionAdminService {
         connector.configureSource(form.toSourceConfig(), ref);
         // 인증정보는 커넥터 정의가 아니라 별도 저장소로 간다. 정의는 화면이 늘 읽기 때문이다.
         secretService.put(ref, secretNameOf(form), form.getSecret());
+        // 검증을 통과했기에 저장까지 온 것이다. 테스트 키면 아직 할 일이 남았다.
+        connector.markVerified(!form.isSandbox());
         return connector;
     }
 

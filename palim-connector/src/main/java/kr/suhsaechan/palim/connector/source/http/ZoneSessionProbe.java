@@ -76,12 +76,13 @@ public class ZoneSessionProbe implements ApiProbe {
             zone = text(response.path("Data").path("ZONE"));
             if (zone.isEmpty()) {
                 steps.add(ProbeStep.fail("지역 조회", "응답에 지역 값이 없습니다. 회사코드를 확인하세요.",
-                        elapsed(started)));
+                        elapsed(started), 200, response.toString()));
                 return finish(steps);
             }
             steps.add(ProbeStep.ok("지역 조회", "지역 = " + zone, elapsed(started)));
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("지역 조회", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("지역 조회", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             steps.add(ProbeStep.skipped("로그인"));
             steps.add(ProbeStep.skipped("재고 조회"));
             return finish(steps);
@@ -105,13 +106,14 @@ public class ZoneSessionProbe implements ApiProbe {
                 // 인증키가 특정 사용자 ID 에 묶여 있어, 발급 시 지정한 ID 와 다르면 여기서 막힌다.
                 steps.add(ProbeStep.fail("로그인",
                         "세션을 받지 못했습니다. 인증키가 이 사용자 ID 로 발급된 것인지 확인하세요.",
-                        elapsed(started)));
+                        elapsed(started), 200, response.toString()));
                 steps.add(ProbeStep.skipped("재고 조회"));
                 return finish(steps);
             }
             steps.add(ProbeStep.ok("로그인", "세션 발급됨", elapsed(started)));
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("로그인", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("로그인", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             steps.add(ProbeStep.skipped("재고 조회"));
             return finish(steps);
         }
@@ -138,7 +140,8 @@ public class ZoneSessionProbe implements ApiProbe {
             return new ProbeReport(steps, List.copyOf(samples.getFirst().keySet()),
                     samples.stream().limit(SAMPLE_LIMIT).toList(), -1);
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("재고 조회", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("재고 조회", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             return finish(steps);
         }
     }
@@ -210,12 +213,6 @@ public class ZoneSessionProbe implements ApiProbe {
             return "";
         }
         return node.isValueNode() ? node.asString() : node.toString();
-    }
-
-    /** 원인 문구. <b>인증키가 섞여 나가지 않도록</b> 예외 메시지를 그대로 쓰지 않는다. */
-    private static String reason(Exception e) {
-        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        return message.length() > 200 ? message.substring(0, 200) + "…" : message;
     }
 
     private static long elapsed(long startedNanos) {
