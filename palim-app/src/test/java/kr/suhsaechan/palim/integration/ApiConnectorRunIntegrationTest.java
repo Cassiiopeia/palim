@@ -1,6 +1,9 @@
 package kr.suhsaechan.palim.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -31,6 +34,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * API 커넥터가 <b>파일 없이</b> 실행되는가.
@@ -42,10 +48,12 @@ import org.springframework.beans.factory.annotation.Autowired;
  * <p>시험 실행은 스테이징에만 쓴다. 확인하지 않은 자료가 운영 테이블에 들어가면 그 뒤 대조가
  * 전부 그 값을 기준으로 돌고, 그때는 되돌릴 방법이 없다.
  */
+@AutoConfigureMockMvc
 class ApiConnectorRunIntegrationTest extends IntegrationTest {
 
     private static final UUID TENANT = UUID.fromString("00000000-0000-7000-8000-000000000001");
 
+    @Autowired private MockMvc mockMvc;
     @Autowired private ConnectorRunner runner;
     @Autowired private ConnectorRepository connectorRepository;
     @Autowired private ConnectorMappingRepository mappingRepository;
@@ -129,5 +137,30 @@ class ApiConnectorRunIntegrationTest extends IntegrationTest {
         assertThat(run.getTotalCount())
                 .as("원천에서 받아온 행이 실행에 들어와야 한다")
                 .isEqualTo(2);
+    }
+
+    /**
+     * 시험 결과 화면이 <b>읽히는 표</b>로 그려지는가.
+     *
+     * <p>저장된 JSON 을 그대로 뿌리면 값이 제대로 들어갔는지 확인하려고 사람이 중괄호를 읽어야
+     * 한다. 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 되고, 잘못된 자료가
+     * 그대로 통과한다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("시험 결과가 표로 그려지고 아직 안 들어갔다고 알린다")
+    void 시험_결과가_표로_그려진다() throws Exception {
+        ConnectorRun run = runner.run(
+                new RunRequest(connector.getId(), RunMode.TEST, RunTrigger.MANUAL, null, 1));
+
+        mockMvc.perform(get("/connectors/{id}/runs/{runId}", connector.getId(), run.getId()))
+                .andExpect(status().isOk())
+                // 확인을 대충 하지 않도록 가장 먼저 말한다
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "진짜 자료에는 아직 아무것도 들어가지 않았습니다")))
+                // 표준 항목이 칸 제목으로 나온다 — JSON 원문이 아니다
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("item_ref")))
+                // 소수점이 길게 붙은 값을 정리해 보여준다
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("9,451")));
     }
 }

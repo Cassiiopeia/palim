@@ -263,7 +263,11 @@ public class ConnectorController {
                 .filter(summary -> summary.id().equals(runId))
                 .findFirst().orElse(null));
         model.addAttribute("errors", queryService.errors(runId, ERROR_ROW_LIMIT));
-        model.addAttribute("staging", queryService.staging(runId, PREVIEW_LIMIT));
+
+        // JSON 원문을 그대로 뿌리면 값이 제대로 들어갔는지 사람이 중괄호를 읽어야 한다.
+        // 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 된다.
+        model.addAttribute("staging",
+                StagingTableView.of(queryService.staging(runId, PREVIEW_LIMIT)));
         return "connector/run-detail";
     }
 
