@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<!--/* 시험 실행 결과 시안.
+
+       바로 운영 테이블에 넣지 않는다. 따로 마련된 자리에 먼저 담고 사람이 눈으로 확인한 뒤,
+       됐다 싶을 때 진짜로 넣는다. 잘못된 값이 한 번 들어가면 그 뒤 대조가 전부 그 값을 기준으로
+       돌기 때문에, 되돌릴 수 있는 자리가 반드시 필요하다.
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="alert alert-info mb-4">
+        <div class="text-sm">
+            <b>확정 전 시안입니다.</b> 아무것도 저장되지 않고 어떤 시스템도 부르지 않습니다.
+            보이는 값은 전부 예시입니다.
+        </div>
+    </div>
+
+    <ul class="steps steps-horizontal w-full mb-6 text-sm">
+        <li class="step step-success">시스템 연결</li>
+        <li class="step step-success">칸 연결하기</li>
+        <li class="step step-primary">시험 삼아 받아보기</li>
+        <li class="step">매일 자동으로</li>
+    </ul>
+
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 class="card-title text-base">시험 실행 결과</h2>
+                    <p class="text-sm text-base-content/70">2026-08-13 18:33 · 0.9초</p>
+                </div>
+                <span class="badge badge-warning">45건 중 43건 담김 · 2건 실패</span>
+            </div>
+
+            <!--/* 「아직 안 들어갔다」를 가장 먼저 말한다. 이걸 모르면 확인을 대충 하게 된다. */-->
+            <div class="alert alert-success py-2">
+                <div class="text-sm">
+                    <b>진짜 자료에는 아직 아무것도 들어가지 않았습니다.</b>
+                    아래를 확인하고 맨 밑에서 「진짜로 담기」를 눌러야 들어갑니다.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body gap-2">
+            <div class="flex flex-wrap items-baseline gap-2">
+                <h2 class="card-title text-base">담길 모습</h2>
+                <span class="text-xs text-base-content/60">43건 중 처음 4건</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>품목</th>
+                        <th>창고</th>
+                        <th class="text-right">수량</th>
+                        <th>단위</th>
+                        <th>기준 시각</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="r : ${rows}">
+                        <td class="font-mono text-xs" th:text="${r.item}">품목</td>
+                        <td class="text-xs" th:text="${r.warehouse}">창고</td>
+                        <!--/* 숫자는 오른쪽 정렬 + 자릿수 고정. 눈으로 크기를 비교하게 된다. */-->
+                        <td class="font-mono text-xs text-right tabular-nums"
+                            th:text="${r.quantity}">수량</td>
+                        <td class="text-xs" th:text="${r.unit}">단위</td>
+                        <td class="font-mono text-xs text-base-content/70"
+                            th:text="${r.baseAt}">시각</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="text-xs text-base-content/60">
+                <code>-1.0000000000</code> 같은 값은 <code>-1</code> 로,
+                <code>9451.0000000000</code> 은 <code>9,451</code> 로 알아서 정리됩니다.
+                <b>바꾸는 규칙을 고르실 필요는 없습니다.</b>
+            </div>
+        </div>
+    </div>
+
+    <!--/* 못 담은 줄은 «왜» 가 함께 있어야 고칠 수 있다. 건수만 알려주면 손댈 데가 없다. */-->
+    <div class="card bg-base-100 shadow-sm mb-4 border border-warning">
+        <div class="card-body gap-2">
+            <div class="flex flex-wrap items-baseline gap-2">
+                <h2 class="card-title text-base">담지 못한 줄</h2>
+                <span class="text-xs text-base-content/60">
+                    <b th:text="${#lists.size(failed)}">2</b>건 — 이 줄만 빠지고 나머지는 담깁니다
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <tbody>
+                    <tr th:each="f : ${failed}">
+                        <td class="w-24 font-medium" th:text="${f.lineNumber} + '번째 줄'">줄</td>
+                        <td th:text="${f.reason}">이유</td>
+                        <td class="w-40">
+                            <select class="select select-bordered select-sm w-full">
+                                <option selected>건너뛰기</option>
+                                <option>0 으로 담기</option>
+                            </select>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!--/* 숫자·날짜를 바꾸다 실패하면 원본을 봐야 원인이 보인다. */-->
+            <details class="collapse collapse-arrow bg-base-200">
+                <summary class="collapse-title text-sm font-medium">
+                    저쪽이 보낸 값 그대로 보기
+                </summary>
+                <div class="collapse-content">
+                    <pre class="text-xs overflow-x-auto" th:each="f : ${failed}"
+                         th:text="${f.lineNumber} + '번째 줄 — ' + ${f.raw}">원본</pre>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap justify-end gap-2">
+        <a th:href="@{/mock/mapping}" class="btn btn-ghost">칸 연결 고치러 가기</a>
+        <button type="button" class="btn btn-primary">확인했습니다 — 진짜로 담기</button>
+    </div>
+
+</div>
+</body>
+</html>
