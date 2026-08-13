@@ -11,6 +11,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 지역 조회 → 로그인 → 조회 3단계 인증 흐름 검증.
@@ -42,6 +43,7 @@ public class ZoneSessionProbe implements ApiProbe {
     private static final String DEFAULT_DOMAIN = "ecount.com";
 
     private final RestClient restClient;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public ZoneSessionProbe() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -75,8 +77,11 @@ public class ZoneSessionProbe implements ApiProbe {
         String zone = null;
         long started = System.nanoTime();
         try {
-            JsonNode response = post("https://%s.%s/OAPI/V2/Zone".formatted(prefix, domain),
-                    Map.of("COM_CODE", companyCode));
+            // 주소를 통째로 덮어쓸 수 있게 둔다. 기본 조립이 맞지 않는 환경(지역이 다른 같은
+            // 제품, 사설망 게이트웨이)에서 코드를 고치지 않고 화면에서 바꿀 수 있어야 한다.
+            String zoneUrl = request.params().getOrDefault("zoneUrl",
+                    "https://%s.%s/OAPI/V2/Zone".formatted(prefix, domain));
+            JsonNode response = post(zoneUrl, Map.of("COM_CODE", companyCode));
             zone = text(response.path("Data").path("ZONE"));
             if (zone.isEmpty()) {
                 // 상대가 알려주는 신호를 그대로 읽어 원인을 짚어 준다. 이 구분이 없으면
@@ -103,7 +108,8 @@ public class ZoneSessionProbe implements ApiProbe {
             return finish(steps);
         }
 
-        String base = "https://%s%s.%s/OAPI/V2".formatted(prefix, zone, domain);
+        String base = request.params().getOrDefault("apiBase",
+                "https://%s%s.%s/OAPI/V2".formatted(prefix, zone, domain));
 
         String sessionId;
         started = System.nanoTime();
@@ -160,14 +166,26 @@ public class ZoneSessionProbe implements ApiProbe {
         }
     }
 
+    /**
+     * 본문을 <b>문자열로 직렬화해서</b> 보낸다.
+     *
+     * <p>객체를 그대로 넘기면 HTTP 클라이언트에 등록된 JSON 변환기가 처리해야 하는데, 그 변환기가
+     * 없으면 <b>빈 본문이 조용히 나간다.</b> 상대 서버는 "값이 없다"는 정상 응답(200)을 돌려주므로
+     * 예외가 나지 않고, 코드는 성공한 줄 안다. 화면에는 "회사코드를 확인하세요"가 뜨고, 사용자는
+     * 맞는 값을 넣고도 원인을 찾을 수 없다 — 실제로 그렇게 한 번 겪었다.
+     *
+     * <p>문자열로 만들어 보내면 변환기 구성에 기대지 않는다. 응답도 문자열로 받아 직접 파싱한다.
+     */
     private JsonNode post(String url, Map<String, String> body) {
-        return restClient.post()
+        String payload = mapper.writeValueAsString(body);
+        String response = restClient.post()
                 .uri(url)
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
-                .body(body)
+                .body(payload)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(String.class);
+        return mapper.readTree(response == null ? "{}" : response);
     }
 
     /**
