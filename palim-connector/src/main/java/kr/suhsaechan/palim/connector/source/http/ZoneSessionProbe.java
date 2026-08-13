@@ -68,15 +68,30 @@ public class ZoneSessionProbe implements ApiProbe {
                 .getOrDefault("sandboxPrefix", DEFAULT_SANDBOX_PREFIX);
         String livePrefix = request.params().getOrDefault("livePrefix", DEFAULT_LIVE_PREFIX);
 
+        // 지역 조회도 환경을 따른다. 테스트 환경에는 "테스트용으로 따로 만든 회사"만 있고
+        // 실제 운영 회사는 없다. 여기를 고정하면 운영 회사를 넣어도 늘 빈 지역이 돌아온다.
+        String prefix = request.sandbox() ? sandboxPrefix : livePrefix;
+
         String zone = null;
         long started = System.nanoTime();
         try {
-            JsonNode response = post("https://%s.%s/OAPI/V2/Zone".formatted(sandboxPrefix, domain),
+            JsonNode response = post("https://%s.%s/OAPI/V2/Zone".formatted(prefix, domain),
                     Map.of("COM_CODE", companyCode));
             zone = text(response.path("Data").path("ZONE"));
             if (zone.isEmpty()) {
-                steps.add(ProbeStep.fail("지역 조회", "응답에 지역 값이 없습니다. 회사코드를 확인하세요.",
-                        elapsed(started), 200, response.toString()));
+                // 상대가 알려주는 신호를 그대로 읽어 원인을 짚어 준다. 이 구분이 없으면
+                // 사용자는 회사코드가 틀린 줄 알고 맞는 값을 계속 다시 넣는다.
+                boolean emptyZone = response.path("Data").path("EMPTY_ZONE").asBoolean(false);
+                String hint = emptyZone
+                        ? (request.sandbox()
+                            ? "이 회사코드가 테스트 환경에 없습니다. 실제 운영 회사라면 위의 "
+                              + "'테스트 환경으로 접속'을 끄고 다시 시도하세요."
+                            : "이 회사코드에 해당하는 지역이 없습니다. 회사코드를 확인하세요.")
+                        : "응답에 지역 값이 없습니다. 회사코드를 확인하세요.";
+                steps.add(ProbeStep.fail("지역 조회", hint, elapsed(started), 200,
+                        response.toString()));
+                steps.add(ProbeStep.skipped("로그인"));
+                steps.add(ProbeStep.skipped("재고 조회"));
                 return finish(steps);
             }
             steps.add(ProbeStep.ok("지역 조회", "지역 = " + zone, elapsed(started)));
@@ -88,7 +103,6 @@ public class ZoneSessionProbe implements ApiProbe {
             return finish(steps);
         }
 
-        String prefix = request.sandbox() ? sandboxPrefix : livePrefix;
         String base = "https://%s%s.%s/OAPI/V2".formatted(prefix, zone, domain);
 
         String sessionId;
