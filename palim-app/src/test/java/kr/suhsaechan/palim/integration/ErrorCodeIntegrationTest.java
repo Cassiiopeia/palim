@@ -64,7 +64,10 @@ class ErrorCodeIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("코드 접두사가 정의된 도메인 문자 중 하나다")
     void 접두사_규칙을_지킨다() {
-        List<Character> allowed = List.of('C', 'S', 'O', 'M', 'H', 'N', 'A', 'I', 'Y', 'X', 'K');
+        // K 연동(커넥터) · R 대조. 도메인이 늘면 여기 한 글자를 더한다 — 이 목록이
+        // 접두사를 아무렇게나 붙이는 것을 막는다.
+        List<Character> allowed =
+                List.of('C', 'S', 'O', 'M', 'H', 'N', 'A', 'I', 'Y', 'X', 'K', 'R');
 
         for (ErrorCode errorCode : ErrorCode.values()) {
             assertThat(errorCode.code())
