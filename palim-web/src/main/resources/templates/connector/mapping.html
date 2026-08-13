@@ -20,8 +20,25 @@
         </a>
     </div>
 
-    <!--/* 1단계 — 원천 파일에서 컬럼 읽기 */-->
-    <div class="card bg-base-100 shadow-sm mb-4">
+    <!--/* 1단계 — 원천에서 칸 목록 얻기.
+
+           스스로 가져오는 원천(API)은 이 단계가 없다. 칸 이름을 이미 알기 때문이다.
+           그런데도 파일을 요구하면 사용자는 «이미 받아온 자료를 엑셀로 다시 만들어» 올려야
+           한다. 실제로 그 상태였다. */-->
+    <div class="card bg-base-100 shadow-sm mb-4" th:if="${fetchesItself}">
+        <div class="card-body gap-2">
+            <h2 class="card-title text-base">1. 저쪽에서 칸 목록 받기</h2>
+            <p class="text-sm text-base-content/70">
+                화면을 열 때마다 <b>새로 받아옵니다.</b> 상대가 칸을 바꾸면 여기서 바로 드러납니다.
+            </p>
+            <div th:if="${schema != null}" class="flex flex-wrap gap-1 mt-1">
+                <span class="badge badge-outline font-mono text-xs"
+                      th:each="f : ${schema.fields}" th:text="${f}">칸</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm mb-4" th:unless="${fetchesItself}">
         <div class="card-body">
             <h2 class="card-title text-base">1. 원천 파일 올리기</h2>
             <p class="text-sm text-base-content/70">
@@ -124,9 +141,11 @@
                   enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end mt-2">
                 <input type="hidden" name="mode" value="TEST">
                 <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                       th:unless="${fetchesItself}"
                        class="file-input file-input-bordered file-input-sm">
                 <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
-                <button type="submit" class="btn btn-outline btn-sm">테스트 실행</button>
+                <button type="submit" class="btn btn-outline btn-sm"
+                        th:text="${fetchesItself} ? '지금 가져와서 시험 실행' : '테스트 실행'">테스트 실행</button>
             </form>
         </div>
     </div>
@@ -151,9 +170,11 @@
                   enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
                 <input type="hidden" name="mode" value="LIVE">
                 <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
+                       th:unless="${fetchesItself}"
                        class="file-input file-input-bordered file-input-sm">
                 <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
-                <button type="submit" class="btn btn-primary btn-sm">실제 적재</button>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="${fetchesItself} ? '지금 가져와서 담기' : '실제 적재'">실제 적재</button>
                 <span class="text-xs text-base-content/60">확정된 매핑이 있어야 실행됩니다.</span>
             </form>
         </div>

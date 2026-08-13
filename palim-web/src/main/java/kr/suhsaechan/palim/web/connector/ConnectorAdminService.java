@@ -92,6 +92,25 @@ public class ConnectorAdminService {
     }
 
     /**
+     * 파일 없이 원천 구조를 읽는다.
+     *
+     * <p>API 로 연결한 원천은 올릴 파일이 없다. 그런데도 매핑 화면이 파일을 요구하면 사용자는
+     * <b>이미 받아온 자료를 엑셀로 다시 만들어 올려야</b> 한다. 실제로 그 상태였다.
+     *
+     * <p>화면을 열 때마다 새로 받는다. 상대가 칸을 바꾸면 그 자리에서 드러나기 때문이다 —
+     * 저장해 둔 목록을 쓰면 이미 바뀐 원천에 옛 매핑을 그리게 된다.
+     */
+    public SourceSchema readSchema(Connector connector) {
+        return readers.of(connector.getSourceType()).readSchema(
+                new SourceContext(connector.getId(), null, 1, null, connector.getSourceConfig()));
+    }
+
+    /** 이 원천이 파일 없이 스스로 자료를 가져올 수 있는가. 화면이 업로드 칸을 감출지 정한다. */
+    public boolean fetchesItself(Connector connector) {
+        return connector.getSourceType() != SourceType.UPLOAD;
+    }
+
+    /**
      * 매핑 초안 저장.
      *
      * <p>기존 초안이 있으면 그것을 갱신하고, 없으면 다음 버전으로 만든다. 화면에서 매핑을
