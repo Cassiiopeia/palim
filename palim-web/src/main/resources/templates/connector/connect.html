@@ -185,7 +185,10 @@
                        때문이다. 한 번 테스트한 뒤 값을 고쳐 다시 실행하려 하면 여기서 막히는데,
                        원인이 "내가 안 넣어서"가 아니라 "화면이 지웠기 때문"이라 스스로 알아채기
                        어렵다. 그래서 실행 이력이 있으면 눈에 띄게 알린다. */-->
-                <div th:if="${report != null or missingSecret}"
+                <!--/* missingSecret 는 «인증키 칸이 비어 실패한» 경로에서만 담긴다. 화면을 처음
+                       열 때는 없으므로 null 인데, or 는 boolean 변환을 강제해 그대로 두면 화면이
+                       열리는 순간 죽는다. == true 로 비교해 없을 때를 false 로 받는다. */-->
+                <div th:if="${report != null or missingSecret == true}"
                      class="alert alert-info py-2 mt-2">
                     <div class="text-sm">
                         <b>인증키를 한 번 더 넣어야 합니다.</b>
