@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
-import kr.suhsaechan.palim.connector.tenant.TenantContext;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

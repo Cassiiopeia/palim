@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.crypto.SecretCipher;
-import kr.suhsaechan.palim.connector.tenant.TenantContext;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
