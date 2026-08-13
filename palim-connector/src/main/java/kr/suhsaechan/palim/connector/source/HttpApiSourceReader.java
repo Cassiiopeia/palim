@@ -15,6 +15,7 @@ import kr.suhsaechan.palim.connector.define.SourceType;
 import kr.suhsaechan.palim.connector.secret.ConnectorSecretService;
 import kr.suhsaechan.palim.connector.source.http.ApiAuthPreset;
 import kr.suhsaechan.palim.connector.source.http.EcountSessionClient;
+import kr.suhsaechan.palim.connector.source.http.FormSessionClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +41,7 @@ public class HttpApiSourceReader implements SourceReader {
     private static final int SAMPLE_LIMIT = 5;
 
     private final EcountSessionClient ecount;
+    private final FormSessionClient form;
     private final ConnectorRepository connectorRepository;
     private final ConnectorSecretService secrets;
 
@@ -88,11 +90,26 @@ public class HttpApiSourceReader implements SourceReader {
 
         return switch (preset.getFlow()) {
             case ZONE_SESSION -> fetchViaSession(config, preset, secret);
-            // 폼 로그인 방식(3자물류)은 아직 붙이지 않았다. 대조는 두 곳을 비교하는 일이라
-            // 여기까지 와야 완성되므로, 조용히 빈 목록을 주지 않고 분명히 막는다.
-            case FORM_SESSION -> throw new BusinessException(ErrorCode.CONNECTOR_SOURCE_UNREACHABLE,
-                    "이 원천 방식은 아직 자동 수집을 지원하지 않습니다.");
+            case FORM_SESSION -> fetchViaForm(config, preset, secret);
         };
+    }
+
+    /**
+     * 로그인 화면을 통과해 받아온다.
+     *
+     * <p>공개 API 가 없거나 유료인 시스템이 쓰는 경로다. <b>상대 화면이 바뀌면 깨지므로</b>
+     * 실패를 조용히 삼키지 않는다 — 옛 자료로 대조가 계속 돌면 그 결과를 믿고 판단하게 된다.
+     */
+    private List<Map<String, String>> fetchViaForm(Map<String, Object> config,
+                                                   ApiAuthPreset preset, String secret) {
+        Map<String, String> merged = preset.mergeDefaults(asText(config));
+        String userId = required(merged, "userId");
+
+        Map<String, String> cookies = new LinkedHashMap<>();
+        String token = form.openLoginPage(required(merged, "loginUrl"),
+                merged.getOrDefault("tokenField", "token"), cookies);
+        FormSessionClient.Session session = form.login(merged, userId, secret, cookies, token);
+        return form.fetch(merged, session);
     }
 
     private List<Map<String, String>> fetchViaSession(Map<String, Object> config,
