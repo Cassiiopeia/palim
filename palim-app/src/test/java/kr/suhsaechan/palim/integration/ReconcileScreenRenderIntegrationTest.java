@@ -145,4 +145,25 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("맞춰 본 기록")));
     }
+
+    /**
+     * 확인 전과 후를 «분명히» 갈라야 한다. 제안 상태를 확정처럼 보이게 하면 아무도 확인하지
+     * 않고, 그러면 확인 단계를 둔 의미가 없어진다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("품목 잇기 화면이 확인 대기와 정해 둔 것을 갈라 보여준다")
+    void 품목_잇기_화면이_그려진다() throws Exception {
+        ReconcileUnit unit = unitService.create(
+                "UNIT-" + UUID.randomUUID().toString().substring(0, 8), "제품B 100g", "EA");
+        // 제안만 하고 확정하지 않는다 — 화면이 이것을 «확인해 주세요» 로 보여줘야 한다.
+        unitService.propose(unit.getId(), erp, "E-PENDING", BigDecimal.ONE);
+
+        mockMvc.perform(get("/reconcile/units"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("확인해 주세요")))
+                .andExpect(content().string(containsString("정해 둔 품목")))
+                // 틀린 채로 두면 어떻게 되는지 말해 줘야 사람이 실제로 확인한다
+                .andExpect(content().string(containsString("엉뚱한 재고를 합쳐")));
+    }
 }
