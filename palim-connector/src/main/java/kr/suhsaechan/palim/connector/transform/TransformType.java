@@ -19,5 +19,16 @@ public enum TransformType {
     /** 코드 치환표. {@code params} 의 키가 원천 값, 값이 바꿀 값. */
     CODE_REPLACE,
     /** 비어 있으면 {@code params.value} 로 채운다. */
-    DEFAULT_IF_EMPTY
+    DEFAULT_IF_EMPTY,
+    /**
+     * 원천 칸 없이 <b>사람이 적어 넣은 값</b>을 모든 행에 넣는다. {@code params.value}.
+     *
+     * <p>{@link #DEFAULT_IF_EMPTY} 와 다르다 — 그것은 원천 값이 비었을 때 대신 쓰는 규칙이라
+     * <b>원천에 그 칸이 있어야</b> 한다. 이것은 칸 자체가 없을 때 쓴다.
+     *
+     * <p>단위가 대표적이다. 단위 칸을 주지 않는 원천이 있는데, 그렇다고 단위 없이 담으면 나중에
+     * BOX 와 EA 가 섞인 원천이 붙었을 때 두 수량을 구분할 수 없다. 그때는 이미 쌓인 자료를
+     * 되돌릴 방법이 없다.
+     */
+    CONSTANT
 }

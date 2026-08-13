@@ -23,6 +23,15 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
+    // 화면 렌더링을 확인하려면 웹 계층이 테스트 classpath 에 있어야 한다. palim-web 이
+    // implementation 으로 가진 것은 전이되지 않는다(CLAUDE.md «자주 틀리는 것»).
+    //
+    // Boot 4 는 테스트 자동 구성도 기술별 모듈로 쪼갰다. starter-test 만으로는 MockMvc 가
+    // 붙지 않아 spring-boot-webmvc-test 를 따로 넣는다 — Boot 3 관례가 깨지는 지점이다.
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc")
+    testImplementation("org.springframework.boot:spring-boot-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+
     testImplementation(testFixtures(project(":palim-common")))
 
     // 스키마·제약 검증은 전체 컨텍스트에서 해야 의미가 있다(ddl-auto=validate 가 모든 엔티티를 본다).

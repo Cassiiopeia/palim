@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +24,7 @@ import kr.suhsaechan.palim.connector.model.TargetModel;
 import kr.suhsaechan.palim.connector.model.TargetModelRepository;
 import kr.suhsaechan.palim.connector.source.SourceContext;
 import kr.suhsaechan.palim.connector.source.SourceReaderRegistry;
+import kr.suhsaechan.palim.connector.suggest.FieldMappingMemoryService;
 import kr.suhsaechan.palim.connector.source.SourceSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,7 @@ public class ConnectorAdminService {
     private final TargetModelRepository targetModelRepository;
     private final TargetFieldRepository targetFieldRepository;
     private final SourceReaderRegistry readers;
+    private final FieldMappingMemoryService memories;
 
     @Transactional(readOnly = true)
     public List<TargetModel> targetModels() {
@@ -89,6 +92,33 @@ public class ConnectorAdminService {
     public SourceSchema readSchema(Connector connector, Path file, int headerRow) {
         return readers.of(connector.getSourceType())
                 .readSchema(SourceContext.ofUpload(connector.getId(), file, headerRow));
+    }
+
+    /**
+     * 파일 없이 원천 구조를 읽는다.
+     *
+     * <p>API 로 연결한 원천은 올릴 파일이 없다. 그런데도 매핑 화면이 파일을 요구하면 사용자는
+     * <b>이미 받아온 자료를 엑셀로 다시 만들어 올려야</b> 한다. 실제로 그 상태였다.
+     *
+     * <p>화면을 열 때마다 새로 받는다. 상대가 칸을 바꾸면 그 자리에서 드러나기 때문이다 —
+     * 저장해 둔 목록을 쓰면 이미 바뀐 원천에 옛 매핑을 그리게 된다.
+     */
+    public SourceSchema readSchema(Connector connector) {
+        return readers.of(connector.getSourceType()).readSchema(
+                new SourceContext(connector.getId(), null, 1, null, connector.getSourceConfig()));
+    }
+
+    /** 담을 표준 모델 코드. 자동 추천이 어느 항목 목록을 볼지 정하는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public String targetModelCode(Connector connector) {
+        return targetModelRepository.findById(connector.getTargetModelId())
+                .map(TargetModel::getCode)
+                .orElse("");
+    }
+
+    /** 이 원천이 파일 없이 스스로 자료를 가져올 수 있는가. 화면이 업로드 칸을 감출지 정한다. */
+    public boolean fetchesItself(Connector connector) {
+        return connector.getSourceType() != SourceType.UPLOAD;
     }
 
     /**
@@ -145,7 +175,32 @@ public class ConnectorAdminService {
                 });
 
         draft.activate();
-        return mappingRepository.save(draft);
+        ConnectorMapping activated = mappingRepository.save(draft);
+
+        // 확정한 판단만 기억한다. 화면에서 고르는 중에 기억하면 고민하며 눌러 본 것까지
+        // 학습해 기억이 오염되고, 그 뒤로 잘못된 추천이 계속 나온다.
+        rememberConnections(connectorId, activated);
+        return activated;
+    }
+
+    /**
+     * 이번에 사람이 내린 연결 판단을 남긴다.
+     *
+     * <p>다음에 같은 칸 이름이 오면 시스템이 먼저 골라 준다 — 우리가 모르는 시스템도 <b>한 번만
+     * 손대면 그 뒤로는 자동</b>이 된다.
+     */
+    private void rememberConnections(UUID connectorId, ConnectorMapping mapping) {
+        Connector connector = connector(connectorId);
+        String modelCode = targetModelRepository.findById(connector.getTargetModelId())
+                .map(TargetModel::getCode)
+                .orElse(null);
+        if (modelCode == null) {
+            return;
+        }
+        Map<String, String> connections = new LinkedHashMap<>();
+        fieldMapRepository.findByMappingIdOrderBySortOrder(mapping.getId())
+                .forEach(map -> connections.put(map.getSourceField(), map.getTargetFieldKey()));
+        memories.remember(modelCode, connections);
     }
 
     @Transactional(readOnly = true)

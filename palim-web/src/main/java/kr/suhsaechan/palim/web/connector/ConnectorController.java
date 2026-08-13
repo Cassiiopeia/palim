@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
 import kr.suhsaechan.palim.connector.define.SourceType;
@@ -52,6 +53,8 @@ public class ConnectorController {
     private final ConnectorQueryService queryService;
     private final ConnectorRunner runner;
     private final RollbackService rollbackService;
+    private final ErrorMessageResolver errorMessages;
+    private final MappingViewAssembler assembler;
 
     @GetMapping("/connectors")
     public String list(Model model) {
@@ -80,7 +83,8 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashSuccess", "연동을 만들었습니다. 원천 파일을 올려 매핑을 정의하세요.");
             return "redirect:/connectors/" + connector.getId() + "/mapping";
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError", e.getMessage());
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/new";
         }
     }
@@ -99,7 +103,37 @@ public class ConnectorController {
         model.addAttribute("targetFields", adminService.targetFields(id));
         model.addAttribute("transformTypes", TransformType.values());
         model.addAttribute("existing", existingByTarget(id));
+        model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
+
+        // 스스로 가져오는 원천은 칸 목록을 이미 알 수 있다. 파일을 올리라고 할 이유가 없다.
+        SourceSchema schema = null;
+        if (adminService.fetchesItself(connector)) {
+            try {
+                schema = adminService.readSchema(connector);
+                model.addAttribute("schema", schema);
+            } catch (BusinessException e) {
+                // 원천에 닿지 못해도 화면은 열려야 한다. 무엇이 막혔는지 보여주고, 사용자가
+                // 연결 설정을 고치러 갈 수 있어야 한다.
+                model.addAttribute("flashError", errorMessages.resolve(e.getErrorCode(),
+                        e.messageArgs()));
+            }
+        }
+        addMappingView(model, id, connector, schema);
         return "connector/mapping";
+    }
+
+    /**
+     * 화면이 그릴 것을 채운다.
+     *
+     * <p>표준 항목 · 저장된 연결 · 자동 추천 · 값 미리보기를 한 덩어리로 만든다. 화면이 이
+     * 셋을 각각 받아 맞춰 보게 하면 템플릿에 판단이 들어가고, 그 판단은 테스트할 수 없다.
+     */
+    private void addMappingView(Model model, UUID id, Connector connector, SourceSchema schema) {
+        String modelCode = adminService.targetModelCode(connector);
+        Map<String, ConnectorFieldMap> existing = existingByTarget(id);
+        model.addAttribute("groups", assembler.assemble(
+                adminService.targetFields(id), existing, schema, modelCode));
+        model.addAttribute("leftovers", assembler.leftovers(schema, existing));
     }
 
     /** 파일 업로드 → 원천 필드 추출. 매핑 화면을 채워 다시 보여준다. */
@@ -120,10 +154,13 @@ public class ConnectorController {
             model.addAttribute("existing", existingByTarget(id));
             model.addAttribute("schema", schema);
             model.addAttribute("headerRow", headerRow);
+            model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
+            addMappingView(model, id, connector, schema);
             return "connector/mapping";
 
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError", e.getMessage());
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/" + id + "/mapping";
         } finally {
             adminService.deleteQuietly(temp);
@@ -163,23 +200,31 @@ public class ConnectorController {
      * 가능하며, 그렇지 않으면 엔진이 거부한다.
      */
     @PostMapping("/connectors/{id}/run")
-    public String run(@PathVariable UUID id, @RequestParam MultipartFile file,
+    public String run(@PathVariable UUID id,
+                      @RequestParam(required = false) MultipartFile file,
                       @RequestParam(defaultValue = "1") int headerRow,
                       @RequestParam RunMode mode, RedirectAttributes redirect) {
         Path temp = null;
         try {
-            temp = adminService.saveTemporary(file);
+            // 스스로 가져오는 원천은 올릴 파일이 없다. 파일을 필수로 두면 API 커넥터는
+            // 시험 실행조차 못 하고, 매일 자동 수집으로 넘어갈 수도 없다.
+            if (file != null && !file.isEmpty()) {
+                temp = adminService.saveTemporary(file);
+            }
             ConnectorRun run = runner.run(new RunRequest(id, mode, RunTrigger.MANUAL, temp,
                     headerRow));
 
             redirect.addFlashAttribute("flashSuccess",
                     "%s 실행 완료 — 총 %d건 중 성공 %d건, 실패 %d건".formatted(
-                            mode == RunMode.TEST ? "테스트" : "실제 적재",
+                            mode == RunMode.TEST ? "시험 실행" : "실제 적재",
                             run.getTotalCount(), run.getSuccessCount(), run.getFailedCount()));
             return "redirect:/connectors/" + id + "/runs/" + run.getId();
 
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError", e.getMessage());
+            // getMessage() 는 «API_PROBE_FAILED(K015) args=[…]» 같은 로그용 문자열이다.
+            // 그대로 내보내면 사용자는 무엇을 고쳐야 하는지 알 수 없다.
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/" + id + "/mapping";
         } finally {
             adminService.deleteQuietly(temp);
@@ -193,7 +238,8 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashSuccess",
                     "매핑을 확정했습니다. 이제 실제 적재가 가능합니다.");
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError", e.getMessage());
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/connectors/" + id + "/mapping";
     }
@@ -217,7 +263,11 @@ public class ConnectorController {
                 .filter(summary -> summary.id().equals(runId))
                 .findFirst().orElse(null));
         model.addAttribute("errors", queryService.errors(runId, ERROR_ROW_LIMIT));
-        model.addAttribute("staging", queryService.staging(runId, PREVIEW_LIMIT));
+
+        // JSON 원문을 그대로 뿌리면 값이 제대로 들어갔는지 사람이 중괄호를 읽어야 한다.
+        // 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 된다.
+        model.addAttribute("staging",
+                StagingTableView.of(queryService.staging(runId, PREVIEW_LIMIT)));
         return "connector/run-detail";
     }
 
@@ -228,7 +278,8 @@ public class ConnectorController {
             rollbackService.rollback(runId);
             redirect.addFlashAttribute("flashSuccess", "실행을 되돌렸습니다.");
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError", e.getMessage());
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
         }
         return "redirect:/connectors/" + id + "/runs";
     }
