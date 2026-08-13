@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<!--/* 외부 시스템 연결. 인증정보를 넣고 한 번에 전 단계를 검증한 뒤 커넥터로 저장한다. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div th:if="${error}" class="alert alert-error mb-4">
+        <span th:text="${error}">오류</span>
+    </div>
+
+    <div class="alert alert-warning mb-4">
+        <div>
+            <div class="font-semibold">테스트용 인증키는 한 번 쓰면 소진되는 경우가 있습니다</div>
+            <div class="text-sm">
+                그래서 이 화면은 <b>한 번 실행에 인증부터 데이터 조회까지</b> 확인하고,
+                응답 필드까지 함께 보여줍니다. 매핑을 짜려고 다시 호출할 필요가 없게 하기 위해서입니다.
+            </div>
+        </div>
+    </div>
+
+    <form th:action="@{/connectors/connect/test}" method="post" th:object="${form}"
+          class="card bg-base-100 shadow-sm">
+        <div class="card-body gap-4">
+
+            <label class="form-control max-w-md">
+                <div class="label"><span class="label-text">인증 방식</span></div>
+                <select th:field="*{preset}" class="select select-bordered">
+                    <option th:each="p : ${presets}" th:value="${p}"
+                            th:text="${p.description}">방식</option>
+                </select>
+            </label>
+
+            <label class="label cursor-pointer justify-start gap-3 max-w-md">
+                <input type="checkbox" th:field="*{sandbox}" class="checkbox">
+                <span class="label-text">테스트 환경으로 접속</span>
+                <span class="label-text-alt text-base-content/60">
+                    테스트키와 정식키는 접속 주소가 다릅니다
+                </span>
+            </label>
+
+            <div class="divider">접속 정보</div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <label class="form-control">
+                    <div class="label"><span class="label-text">회사코드</span></div>
+                    <input type="text" th:field="*{companyCode}" class="input input-bordered"
+                           placeholder="지역 조회 방식일 때 필요">
+                </label>
+
+                <label class="form-control">
+                    <div class="label"><span class="label-text">사용자 ID</span></div>
+                    <input type="text" th:field="*{userId}" class="input input-bordered">
+                </label>
+            </div>
+
+            <label class="form-control">
+                <div class="label">
+                    <span class="label-text">인증키 / 비밀번호</span>
+                </div>
+                <input type="password" th:field="*{secret}" class="input input-bordered"
+                       autocomplete="off">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        암호화해서 저장하며 <b>다시 표시하지 않습니다</b>. 화면을 새로 열면 다시 입력해야 합니다.
+                    </span>
+                </div>
+            </label>
+
+            <div class="collapse collapse-arrow bg-base-200">
+                <input type="checkbox">
+                <div class="collapse-title font-medium">폼 로그인 방식일 때 추가 입력</div>
+                <div class="collapse-content grid gap-4">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text">로그인 주소</span></div>
+                        <input type="text" th:field="*{loginUrl}" class="input input-bordered">
+                    </label>
+                    <label class="form-control">
+                        <div class="label"><span class="label-text">조회 주소</span></div>
+                        <input type="text" th:field="*{fetchUrl}" class="input input-bordered">
+                    </label>
+                    <label class="form-control">
+                        <div class="label"><span class="label-text">계정(회사) 코드</span></div>
+                        <input type="text" th:field="*{domain}" class="input input-bordered">
+                    </label>
+                    <label class="form-control">
+                        <div class="label"><span class="label-text">조회 요청 본문</span></div>
+                        <textarea th:field="*{fetchBody}" rows="3"
+                                  class="textarea textarea-bordered font-mono text-xs"></textarea>
+                        <div class="label">
+                            <span class="label-text-alt text-base-content/60">
+                                화면이 보내는 것과 같은 형식입니다.
+                            </span>
+                        </div>
+                    </label>
+                    <label class="form-control">
+                        <div class="label"><span class="label-text">응답에서 행이 있는 경로</span></div>
+                        <input type="text" th:field="*{rowsPath}" class="input input-bordered"
+                               placeholder="rows">
+                    </label>
+                </div>
+            </div>
+
+            <div class="card-actions justify-end">
+                <button type="submit" class="btn btn-primary">연결 테스트</button>
+            </div>
+        </div>
+    </form>
+
+    <!--/* 검증 결과. 어느 단계에서 막혔는지가 곧 원인이라 단계별로 보여준다. */-->
+    <div th:if="${report}" class="card bg-base-100 shadow-sm mt-6">
+        <div class="card-body">
+            <h2 class="card-title">
+                검증 결과
+                <span th:if="${report.success}" class="badge badge-success">통과</span>
+                <span th:unless="${report.success}" class="badge badge-error">실패</span>
+            </h2>
+
+            <table class="table table-sm">
+                <thead>
+                <tr><th>단계</th><th>결과</th><th>내용</th><th class="text-right">소요</th></tr>
+                </thead>
+                <tbody>
+                <tr th:each="step : ${report.steps}">
+                    <td th:text="${step.name}">단계</td>
+                    <td>
+                        <span th:if="${step.success}" class="badge badge-success badge-sm">성공</span>
+                        <span th:unless="${step.success}" class="badge badge-error badge-sm">실패</span>
+                    </td>
+                    <td class="text-sm" th:text="${step.message}">내용</td>
+                    <td class="text-right text-sm" th:text="${step.elapsedMs} + ' ms'">0 ms</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div th:if="${!report.fields.isEmpty()}" class="mt-4">
+                <div class="font-medium mb-2">응답 필드</div>
+                <div class="flex flex-wrap gap-1">
+                    <span th:each="f : ${report.fields}" class="badge badge-outline"
+                          th:text="${f}">필드</span>
+                </div>
+                <div class="text-sm text-base-content/60 mt-2">
+                    매핑은 이 이름들로 만듭니다. 문서에 적힌 이름과 다를 수 있어 실제 응답을 기준으로 합니다.
+                </div>
+            </div>
+
+            <div th:if="${!report.samples.isEmpty()}" class="mt-4 overflow-x-auto">
+                <div class="font-medium mb-2">샘플</div>
+                <table class="table table-xs">
+                    <thead>
+                    <tr><th th:each="f : ${report.fields}" th:text="${f}">필드</th></tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${report.samples}">
+                        <td th:each="f : ${report.fields}" th:text="${row.get(f)}">값</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!--/* 통과했을 때만 저장을 연다. 실패한 설정을 저장하면 실행 시점에야 드러난다. */-->
+    <form th:if="${report != null and report.success}" th:action="@{/connectors/connect/save}"
+          method="post" th:object="${form}" class="card bg-base-100 shadow-sm mt-6">
+        <div class="card-body gap-4">
+            <h2 class="card-title">연동으로 저장</h2>
+
+            <input type="hidden" th:field="*{preset}">
+            <input type="hidden" th:field="*{sandbox}">
+            <input type="hidden" th:field="*{userId}">
+            <input type="hidden" th:field="*{companyCode}">
+            <input type="hidden" th:field="*{loginUrl}">
+            <input type="hidden" th:field="*{fetchUrl}">
+            <input type="hidden" th:field="*{fetchBody}">
+            <input type="hidden" th:field="*{rowsPath}">
+            <input type="hidden" th:field="*{domain}">
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <label class="form-control">
+                    <div class="label"><span class="label-text">이름</span></div>
+                    <input type="text" th:field="*{name}" required class="input input-bordered"
+                           placeholder="예: 전산재고 일일 스냅샷">
+                </label>
+                <label class="form-control">
+                    <div class="label"><span class="label-text">코드</span></div>
+                    <input type="text" th:field="*{code}" required class="input input-bordered"
+                           pattern="[a-z0-9\-_]+" placeholder="erp-stock-daily">
+                </label>
+            </div>
+
+            <label class="form-control max-w-md">
+                <div class="label"><span class="label-text">목표 모델</span></div>
+                <select th:field="*{targetModelCode}" class="select select-bordered">
+                    <option value="std_stock_snapshot">재고 스냅샷 (대사에 쓰는 것)</option>
+                    <option value="std_item">품목</option>
+                    <option value="std_stock_movement">입출고 이력</option>
+                    <option value="std_outbound_order">출고 주문</option>
+                </select>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        재고 수량을 담으려면 <b>재고 스냅샷</b>입니다. 품목에는 수량 칸이 없습니다.
+                    </span>
+                </div>
+            </label>
+
+            <label class="form-control max-w-xs">
+                <div class="label"><span class="label-text">기준 단위</span></div>
+                <input type="text" th:field="*{defaultUnit}" class="input input-bordered">
+            </label>
+
+            <label class="form-control">
+                <div class="label"><span class="label-text">인증키 / 비밀번호 (다시 입력)</span></div>
+                <input type="password" th:field="*{secret}" required class="input input-bordered"
+                       autocomplete="off">
+                <div class="label">
+                    <span class="label-text-alt text-base-content/60">
+                        보안을 위해 화면에 남겨두지 않으므로 저장할 때 한 번 더 입력합니다.
+                    </span>
+                </div>
+            </label>
+
+            <div class="card-actions justify-end">
+                <button type="submit" class="btn btn-primary">연동 만들기</button>
+            </div>
+        </div>
+    </form>
+
+</div>
+</body>
+</html>

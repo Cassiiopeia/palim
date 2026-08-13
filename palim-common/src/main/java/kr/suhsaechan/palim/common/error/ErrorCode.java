@@ -337,7 +337,18 @@ public enum ErrorCode {
      * <p>그 이전까지 거슬러 오르면 이후 실행들과 뒤엉켜 어떤 상태로 돌아가는지 아무도
      * 설명할 수 없게 된다.
      */
-    ROLLBACK_NOT_ALLOWED("K014", HttpStatus.CONFLICT, LogLevel.WARN);
+    ROLLBACK_NOT_ALLOWED("K014", HttpStatus.CONFLICT, LogLevel.WARN),
+
+    /**
+     * 원천 API 인증 흐름이 실패했다. 어느 단계인지는 메시지 인자로 넘긴다.
+     *
+     * <p>5xx 가 아니라 422 인 이유 — 대부분 회사코드·인증키처럼 <b>사람이 고칠 수 있는 입력</b>
+     * 문제다. 5xx 로 두면 서버 장애로 분류되어 ERROR 로 쌓이고, 진짜 장애가 그 사이에 묻힌다.
+     */
+    API_PROBE_FAILED("K015", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /** 연결 정의에 필요한 값이 비어 있다. */
+    API_PROBE_INCOMPLETE("K016", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;
