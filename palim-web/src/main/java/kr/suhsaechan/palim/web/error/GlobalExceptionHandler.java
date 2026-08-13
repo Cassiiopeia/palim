@@ -14,9 +14,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * 전역 예외 처리.
@@ -118,6 +120,31 @@ public class GlobalExceptionHandler {
                                                           HttpServletRequest request) {
         log.debug("없는 정적 자원 — {} {}", request.getMethod(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+
+    /**
+     * 요청이 형식을 갖추지 못한 경우.
+     *
+     * <p>필요한 값이 빠졌거나(주소를 직접 고쳐 들어온 경우) 숫자 자리에 글자가 온 경우다.
+     * <b>서버가 고장난 것이 아니라 요청이 잘못된 것</b>이므로 400 으로 돌려준다.
+     *
+     * <p>500 으로 두면 두 가지를 잃는다. 사용자는 오타 하나에 「서버 오류」 화면을 보고 자기
+     * 잘못인 줄 모르며, 로그에는 링크가 깨지거나 봇이 훑을 때마다 ERROR 가 쌓여 <b>진짜 장애가
+     * 그 사이에 묻힌다.</b> {@link NoResourceFoundException} 을 조용히 404 로 돌리는 것과 같은
+     * 이유다.
+     */
+    @ExceptionHandler({MissingServletRequestParameterException.class,
+                       MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(
+            Exception exception, HttpServletRequest request) {
+
+        ErrorCode errorCode = ErrorCode.INVALID_INPUT;
+        log.debug("요청 형식 오류 — {} {} ({})", request.getMethod(), request.getRequestURI(),
+                exception.getMessage());
+
+        return ResponseEntity.status(errorCode.httpStatus())
+                .body(ErrorResponse.of(errorCode, errorMessageResolver.resolve(errorCode),
+                        request.getRequestURI()));
     }
 
     /**
