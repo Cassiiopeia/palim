@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--/* 준비 상태판. 위저드가 아니라 상태판인 이유는 SetupService 주석 참고. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="prose max-w-none mb-6">
+        <p class="text-base-content/70">
+            전산 시스템과 물류 시스템의 재고를 매일 자동으로 맞춰 봅니다.
+            아래 순서대로 준비하면 됩니다. <b>지금 손봐야 할 곳은 색으로 표시</b>됩니다.
+        </p>
+    </div>
+
+    <div class="flex flex-col gap-3">
+        <div th:each="step : ${steps}"
+             th:classappend="${step.state.name() == 'ATTENTION'} ? 'border-warning' :
+                             (${step.done} ? 'border-success/40' : 'border-base-300')"
+             class="card bg-base-100 border shadow-sm">
+            <div class="card-body flex-row items-center gap-4 py-4">
+
+                <div class="text-2xl w-8 text-center">
+                    <span th:if="${step.done}" class="text-success">✅</span>
+                    <span th:if="${step.state.name() == 'ATTENTION'}" class="text-warning">⚠️</span>
+                    <span th:if="${step.state.name() == 'WAITING'}" class="opacity-30">⬜</span>
+                    <span th:if="${step.state.name() == 'NOT_READY'}" class="opacity-30">⬜</span>
+                </div>
+
+                <div class="grow">
+                    <div class="font-semibold">
+                        <span th:text="${step.order} + '. ' + ${step.title}">단계</span>
+                        <span th:if="${step.state.name() == 'NOT_READY'}"
+                              class="badge badge-ghost badge-sm ml-2">준비 중</span>
+                    </div>
+                    <div class="text-sm text-base-content/70" th:text="${step.detail}">상황</div>
+                    <div th:if="${step.action != null and step.state.name() == 'ATTENTION'}"
+                         class="text-sm text-warning mt-1" th:text="'→ ' + ${step.action}">할 일</div>
+                </div>
+
+                <div>
+                    <a th:if="${step.actionable}" th:href="@{${step.link}}"
+                       class="btn btn-warning btn-sm">하러 가기</a>
+                    <a th:if="${step.done and step.link != null}" th:href="@{${step.link}}"
+                       class="btn btn-ghost btn-sm">확인</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!--/* 아직 없는 기능을 숨기지 않는 이유 — 전체 그림을 알아야 지금 위치가 이해된다.
+           "연결은 끝났는데 왜 대조가 안 되지"를 막는다. */-->
+    <div class="alert alert-info mt-6">
+        <div class="text-sm">
+            <b>준비 중</b>으로 표시된 단계는 아직 만들고 있습니다.
+            연결까지 마쳐 두시면 완성되는 대로 바로 이어집니다.
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

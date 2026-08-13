@@ -24,7 +24,12 @@ public class ConnectionForm {
     /** 인증 흐름. */
     private ApiAuthPreset preset = ApiAuthPreset.ECOUNT;
 
-    /** 테스트 환경 여부. 테스트키와 정식키는 접속 주소가 다르다. */
+    /**
+     * 테스트 환경 여부. 테스트키와 정식키는 접속 주소가 다르다.
+     *
+     * <p>이 값이 곧 "지금 넣는 키가 테스트용인가"를 뜻한다. 검증에 성공했을 때 정식 키 교체를
+     * 안내할지, 바로 운영 상태로 볼지가 여기서 갈린다.
+     */
     private boolean sandbox = true;
 
     // ── 공통 ──
