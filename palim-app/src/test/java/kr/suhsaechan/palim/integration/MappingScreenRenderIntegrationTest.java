@@ -103,6 +103,7 @@ class MappingScreenRenderIntegrationTest extends IntegrationTest {
     void 화면이_그려진다() throws Exception {
         mockMvc.perform(get("/connectors/{id}/mapping", connector.getId()))
                 .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
                 // 저쪽 칸이 선택지로 나온다
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("BAL_QTY")))
                 // 소수점이 길게 붙은 값을 읽을 수 있게 정리한다

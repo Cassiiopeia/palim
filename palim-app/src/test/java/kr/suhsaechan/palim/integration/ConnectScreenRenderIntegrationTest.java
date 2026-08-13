@@ -36,11 +36,13 @@ class ConnectScreenRenderIntegrationTest extends IntegrationTest {
      */
     @Test
     @WithMockUser
-    @DisplayName("처음 열 때 그려진다")
+    @DisplayName("처음 열 때 끝까지 그려진다")
     void 처음_열_때_그려진다() throws Exception {
         mockMvc.perform(get("/connectors/connect"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("인증키")));
+                // 실행 버튼이 없으면 이 화면은 «있으나 마나» 다. 실제로 여기가 잘렸었다.
+                .andExpect(content().string(containsString("연결 확인하기")))
+                .andExpect(RenderAssertions.fullyRendered());
     }
 
     /**
@@ -62,6 +64,9 @@ class ConnectScreenRenderIntegrationTest extends IntegrationTest {
                         .param("secret", ""))
                 .andExpect(status().isOk())
                 // 비밀값은 화면에 되돌리지 않으므로 «왜 또 비어 있지» 를 설명해야 한다
-                .andExpect(content().string(containsString("인증키를 한 번 더 넣어야 합니다")));
+                .andExpect(content().string(containsString("인증키를 한 번 더 넣어야 합니다")))
+                // 실패한 뒤에도 다시 실행할 수 있어야 한다 — 버튼이 잘리면 여기서 막힌다
+                .andExpect(content().string(containsString("연결 확인하기")))
+                .andExpect(RenderAssertions.fullyRendered());
     }
 }
