@@ -189,7 +189,7 @@ jobs:
               -e DB_HOST=postgres \
               -e DB_PORT=5432 \
               -e DB_NAME=palim \
-              -e DB_USER=palim \
+              -e DB_USER=kimchi \
               -e DB_PASSWORD="$DB_PASSWORD" \
               -e PALIM_CRYPTO_MASTER_KEY="$MASTER_KEY" \
               -v /etc/localtime:/etc/localtime:ro \
