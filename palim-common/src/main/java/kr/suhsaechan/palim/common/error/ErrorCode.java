@@ -348,7 +348,18 @@ public enum ErrorCode {
     API_PROBE_FAILED("K015", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
 
     /** 연결 정의에 필요한 값이 비어 있다. */
-    API_PROBE_INCOMPLETE("K016", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
+    API_PROBE_INCOMPLETE("K016", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /**
+     * 양쪽 재고의 기준 시각이 다르다.
+     *
+     * <p>실패로 다루는 것이 «막다른 길» 이 아니다. 기준일을 지정해 다시 받아올 수 있으므로,
+     * 사람이 할 일이 분명히 있다.
+     */
+    RECONCILE_BASE_AT_MISMATCH("R001", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /** 비교할 재고가 한쪽에 아예 없다. 수집이 안 돌았거나 기준일이 어긋난 것이다. */
+    RECONCILE_SNAPSHOT_MISSING("R002", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;
