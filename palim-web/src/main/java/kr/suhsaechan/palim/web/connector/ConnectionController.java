@@ -1,5 +1,8 @@
 package kr.suhsaechan.palim.web.connector;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.connector.source.http.ApiAuthPreset;
 import kr.suhsaechan.palim.connector.source.http.ApiProbeRegistry;
@@ -33,14 +36,39 @@ public class ConnectionController {
     @GetMapping("/connectors/connect")
     public String form(Model model) {
         model.addAttribute("form", new ConnectionForm());
-        model.addAttribute("presets", ApiAuthPreset.values());
+        addPresets(model);
         return "connector/connect";
+    }
+
+    /**
+     * 시스템별 안내 문구.
+     *
+     * <p>화면이 시스템을 바꿀 때 서버에 다녀오지 않고 문구만 갈아 끼우도록 미리 넘긴다.
+     * 폼을 다시 제출하면 연결 테스트가 실행되고 <b>1회용 인증키가 그 자리에서 소진</b>된다.
+     */
+    private void addPresets(Model model) {
+        model.addAttribute("presets", ApiAuthPreset.values());
+        Map<String, Map<String, Object>> meta = new LinkedHashMap<>();
+        for (ApiAuthPreset preset : ApiAuthPreset.values()) {
+            meta.put(preset.name(), Map.of(
+                    "label", preset.getAccountLabel(),
+                    "hint", preset.getHint(),
+                    "accountHelp", preset.getAccountHelp(),
+                    "secretLabel", preset.getSecretLabel(),
+                    "issueGuide", preset.getIssueGuide(),
+                    "keyStages", preset.hasKeyStages(),
+                    "manual", preset.needsManualEndpoint()));
+        }
+        model.addAttribute("presetMeta", meta);
     }
 
     /** 연결 검증. 결과는 단계별로 보여준다. */
     @PostMapping("/connectors/connect/test")
     public String test(@ModelAttribute("form") ConnectionForm form, Model model) {
-        model.addAttribute("presets", ApiAuthPreset.values());
+        addPresets(model);
+        // 결과가 언제 것인지 없으면, 화면에 남은 것이 방금 실행한 것인지 아까 것인지
+        // 구분되지 않는다. 여러 번 시도할수록 헷갈린다.
+        model.addAttribute("testedAt", LocalDateTime.now());
         try {
             ProbeReport report = probes.of(form.getPreset()).probe(form.toProbeRequest());
             model.addAttribute("report", report);

@@ -87,6 +87,38 @@ public enum ApiAuthPreset {
         return hint;
     }
 
+    /** 그 값을 어디서 찾는지. 화면 칸 밑에 그대로 붙는다. */
+    public String getAccountHelp() {
+        return switch (this) {
+            case ECOUNT -> "이카운트 로그인 화면에서 아이디 위에 넣는 6자리 숫자입니다.";
+            case ONEWMS -> "ONEWMS 로그인 화면 맨 위 「계정정보」 칸에 넣는 값입니다.";
+            case CUSTOM_FORM -> "로그인 폼이 회사·계정 코드를 받는다면 그 값입니다. 없으면 비워 둡니다.";
+        };
+    }
+
+    /** 비밀값 칸 이름. 시스템마다 넣는 것이 다르다. */
+    public String getSecretLabel() {
+        return switch (this) {
+            case ECOUNT -> "API 인증키";
+            case ONEWMS, CUSTOM_FORM -> "비밀번호";
+        };
+    }
+
+    /** 인증키를 어디서 어떻게 받는지. 모르면 여기서 막힌다. */
+    public String getIssueGuide() {
+        return switch (this) {
+            case ECOUNT -> "이카운트는 관리자가 발급한 인증키가 있어야 합니다. "
+                    + "먼저 테스트 인증키로 검증한 뒤 정식 인증키를 받는 순서입니다.";
+            case ONEWMS -> "별도 발급이 없습니다. 평소 로그인에 쓰는 계정을 그대로 넣습니다.";
+            case CUSTOM_FORM -> "로그인에 쓰는 계정을 넣고, 접속 주소를 직접 지정합니다.";
+        };
+    }
+
+    /** 이 시스템이 테스트/정식 키를 구분하는가. 구분하지 않으면 그 선택을 감춘다. */
+    public boolean hasKeyStages() {
+        return this == ECOUNT;
+    }
+
     /**
      * 「회사/계정 코드」 칸에 붙일 이름.
      *
