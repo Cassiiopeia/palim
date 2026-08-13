@@ -3,9 +3,13 @@
  *
  * Tailwind CSS 4 는 설정 파일 대신 CSS 안에서 선언한다. tailwind.config.js 가 없는 이유다.
  *
- * 커스텀 CSS 를 여기에 쌓지 않는다(07-DECISIONS 009). 관리자 1명이 쓰는 내부 도구에
- * 디자인 시스템을 자체 구축할 이유가 없고, 커스텀 CSS 는 유지보수 대상만 늘린다.
- * 필요한 것은 daisyUI 컴포넌트 클래스와 Tailwind 유틸리티로 해결한다.
+ * 커스텀 CSS 를 여기에 쌓지 않는다(07-DECISIONS 009). 관리자 화면에 디자인 시스템을 자체
+ * 구축할 이유가 없고, 커스텀 CSS 는 유지보수 대상만 늘린다. 필요한 것은 daisyUI 컴포넌트
+ * 클래스와 Tailwind 유틸리티로 해결한다.
+ *
+ * 다만 «색 토큰 선언» 은 그 금지에 걸리지 않는다. 아래 @plugin 블록은 daisyUI 가 공식으로
+ * 제공하는 테마 정의 경로이며, 컴포넌트 CSS 를 만드는 것이 아니라 컴포넌트가 쓸 색을 고르는
+ * 일이다. 내장 테마를 그대로 쓰면 어떤 화면을 만들어도 같은 인상이 나온다.
  */
 
 @import "tailwindcss";
@@ -17,6 +21,110 @@
 @source "../resources/templates/**/*.html";
 
 @plugin "daisyui" {
-    /* daisyUI 내장 테마를 쓴다. 색상을 직접 지정하지 않는다. */
-    themes: corporate --default, business --prefersdark;
+    /* 내장 테마를 끄고 아래 두 벌만 쓴다. 켜 두면 산출물에 안 쓰는 테마가 함께 들어간다. */
+    themes: false;
+}
+
+/*
+ * 밝은 테마.
+ *
+ * 강조색은 «하나» 다. 버튼·현재 위치·선택 상태에만 쓴다 — 여기저기 쓰면 아무것도 도드라지지
+ * 않아 무엇이 중요한지 화면이 말해주지 못한다.
+ *
+ * 정상·주의·문제(success·warning·error)는 강조색과 «역할이 다르다». 강조는 "여기를 누르세요"
+ * 이고 의미색은 "이 상태입니다" 다. 둘을 같은 색으로 쓰면 상태를 눈으로 가려낼 수 없다.
+ *
+ * 중성색에 청록 기운을 살짝 섞었다. 완전한 무채색은 강조색과 따로 놀아 «맞춰 고르지 않은»
+ * 인상을 준다.
+ */
+@plugin "daisyui/theme" {
+    name: "palim";
+    default: true;
+    color-scheme: light;
+
+    --color-base-100: oklch(99.0% 0.001 197.1);
+    --color-base-200: oklch(96.7% 0.004 179.7);
+    --color-base-300: oklch(92.7% 0.006 170.4);
+    --color-base-content: oklch(21.7% 0.019 178.3);
+
+    --color-primary: oklch(48.9% 0.082 173.5);
+    --color-primary-content: oklch(99.0% 0.001 197.1);
+
+    /* 보조는 강조보다 물러서 있어야 한다. 같은 계열에서 채도만 낮춘다. */
+    --color-secondary: oklch(58.0% 0.045 176.0);
+    --color-secondary-content: oklch(99.0% 0.001 197.1);
+
+    --color-accent: oklch(52.9% 0.117 63.2);
+    --color-accent-content: oklch(99.0% 0.001 197.1);
+
+    --color-neutral: oklch(33.4% 0.021 176.8);
+    --color-neutral-content: oklch(96.7% 0.004 179.7);
+
+    --color-info: oklch(52.4% 0.126 252.3);
+    --color-info-content: oklch(99.0% 0.001 197.1);
+    --color-success: oklch(47.4% 0.093 164.5);
+    --color-success-content: oklch(99.0% 0.001 197.1);
+    --color-warning: oklch(52.9% 0.117 63.2);
+    --color-warning-content: oklch(99.0% 0.001 197.1);
+    --color-error: oklch(47.4% 0.163 29.2);
+    --color-error-content: oklch(99.0% 0.001 197.1);
+
+    /* 모서리를 과하게 굴리지 않는다. 자료를 읽는 화면에서 둥근 모서리는 밀도를 떨어뜨린다. */
+    --radius-selector: 0.5rem;
+    --radius-field: 0.375rem;
+    --radius-box: 0.625rem;
+
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
+}
+
+/*
+ * 어두운 테마.
+ *
+ * 밝은 쪽을 그대로 뒤집지 않는다. 어두운 바탕에서는 같은 색이 탁해 보이므로 강조·의미색의
+ * 밝기를 올리고 채도를 조금 낮춘다. 그러지 않으면 «어두운 테마는 대충 만든» 티가 난다.
+ */
+@plugin "daisyui/theme" {
+    name: "palim-dark";
+    prefersdark: true;
+    color-scheme: dark;
+
+    --color-base-100: oklch(22.4% 0.012 248.4);
+    --color-base-200: oklch(19.8% 0.010 248.3);
+    --color-base-300: oklch(28.1% 0.015 244.2);
+    --color-base-content: oklch(94.0% 0.007 233.6);
+
+    --color-primary: oklch(73.0% 0.116 168.3);
+    --color-primary-content: oklch(19.8% 0.010 248.3);
+
+    --color-secondary: oklch(62.0% 0.055 172.0);
+    --color-secondary-content: oklch(19.8% 0.010 248.3);
+
+    --color-accent: oklch(74.3% 0.130 77.3);
+    --color-accent-content: oklch(19.8% 0.010 248.3);
+
+    --color-neutral: oklch(28.1% 0.015 244.2);
+    --color-neutral-content: oklch(94.0% 0.007 233.6);
+
+    --color-info: oklch(70.0% 0.111 247.8);
+    --color-info-content: oklch(19.8% 0.010 248.3);
+    --color-success: oklch(67.3% 0.133 156.8);
+    --color-success-content: oklch(19.8% 0.010 248.3);
+    --color-warning: oklch(74.3% 0.130 77.3);
+    --color-warning-content: oklch(19.8% 0.010 248.3);
+    --color-error: oklch(68.4% 0.142 26.1);
+    --color-error-content: oklch(19.8% 0.010 248.3);
+
+    --radius-selector: 0.5rem;
+    --radius-field: 0.375rem;
+    --radius-box: 0.625rem;
+
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
 }
