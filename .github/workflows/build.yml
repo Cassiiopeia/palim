@@ -180,6 +180,10 @@ jobs:
       DB_USER: ${{ secrets.PALIM_DB_USER }}
       DB_PASSWORD: ${{ secrets.PALIM_DB_PASSWORD }}
       MASTER_KEY: ${{ secrets.PALIM_CRYPTO_MASTER_KEY }}
+      # 이걸 주입하지 않으면 관리자 계정이 코드의 기본값으로 만들어진다. 그 값은 공개
+      # 문서에도 적혀 있으므로, 계정이 처음 생기는 순간부터 "먼저 로그인하는 쪽이 가져가는"
+      # 상태가 된다. 최초 로그인 시 변경 강제는 공격자도 통과할 수 있어 방어가 되지 않는다.
+      ADMIN_PASSWORD: ${{ secrets.PALIM_ADMIN_PASSWORD }}
     steps:
       - name: SSH 배포
         uses: appleboy/ssh-action@v1.0.3
@@ -190,7 +194,7 @@ jobs:
           port: ${{ secrets.SERVER_SSH_PORT }}
           timeout: 60s
           command_timeout: 600s
-          envs: IMAGE_REF,GHCR_USER,GHCR_TOKEN,DEPLOY_PORT,DEPLOY_NETWORK,DB_HOST,DB_NAME,DB_USER,DB_PASSWORD,MASTER_KEY
+          envs: IMAGE_REF,GHCR_USER,GHCR_TOKEN,DEPLOY_PORT,DEPLOY_NETWORK,DB_HOST,DB_NAME,DB_USER,DB_PASSWORD,MASTER_KEY,ADMIN_PASSWORD
           script: |
             set -euo pipefail
             # 컨테이너 런타임 경로. PATH 에 docker 가 없는 호스트(예: NAS 패키지 설치)를
@@ -221,6 +225,7 @@ jobs:
               -e DB_USER="$DB_USER" \
               -e DB_PASSWORD="$DB_PASSWORD" \
               -e PALIM_CRYPTO_MASTER_KEY="$MASTER_KEY" \
+              -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
               -v /etc/localtime:/etc/localtime:ro \
               "$IMAGE_REF"
 
