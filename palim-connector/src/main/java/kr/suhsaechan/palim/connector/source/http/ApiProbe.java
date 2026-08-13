@@ -11,7 +11,7 @@ package kr.suhsaechan.palim.connector.source.http;
  */
 public interface ApiProbe {
 
-    ApiAuthPreset preset();
+    ApiAuthPreset.AuthFlow flow();
 
     /** 전 단계를 순서대로 실행하고 결과를 모아 돌려준다. */
     ProbeReport probe(ProbeRequest request);

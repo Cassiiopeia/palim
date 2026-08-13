@@ -21,7 +21,9 @@ public record ProbeRequest(ApiAuthPreset preset, boolean sandbox, Map<String, St
                            String secret) {
 
     public ProbeRequest {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        // 프리셋 기본값(접속 주소 등) 위에 사용자 입력을 덮는다. 사용자는 계정 정보만 넣으면 되고,
+        // 기본값이 맞지 않는 환경에서는 화면에서 덮어쓸 수 있다.
+        params = preset.mergeDefaults(params == null ? Map.of() : params);
     }
 
     /** 필수 값이 없으면 호출 전에 막는다. 빈 값으로 요청하면 원인이 원격 서버 메시지로 흐려진다. */

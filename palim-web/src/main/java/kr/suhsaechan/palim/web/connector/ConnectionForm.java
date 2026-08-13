@@ -22,7 +22,7 @@ import org.springframework.util.StringUtils;
 public class ConnectionForm {
 
     /** 인증 흐름. */
-    private ApiAuthPreset preset = ApiAuthPreset.ZONE_SESSION;
+    private ApiAuthPreset preset = ApiAuthPreset.ECOUNT;
 
     /** 테스트 환경 여부. 테스트키와 정식키는 접속 주소가 다르다. */
     private boolean sandbox = true;
@@ -31,11 +31,11 @@ public class ConnectionForm {
     private String userId;
     private String secret;
 
-    // ── ZONE_SESSION ──
+    // ── 지역 조회 방식 ──
     private String companyCode;
     private String baseDate;
 
-    // ── FORM_SESSION ──
+    // ── 웹 로그인 방식 ──
     private String loginUrl;
     private String fetchUrl;
     private String fetchBody;
@@ -54,7 +54,7 @@ public class ConnectionForm {
     public ProbeRequest toProbeRequest() {
         Map<String, String> params = new LinkedHashMap<>();
         putIfPresent(params, "userId", userId);
-        if (preset == ApiAuthPreset.ZONE_SESSION) {
+        if (preset.getFlow() == ApiAuthPreset.AuthFlow.ZONE_SESSION) {
             putIfPresent(params, "companyCode", companyCode);
             putIfPresent(params, "baseDate", baseDate);
         } else {

@@ -47,8 +47,8 @@ public class FormSessionProbe implements ApiProbe {
     }
 
     @Override
-    public ApiAuthPreset preset() {
-        return ApiAuthPreset.FORM_SESSION;
+    public ApiAuthPreset.AuthFlow flow() {
+        return ApiAuthPreset.AuthFlow.FORM_SESSION;
     }
 
     @Override

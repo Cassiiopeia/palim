@@ -24,12 +24,18 @@
         <div class="card-body gap-4">
 
             <label class="form-control max-w-md">
-                <div class="label"><span class="label-text">인증 방식</span></div>
+                <div class="label"><span class="label-text">연동할 시스템</span></div>
                 <select th:field="*{preset}" class="select select-bordered">
                     <option th:each="p : ${presets}" th:value="${p}"
-                            th:text="${p.description}">방식</option>
+                            th:text="${p.label}">시스템</option>
                 </select>
             </label>
+
+            <!--/* 시스템마다 필요한 값이 다르다. 무엇을 준비해야 하는지 미리 알려준다. */-->
+            <div class="text-sm text-base-content/70 -mt-2">
+                <div th:each="p : ${presets}" th:if="${p.name() == form.preset?.name()}"
+                     th:text="${p.hint}">안내</div>
+            </div>
 
             <label class="label cursor-pointer justify-start gap-3 max-w-md">
                 <input type="checkbox" th:field="*{sandbox}" class="checkbox">
@@ -69,7 +75,9 @@
 
             <div class="collapse collapse-arrow bg-base-200">
                 <input type="checkbox">
-                <div class="collapse-title font-medium">폼 로그인 방식일 때 추가 입력</div>
+                <div class="collapse-title font-medium">
+                    접속 주소 직접 지정 (기본값을 바꿔야 할 때만)
+                </div>
                 <div class="collapse-content grid gap-4">
                     <label class="form-control">
                         <div class="label"><span class="label-text">로그인 주소</span></div>

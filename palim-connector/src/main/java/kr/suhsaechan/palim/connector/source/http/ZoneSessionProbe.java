@@ -52,8 +52,8 @@ public class ZoneSessionProbe implements ApiProbe {
     }
 
     @Override
-    public ApiAuthPreset preset() {
-        return ApiAuthPreset.ZONE_SESSION;
+    public ApiAuthPreset.AuthFlow flow() {
+        return ApiAuthPreset.AuthFlow.ZONE_SESSION;
     }
 
     @Override
