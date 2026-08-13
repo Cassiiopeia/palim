@@ -64,12 +64,12 @@ guard(커밋 검사) → build(테스트) → image(GHCR 푸시) → deploy(NAS)
 
 | Secret | 용도 |
 |---|---|
-| `APPLICATION_PROD_YML` | 운영 설정 본문. `${환경변수}` 자리표시자만 담는다 |
+| `APPLICATION_PROD_YML` | **운영 설정 전부** — DB 접속·마스터키·관리자 초기 비밀번호 |
 | `SERVER_HOST` · `SERVER_USER` · `SERVER_PASSWORD` · `SERVER_SSH_PORT` | 배포 대상 서버 접속 |
 | `DEPLOY_PORT` | 컨테이너 `8080` 을 붙일 호스트 포트 |
 | `DEPLOY_NETWORK` | 컨테이너를 붙일 도커 네트워크 (DB 와 같은 네트워크) |
-| `PALIM_DB_HOST` · `PALIM_DB_NAME` · `PALIM_DB_USER` · `PALIM_DB_PASSWORD` | DB 접속 |
-| `PALIM_CRYPTO_MASTER_KEY` | 인증정보 암호화 마스터키 (`openssl rand -base64 32`) |
+
+상세는 `docs/10-DEPLOYMENT.md` 를 본다 — 설정이 이미지에 들어간다는 점과 그 의미를 함께 적었다.
 
 **롤백**은 이전 커밋 SHA 태그로 `docker run` 을 다시 하면 된다.
 

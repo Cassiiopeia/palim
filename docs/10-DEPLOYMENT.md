@@ -66,49 +66,55 @@ password: ${{ secrets.GITHUB_TOKEN }}    # 자동
 쓰면 `docker ps` 만으로 정확히 어느 코드인지 나오고, **롤백이 이전 SHA 로 다시 띄우는 것**으로
 끝난다 — 다시 빌드하지 않는다.
 
-## 4. 비밀값을 다루는 방식
+## 4. 설정과 비밀값
 
-이미지가 공개이므로 **비밀값을 이미지에 넣지 않는다.** 두 단계로 나눈다.
+**운영 설정은 `APPLICATION_PROD_YML` Secret 하나로 관리한다.** DB 접속·암호화 마스터키·관리자
+초기 비밀번호가 전부 여기 들어 있고, CI 가 이것을 `application-prod.yaml` 파일로 만들어 jar 에
+넣는다. 값을 바꾸려면 Secret 을 수정하고 `main` 에 push 한다.
 
 ```
-① 빌드 시   Secret APPLICATION_PROD_YML → application-prod.yaml 파일 → jar → 이미지
-             이 파일에는 ${환경변수} 자리표시자만 있다
-
-② 실행 시   docker run -e DB_PASSWORD=... 로 실제 값 주입
-             ①의 ${DB_PASSWORD} 자리가 이때 채워진다
+Secret APPLICATION_PROD_YML → application-prod.yaml → jar → 이미지
 ```
 
-`image` 잡이 ①의 내용에 **리터럴 비밀값이 섞였는지 검사해 빌드를 실패시킨다.** 규칙 문서만
-두면 언젠가 누군가 값을 직접 적는다.
+`application-prod.yaml` 은 gitignore 대상이라 **저장소에는 없다.** 다만 **이미지에는 들어간다.**
 
-이 방식이 막아주는 것과 못 막는 것을 분명히 해 둔다.
+### 알고 있어야 할 것
 
-| | 막는다 | 못 막는다 |
-|---|---|---|
-| 이미지에 값 기입 | — | 이미지를 받는 누구나 |
-| **현재 방식(`-e` 주입)** | 이미지 유출 | 서버 접근자가 `docker inspect` 로 조회 |
-| 파일 마운트(600) | 위 + inspect | 서버에서 파일 읽기 |
-| 시크릿 관리자 | 위 + 디스크 평문 | — |
+이미지를 받을 수 있는 사람은 그 안의 설정을 읽을 수 있다. 특별한 기술이 필요하지 않다.
 
-지금은 서버 운영자와 비밀 접근자가 같은 사람이라 현재 방식으로 충분하다. **둘이 분리되는
-조직으로 가면 그때 단계를 올린다.**
+```bash
+docker pull <이미지>
+docker cp <컨테이너>:/app/app.jar .
+unzip -p app.jar BOOT-INF/classes/application-prod.yaml
+```
+
+따라서 **이미지 접근 권한 = 운영 설정 접근 권한**이다. 이 등식이 성립하도록 관리해야 한다.
+
+| 이미지 가시성 | 결과 |
+|---|---|
+| public | 인터넷의 누구나 설정을 읽을 수 있다 |
+| private | GitHub 저장소 권한이 있는 사람만 읽을 수 있다 |
+
+값을 이미지에서 빼려면 yml 에 `${DB_PASSWORD}` 같은 자리표시자만 두고 배포 시
+`docker run -e` 로 주입하면 된다. 관리할 Secret 이 값 개수만큼 늘어나는 대신 이미지가
+유출돼도 설정이 함께 나가지 않는다. **어느 쪽을 택할지는 이미지 가시성과 함께 판단한다.**
 
 ## 5. 필요한 GitHub Secrets
 
 | Secret | 용도 |
 |---|---|
-| `APPLICATION_PROD_YML` | 운영 설정 본문 (자리표시자만) |
+| `APPLICATION_PROD_YML` | **운영 설정 전부** — DB 접속, 암호화 마스터키, 관리자 초기 비밀번호 |
 | `SERVER_HOST` · `SERVER_USER` · `SERVER_PASSWORD` · `SERVER_SSH_PORT` | 배포 서버 접속 |
 | `DEPLOY_PORT` | 컨테이너 `8080` 을 붙일 호스트 포트 |
 | `DEPLOY_NETWORK` | 컨테이너를 붙일 도커 네트워크 (DB 와 같은 네트워크) |
-| `PALIM_DB_HOST` · `PALIM_DB_NAME` · `PALIM_DB_USER` · `PALIM_DB_PASSWORD` | DB 접속 |
-| `PALIM_CRYPTO_MASTER_KEY` | 인증정보 암호화 마스터키 |
-| `PALIM_ADMIN_PASSWORD` | 관리자 초기 비밀번호 |
 
-**`PALIM_ADMIN_PASSWORD` 를 비우면 안 된다.** 비면 코드의 기본값으로 관리자 계정이 만들어지는데,
-그 값은 공개 문서에도 적혀 있다. "최초 로그인 시 변경 강제"가 있지만 그건 방어가 아니다 —
+뒤의 여섯은 애플리케이션 설정이 아니라 **배포 명령의 인자**다. SSH 접속 정보는 앱이 알 필요가
+없고, 포트 매핑과 네트워크는 `docker run` 이 쓰는 값이라 yml 에 넣을 자리가 없다.
+
+**`APPLICATION_PROD_YML` 에 관리자 비밀번호를 반드시 넣는다.** 비우면 코드의 기본값으로 계정이
+만들어지는데 그 값은 공개 문서에도 적혀 있다. "최초 로그인 시 변경 강제"는 방어가 아니다 —
 공격자도 기본값을 알고 있으므로 **먼저 로그인해서 자기 비밀번호로 바꾸면 그만**이고, 그러면
-정당한 소유자가 잠긴다.
+정당한 소유자가 잠긴다. 계정이 이미 있으면 이 값은 무시된다(덮어쓰지 않는다).
 
 ## 6. 다른 환경에 올리기
 
