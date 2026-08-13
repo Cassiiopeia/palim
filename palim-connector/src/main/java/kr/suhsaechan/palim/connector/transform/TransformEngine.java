@@ -45,9 +45,19 @@ public class TransformEngine {
         Set<String> consumed = new HashSet<>();
 
         for (FieldMapping mapping : mappings) {
+            TargetFieldSpec spec = specByKey.get(mapping.targetFieldKey());
+
+            // 고정값은 원천을 읽지 않는다. 칸 이름이 비어 있어 그냥 태우면 null 을 꺼내게 되고,
+            // consumed 에 넣으면 «쓰지도 않은 칸» 이 보존 대상에서 빠져 사용자가 넣지 않은
+            // 이유로 자료가 사라진다.
+            if (spec != null && mapping.rule().type() == TransformType.CONSTANT) {
+                String constant = mapping.rule().param("value", "");
+                values.put(mapping.targetFieldKey(), coerce(constant, spec, mapping.rule()));
+                continue;
+            }
+
             consumed.add(mapping.sourceField());
 
-            TargetFieldSpec spec = specByKey.get(mapping.targetFieldKey());
             if (spec == null) {
                 // 목표 모델에 없는 키로 매핑돼 있으면 무시한다. 모델에서 필드를 지웠는데
                 // 매핑이 남아 있는 경우이며, 그 자체로 실행을 막을 이유는 없다.
@@ -87,6 +97,8 @@ public class TransformEngine {
             case CODE_REPLACE -> rule.params().getOrDefault(value, value);
             case DEFAULT_IF_EMPTY ->
                     StringUtils.hasText(value) ? value : rule.param("value", "");
+            // 위에서 이미 처리하고 넘어오지만, 다른 경로로 들어와도 원천 값에 좌우되지 않아야 한다.
+            case CONSTANT -> rule.param("value", "");
             case DATE_FORMAT -> normalizeDate(value, rule);
         };
     }
