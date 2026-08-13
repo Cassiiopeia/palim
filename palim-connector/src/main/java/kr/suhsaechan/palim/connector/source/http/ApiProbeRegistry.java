@@ -16,14 +16,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApiProbeRegistry {
 
-    private final Map<ApiAuthPreset, ApiProbe> probes = new EnumMap<>(ApiAuthPreset.class);
+    private final Map<ApiAuthPreset.AuthFlow, ApiProbe> probes = new EnumMap<>(ApiAuthPreset.AuthFlow.class);
 
     public ApiProbeRegistry(List<ApiProbe> apiProbes) {
-        apiProbes.forEach(probe -> probes.put(probe.preset(), probe));
+        apiProbes.forEach(probe -> probes.put(probe.flow(), probe));
     }
 
     public ApiProbe of(ApiAuthPreset preset) {
-        ApiProbe probe = probes.get(preset);
+        ApiProbe probe = probes.get(preset.getFlow());
         if (probe == null) {
             throw new BusinessException(ErrorCode.API_PROBE_INCOMPLETE, preset.name());
         }

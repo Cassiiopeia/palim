@@ -58,7 +58,7 @@ public class ConnectionAdminService {
 
     /** 인증 흐름에 따라 값의 이름표가 다르다. 나중에 사람이 무엇을 넣었는지 알아볼 수 있어야 한다. */
     private String secretNameOf(ConnectionForm form) {
-        return switch (form.getPreset()) {
+        return switch (form.getPreset().getFlow()) {
             case ZONE_SESSION -> "apiKey";
             case FORM_SESSION -> "password";
         };

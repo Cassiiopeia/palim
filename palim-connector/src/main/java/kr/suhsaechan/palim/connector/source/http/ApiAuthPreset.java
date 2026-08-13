@@ -1,40 +1,105 @@
 package kr.suhsaechan.palim.connector.source.http;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * 외부 시스템 인증 흐름 프리셋.
+ * 연동 대상 프리셋.
  *
- * <p>인증은 시스템마다 절차가 다르다. 어떤 곳은 키 하나를 헤더에 넣으면 끝이고, 어떤 곳은
- * 지역(zone)을 먼저 조회한 뒤 로그인해 세션을 받아야 한다. 이 차이를 화면 설정만으로 흡수하려
- * 하면 "요청을 만드는 작은 프로그래밍 언어"를 만들게 되고, 그건 설정이 아니라 코드다.
+ * <p><b>흐름과 벤더를 나눠 담는다.</b> 인증 절차({@link AuthFlow})는 몇 가지 유형으로 수렴하지만,
+ * 접속 주소·필드 이름 같은 구체적인 값은 시스템마다 다르다. 절차만 남기고 값을 전부 사람에게
+ * 입력시키면 "로그인 주소가 뭐죠"부터 막히고, 반대로 값까지 코드에 박아 하나로 만들면 새 시스템이
+ * 붙을 때마다 클래스를 늘려야 한다.
  *
- * <p>그래서 <b>절차는 프리셋으로 두고, 그 안에서 바뀌는 값만 설정으로 받는다.</b> 새 시스템은
- * {@link ApiProbe} 구현체 하나를 추가하면 붙는다 — 화면과 저장 구조는 손대지 않는다.
+ * <p>그래서 프리셋은 <b>흐름 + 그 시스템의 기본값</b>이다. 사용자는 계정 정보만 넣는다.
+ * 새 시스템은 여기 한 줄을 더하면 되고, 기본값이 맞지 않으면 화면에서 덮어쓸 수 있다.
  */
 public enum ApiAuthPreset {
 
     /**
-     * 지역 조회 → 로그인(세션 발급) → 업무 API 3단계.
+     * 이카운트 ERP 오픈 API.
      *
-     * <p>세션이 만료되면 로그인부터 다시 한다. 인증키는 특정 사용자 ID 에 묶여 있어, 로그인에
-     * 쓰는 ID 가 발급 시 지정한 ID 와 다르면 인증이 거부된다.
+     * <p>회사코드로 지역을 조회한 뒤 인증키로 로그인해 세션을 받는다. 인증키는 발급 시 지정한
+     * 사용자 ID 에 묶이므로, 로그인에 쓰는 ID 가 다르면 인증이 거부된다.
+     *
+     * <p>테스트 환경과 운영 환경의 주소 접두어가 다르다. 테스트용 인증키는 업무 API 를 한 번
+     * 성공시키면 소진되므로 검증은 한 번에 끝내야 한다.
      */
-    ZONE_SESSION("지역 조회 → 로그인 → 조회 (3단계)"),
+    ECOUNT("이카운트 ERP", AuthFlow.ZONE_SESSION,
+            "회사코드·사용자ID·API 인증키가 필요합니다. 인증키는 ERP 관리자가 발급합니다.",
+            Map.of("apiDomain", "ecount.com",
+                    "sandboxPrefix", "sboapi",
+                    "livePrefix", "oapi")),
 
     /**
-     * 로그인 폼 전송 → 세션 쿠키 → 조회.
+     * ONEWMS 3자물류 재고 어드민.
      *
-     * <p>웹 화면이 쓰는 것과 같은 경로다. 공개 API 가 유료이거나 없을 때 쓴다. 화면 구조가
-     * 바뀌면 깨지므로 수집 실패를 반드시 알려야 한다 — 조용히 멈추면 옛 데이터로 대사가 돈다.
+     * <p>공개 API 가 유료라 화면이 쓰는 경로를 그대로 쓴다. 로그인 폼을 전송해 세션 쿠키를 받고,
+     * 화면이 호출하는 조회 요청을 같은 형식으로 보낸다.
+     *
+     * <p><b>상대 화면이 바뀌면 깨진다.</b> 수집 실패를 반드시 알려야 한다 — 조용히 멈추면 옛
+     * 데이터로 대사가 계속 돌고, 그 결과를 믿고 판단하게 된다.
      */
-    FORM_SESSION("로그인 폼 → 세션 쿠키 → 조회");
+    ONEWMS("ONEWMS (3자물류)", AuthFlow.FORM_SESSION,
+            "회사코드(계정정보)·아이디·비밀번호가 필요합니다. 조회 전용으로만 씁니다.",
+            Map.of("loginUrl", "https://svc.onewms.co.kr/login.html",
+                    "fetchUrl", "https://svc.onewms.co.kr/function.html",
+                    "useridField", "userid",
+                    "passwordField", "passwd",
+                    "tokenField", "token",
+                    "rowsPath", "rows",
+                    "fetchBody", "template=I100&action=search&page_code=I100&rows=500&page=1"
+                            + "&sidx=&sord=asc&_search=false")),
 
-    private final String description;
+    /** 위에 없는 시스템. 주소와 필드 이름을 직접 입력한다. */
+    CUSTOM_FORM("직접 설정 (웹 로그인 방식)", AuthFlow.FORM_SESSION,
+            "로그인 주소·조회 주소·요청 본문을 직접 입력합니다.", Map.of());
 
-    ApiAuthPreset(String description) {
-        this.description = description;
+    /** 인증 절차 유형. 검증기는 이 값으로 고른다. */
+    public enum AuthFlow {
+        /** 지역 조회 → 로그인(세션 발급) → 업무 API. */
+        ZONE_SESSION,
+        /** 로그인 폼 → 세션 쿠키 → 조회. */
+        FORM_SESSION
     }
 
-    public String getDescription() {
-        return description;
+    private final String label;
+    private final AuthFlow flow;
+    private final String hint;
+    private final Map<String, String> defaults;
+
+    ApiAuthPreset(String label, AuthFlow flow, String hint, Map<String, String> defaults) {
+        this.label = label;
+        this.flow = flow;
+        this.hint = hint;
+        this.defaults = defaults;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public AuthFlow getFlow() {
+        return flow;
+    }
+
+    public String getHint() {
+        return hint;
+    }
+
+    /** 사용자가 입력한 값이 기본값을 덮는다. 기본값이 맞지 않는 환경에서도 쓸 수 있어야 한다. */
+    public Map<String, String> mergeDefaults(Map<String, String> params) {
+        Map<String, String> merged = new LinkedHashMap<>(defaults);
+        params.forEach((key, value) -> {
+            if (value != null && !value.isBlank()) {
+                merged.put(key, value);
+            }
+        });
+        return merged;
+    }
+
+    /** 직접 설정이 필요한가. 화면에서 주소 입력칸을 열지 결정한다. */
+    public boolean needsManualEndpoint() {
+        return defaults.isEmpty();
     }
 }
