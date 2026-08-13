@@ -114,6 +114,7 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile/runs/{runId}", run.getId()))
                 .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
                 // 지금 손댈 것과 지켜볼 것을 섞으면 둘 다 안 보게 된다
                 .andExpect(content().string(containsString("지금 볼 것")))
                 // 미매칭은 «재고를 맞출 것» 이 아니라 «품목을 이을 것» 이다
@@ -132,6 +133,7 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile"))
                 .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(containsString("재고 대조")));
     }
 
@@ -143,6 +145,7 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile/{id}", run.getDefinitionId()))
                 .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(containsString("맞춰 본 기록")));
     }
 
@@ -161,6 +164,7 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile/units"))
                 .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(containsString("확인해 주세요")))
                 .andExpect(content().string(containsString("정해 둔 품목")))
                 // 틀린 채로 두면 어떻게 되는지 말해 줘야 사람이 실제로 확인한다
