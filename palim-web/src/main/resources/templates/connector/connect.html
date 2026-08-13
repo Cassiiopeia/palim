@@ -135,7 +135,20 @@
                         <span th:if="${step.success}" class="badge badge-success badge-sm">성공</span>
                         <span th:unless="${step.success}" class="badge badge-error badge-sm">실패</span>
                     </td>
-                    <td class="text-sm" th:text="${step.message}">내용</td>
+                    <td class="text-sm">
+                        <div th:text="${step.message}">내용</div>
+                        <!--/* 상대 서버가 뭐라고 했는지가 원인을 찾는 유일한 단서다.
+                               요약만 보여주면 키가 틀린 것인지 권한이 없는 것인지 알 수 없다. */-->
+                        <details th:if="${step.hasRawResponse()}" class="mt-2">
+                            <summary class="cursor-pointer text-xs text-primary">
+                                서버 응답 보기
+                                <span th:if="${step.httpStatus > 0}"
+                                      th:text="'(HTTP ' + ${step.httpStatus} + ')'">(HTTP 400)</span>
+                            </summary>
+                            <pre class="mt-2 p-3 bg-base-200 rounded text-xs overflow-x-auto whitespace-pre-wrap"
+                                 th:text="${step.rawResponse}">응답</pre>
+                        </details>
+                    </td>
                     <td class="text-right text-sm" th:text="${step.elapsedMs} + ' ms'">0 ms</td>
                 </tr>
                 </tbody>

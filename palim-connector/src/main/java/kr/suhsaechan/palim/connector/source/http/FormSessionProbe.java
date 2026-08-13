@@ -71,7 +71,8 @@ public class FormSessionProbe implements ApiProbe {
             steps.add(ProbeStep.ok("로그인 화면 열기",
                     token.isEmpty() ? "토큰 없음(불필요할 수 있음)" : "토큰 확보", elapsed(started)));
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("로그인 화면 열기", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("로그인 화면 열기", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             steps.add(ProbeStep.skipped("로그인"));
             steps.add(ProbeStep.skipped("데이터 조회"));
             return ProbeReport.of(List.copyOf(steps));
@@ -102,14 +103,16 @@ public class FormSessionProbe implements ApiProbe {
 
             if (!hasSession(cookies)) {
                 steps.add(ProbeStep.fail("로그인",
-                        "세션 쿠키를 받지 못했습니다. 계정 정보를 확인하세요.", elapsed(started)));
+                        "세션 쿠키를 받지 못했습니다. 계정 정보를 확인하세요.", elapsed(started),
+                        response.getStatusCode().value(), response.getBody()));
                 steps.add(ProbeStep.skipped("데이터 조회"));
                 return ProbeReport.of(List.copyOf(steps));
             }
             steps.add(ProbeStep.ok("로그인", "세션 쿠키 " + cookies.size() + "개 확보",
                     elapsed(started)));
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("로그인", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("로그인", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             steps.add(ProbeStep.skipped("데이터 조회"));
             return ProbeReport.of(List.copyOf(steps));
         }
@@ -127,14 +130,16 @@ public class FormSessionProbe implements ApiProbe {
                     request.params().getOrDefault("rowsPath", "rows"));
             if (rows.isEmpty()) {
                 steps.add(ProbeStep.fail("데이터 조회",
-                        "응답에서 행을 찾지 못했습니다. 응답 경로 설정을 확인하세요.", elapsed(started)));
+                        "응답에서 행을 찾지 못했습니다. 응답 경로 설정을 확인하세요.", elapsed(started),
+                        response.getStatusCode().value(), response.getBody()));
                 return ProbeReport.of(List.copyOf(steps));
             }
             steps.add(ProbeStep.ok("데이터 조회", rows.size() + "행 확인", elapsed(started)));
             return new ProbeReport(steps, List.copyOf(rows.getFirst().keySet()),
                     rows.stream().limit(SAMPLE_LIMIT).toList(), rows.size());
         } catch (Exception e) {
-            steps.add(ProbeStep.fail("데이터 조회", reason(e), elapsed(started)));
+            steps.add(ProbeStep.fail("데이터 조회", HttpExchange.summarize(e), elapsed(started),
+                    HttpExchange.statusOf(e), HttpExchange.bodyOf(e)));
             return ProbeReport.of(List.copyOf(steps));
         }
     }
@@ -220,11 +225,6 @@ public class FormSessionProbe implements ApiProbe {
         }
         String raw = node.isValueNode() ? node.asString() : node.toString();
         return raw.replaceAll("<[^>]*>", "").trim();
-    }
-
-    private static String reason(Exception e) {
-        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        return message.length() > 200 ? message.substring(0, 200) + "…" : message;
     }
 
     private static long elapsed(long startedNanos) {

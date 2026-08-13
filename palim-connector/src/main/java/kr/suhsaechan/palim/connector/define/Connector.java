@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
@@ -85,6 +86,37 @@ public class Connector extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean enabled;
 
+    /**
+     * 연결 상태. 화면이 "다음에 무엇을 하라"고 말하는 근거다.
+     *
+     * <p>등록만 하고 검증하지 않은 것과 검증까지 끝난 것은 다르다. 구분하지 않으면 사용자는
+     * 등록을 마친 뒤 멈추고, 첫 수집에서야 안 된다는 것을 알게 된다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ConnectionStatus connectionStatus;
+
+    /**
+     * 등록된 인증키의 종류.
+     *
+     * <p>테스트 키는 업무 API 를 한 번 성공시키면 소진되는 경우가 있어 매일 수집에 쓸 수 없다.
+     * 종류를 기억해야 "정식 키로 교체하세요"라고 안내할 수 있다.
+     */
+    @Column(length = 10)
+    private String credentialKind;
+
+    /** 마지막으로 검증에 성공한 시각. 오래됐으면 다시 확인해 보라고 알릴 수 있다. */
+    private Instant lastVerifiedAt;
+
+    /**
+     * 마지막 실패 사유.
+     *
+     * <p>화면을 닫으면 사라지는 오류는 없는 것과 같다. 키 만료처럼 시간이 지나 드러나는 실패는
+     * 남겨두지 않으면 원인을 다시 찾아야 한다.
+     */
+    @Column(length = 500)
+    private String lastError;
+
     private Connector(UUID tenantId, String code, String name, UUID targetModelId,
                       SourceType sourceType, String defaultUnit) {
         this.id = UuidV7.generate();
@@ -97,6 +129,23 @@ public class Connector extends BaseTimeEntity {
         this.defaultUnit = defaultUnit;
         this.incrementalMode = IncrementalMode.FULL;
         this.enabled = true;
+        this.connectionStatus = ConnectionStatus.NOT_CONFIGURED;
+    }
+
+    /** 검증 성공. 키 종류에 따라 아직 할 일이 남았는지가 갈린다. */
+    public void markVerified(boolean live) {
+        this.connectionStatus = live
+                ? ConnectionStatus.VERIFIED_LIVE : ConnectionStatus.VERIFIED_TEST;
+        this.credentialKind = live ? "LIVE" : "TEST";
+        this.lastVerifiedAt = Instant.now();
+        this.lastError = null;
+    }
+
+    /** 검증 실패. 사유를 남겨 나중에 원인을 되짚을 수 있게 한다. */
+    public void markFailed(String reason) {
+        this.connectionStatus = ConnectionStatus.FAILED;
+        this.lastError = reason == null ? null
+                : reason.substring(0, Math.min(reason.length(), 500));
     }
 
     public static Connector of(UUID tenantId, String code, String name, UUID targetModelId,
