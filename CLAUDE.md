@@ -15,7 +15,8 @@ Java 25 / Spring Boot 4.x 모놀리스 + `scripts/` Python 서브프로세스.
 | 새 모듈·클래스를 어디 둘지 | `docs/02-ARCHITECTURE.md` |
 | 코드 스타일·예외·py 규약 | `docs/04-CONVENTIONS.md` |
 | AI·외부 API·알림 연동 | `docs/05-INTEGRATION.md` |
-| 배포·설정·Docker·AWS | `docs/06-OPERATIONS.md` |
+| 설정 파일 전략·감시·AWS 이식 | `docs/06-OPERATIONS.md` |
+| **배포 파이프라인·GHCR·Secret·롤백** | `docs/10-DEPLOYMENT.md` |
 | **"왜 이렇게 되어 있나"** | `docs/07-DECISIONS.md` |
 | 다음에 할 일 | `docs/08-ROADMAP.md` |
 | 인증·암호화·감사·공급망 보안 | `docs/09-SECURITY.md` |
