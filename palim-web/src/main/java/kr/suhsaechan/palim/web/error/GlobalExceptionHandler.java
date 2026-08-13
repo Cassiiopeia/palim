@@ -8,11 +8,13 @@ import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -102,6 +104,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.httpStatus())
                 .body(ErrorResponse.of(errorCode, errorMessageResolver.resolve(errorCode),
                         request.getRequestURI()));
+    }
+
+    /**
+     * 없는 정적 파일 요청.
+     *
+     * <p>브라우저가 자동으로 요청하는 {@code /favicon.ico} 같은 것들이다. 이것을 "처리하지 못한
+     * 오류"로 다루면 <b>페이지를 열 때마다 ERROR 로그가 쌓이고, 그 사이에 진짜 장애가 묻힌다.</b>
+     * 404 로 조용히 돌려준다.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException exception,
+                                                          HttpServletRequest request) {
+        log.debug("없는 정적 자원 — {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
     /**
