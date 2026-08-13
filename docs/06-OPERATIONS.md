@@ -15,17 +15,25 @@
 
 ## 운영 환경 (2026-08 기준)
 
+> 호스트명·SSH 포트·운영 도메인·서버 계정명은 **여기 적지 않는다**(금지사항 1). 실제 값은
+> GitHub Secret(`SERVER_HOST`·`SERVER_USER`·`SERVER_PASSWORD`)과 로컬 config 에만 있다.
+
 | 항목 | 값 |
 |---|---|
-| 호스트 | 시놀로지 NAS (`suh-project.synology.me`, SSH 2022) |
+| 호스트 | 관리자 소유 NAS 1대 (컨테이너 런타임 + 역방향 프록시 내장) |
 | 컨테이너 | `palim` — `ghcr.io/cassiiopeia/palim:<커밋 SHA>` |
-| 포트 | 호스트 `8095` → 컨테이너 `8080` |
-| DB | **NAS 공용 PostgreSQL 14.15** 의 `palim` 데이터베이스, 전용 계정 `palim` |
-| 네트워크 | `postgres_default` — DB 컨테이너와 같은 네트워크라 `postgres:5432` 로 붙는다 |
-| 외부 노출 | DSM 역방향 프록시 → `https://palim.suhsaechan.kr` |
+| 포트 | 컨테이너 `8080` 을 호스트 포트 하나에 매핑 |
+| DB | **NAS 공용 PostgreSQL 14** 의 `palim` 데이터베이스 |
+| 네트워크 | DB 컨테이너와 같은 도커 네트워크에 붙여 컨테이너 이름으로 접속 |
+| 외부 노출 | NAS 역방향 프록시 → HTTPS (인증서는 NAS 가 발급·갱신) |
 
-**DB 는 여러 프로젝트가 공유한다.** 그래서 두 가지를 지킨다 — 커넥션 풀 상한을 10 으로 묶고,
-`palim` 전용 계정만 쓴다(공용 관리자 계정을 쓰면 남의 DB 까지 접근 가능해진다).
+**DB 는 여러 프로젝트가 공유한다.** 커넥션 풀 상한을 10 으로 묶어 남의 서비스가 커넥션을
+못 얻는 일을 막는다.
+
+계정은 NAS 공용 관리 계정을 그대로 쓴다. 이 NAS 는 관리자 1인이 테스트 용도로 운영하고 올라간
+프로젝트가 전부 같은 사람 것이라, 프로젝트마다 계정을 나누면 관리 비용만 늘고 얻는 게 없다.
+**여러 사람이 쓰는 환경으로 옮길 때는 이 판단을 다시 해야 한다** — 공용 계정은 슈퍼유저라
+그 자격증명 하나로 인스턴스의 모든 DB 에 접근된다.
 
 **PostgreSQL 은 14 다.** 15+ 전용 문법을 쓰면 테스트는 통과하고 배포에서만 죽는다.
 자세한 것은 `CLAUDE.md` 「운영 PostgreSQL 은 14 다」 참고.
@@ -49,10 +57,31 @@ guard(커밋 검사) → build(테스트) → image(GHCR 푸시) → deploy(NAS)
 - 기동 확인은 `/actuator/health` 가 `UP` 이 될 때까지 최대 200초. 실패하면 컨테이너 로그를
   출력하고 워크플로를 실패시킨다
 
-필요한 GitHub Secrets: `APPLICATION_PROD_YML`, `PALIM_DB_PASSWORD`,
-`PALIM_CRYPTO_MASTER_KEY`, `SERVER_HOST`, `SERVER_USER`, `SERVER_PASSWORD`.
+### 필요한 GitHub Secrets
+
+배포 대상을 지목하는 값은 **하나도 파일에 두지 않는다.** 다른 환경에 올리려면 아래 Secret 만
+자기 값으로 채우면 되고, 워크플로는 고치지 않아도 된다.
+
+| Secret | 용도 |
+|---|---|
+| `APPLICATION_PROD_YML` | 운영 설정 본문. `${환경변수}` 자리표시자만 담는다 |
+| `SERVER_HOST` · `SERVER_USER` · `SERVER_PASSWORD` · `SERVER_SSH_PORT` | 배포 대상 서버 접속 |
+| `DEPLOY_PORT` | 컨테이너 `8080` 을 붙일 호스트 포트 |
+| `DEPLOY_NETWORK` | 컨테이너를 붙일 도커 네트워크 (DB 와 같은 네트워크) |
+| `PALIM_DB_HOST` · `PALIM_DB_NAME` · `PALIM_DB_USER` · `PALIM_DB_PASSWORD` | DB 접속 |
+| `PALIM_CRYPTO_MASTER_KEY` | 인증정보 암호화 마스터키 (`openssl rand -base64 32`) |
 
 **롤백**은 이전 커밋 SHA 태그로 `docker run` 을 다시 하면 된다.
+
+### 다른 환경에 올릴 때
+
+1. 대상 서버에 컨테이너 런타임과 PostgreSQL **14 이상**을 준비하고 빈 데이터베이스를 만든다
+2. 앱 컨테이너가 DB 에 컨테이너 이름으로 접근할 수 있도록 같은 도커 네트워크에 둔다
+3. 위 Secret 을 채운다
+4. `main` 에 push 하면 배포된다
+
+`guard` 잡이 커밋 메시지의 AI 흔적, 사내·발주사 자료 추적, **인프라 식별정보 유출**을 검사해
+위반 시 빌드를 실패시킨다. 규칙 문서만으로는 언젠가 누군가 값을 직접 적는다.
 
 ## 빌드 · 배포 — Docker 단일 이미지
 

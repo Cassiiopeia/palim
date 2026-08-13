@@ -1,8 +1,16 @@
+# 로컬 개발 설정 템플릿.
+#
+# 실제 application-dev.yaml 은 gitignore 대상이다. 이 파일을 복사해서 쓰되,
+# **다른 환경에 그대로 복사하지 않는다** — 여기 값은 로컬 전용이다.
+#
+# 비밀값은 리터럴로 적지 않고 환경변수로 받는다. 기본값을 파일에 적어 두면 저장소가
+# 공개인 이상 그 값이 곧 공개된 자격증명이 되고, docker-compose 기본값과 짝을 이루면
+# "아무 설정 없이 띄운 DB" 가 공개된 비밀번호로 열린다.
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/palim
-    username: palim
-    password: palim
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:palim}
+    username: ${DB_USER:palim}
+    password: ${DB_PASSWORD}
 
   jpa:
     properties:

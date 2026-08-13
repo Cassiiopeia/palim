@@ -1,3 +1,7 @@
+# 로컬 개발용. 포트는 전부 루프백(127.0.0.1)에만 연다.
+#
+# 인터페이스를 지정하지 않으면 0.0.0.0 에 바인딩되는데, 도커는 iptables 규칙을 직접 넣기
+# 때문에 호스트 방화벽(ufw 등) 설정을 우회한다. "방화벽이 있으니 괜찮다" 가 성립하지 않는다.
 services:
   postgres:
     # 운영과 같은 메이저 버전을 쓴다. 로컬만 높이면 상위 버전 전용 문법이 여기서는 멀쩡히
@@ -8,10 +12,13 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-palim}
       POSTGRES_USER: ${DB_USER:-palim}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-palim}
+      # 기본값을 두지 않는다. 저장소가 공개이므로 기본 비밀번호를 적어 두면 그 값이 곧
+      # 공개된 자격증명이 되고, .env 를 만들지 않은 사람의 DB 가 그 값으로 뜬다.
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 .env 에 설정하십시오}
       TZ: UTC
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # 루프백 고정 — 위 주석 참고.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,17 +31,21 @@ services:
   #
   # 알림 재시도는 PostgreSQL Outbox 가 관리하며(attemptCount), 큐를 함께 두면 재시도 근거가
   # 두 곳으로 갈려 어느 쪽이 진실인지 알 수 없게 된다. 발송 워커를 별도 프로세스로 분리하거나
-  # 부하가 늘어나면 다시 붙인다. 그때까지 이 컨테이너는 띄우지 않아도 된다.
+  # 부하가 늘어나면 다시 붙인다.
+  #
+  # profiles 를 붙여 기본 기동에서 빼 둔다. 이게 없으면 `docker compose up` 만으로
+  # 관리 UI(15672)가 함께 뜬다. 필요할 때만 `--profile queue` 로 올린다.
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: palim-rabbitmq
     restart: unless-stopped
+    profiles: ["queue"]
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-palim}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-palim}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD 를 .env 에 설정하십시오}
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     healthcheck:

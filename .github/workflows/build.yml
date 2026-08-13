@@ -35,11 +35,25 @@ jobs:
             exit 1
           fi
 
-      # 사내 참고 자료는 어떤 경로로도 공개 저장소에 들어가면 안 된다.
+      # 사내·발주사 맥락이 담긴 자료는 어떤 경로로도 공개 저장소에 들어가면 안 된다.
+      # docs/archive 는 과거 요구사항 문서라 로컬에는 두되 추적하지 않는다.
       - name: 사내 자료 차단
         run: |
-          if git ls-files | grep -E '^docs/somansa/|somansa.*redmine|redmine.*attachments'; then
-            echo "::error::사내 참고 자료가 추적되고 있습니다. 즉시 제거하십시오."
+          if git ls-files | grep -E '^docs/somansa/|^docs/archive/|somansa.*redmine|redmine.*attachments'; then
+            echo "::error::사내·발주사 자료가 추적되고 있습니다. 즉시 제거하십시오."
+            exit 1
+          fi
+
+      # 배포 대상을 지목하는 값이 파일에 새는 것을 막는다. 이 저장소는 공개이고
+      # 남이 그대로 가져다 쓰므로, 환경 특정 값은 전부 Secret 에만 있어야 한다.
+      - name: 인프라 식별정보 차단
+        run: |
+          HITS=$(git ls-files -z \
+            | xargs -0 grep -nIE '([A-Za-z0-9-]+\.(synology\.me|myds\.me)|/volume[0-9]+/)' \
+              2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::서버 호스트명·내부 경로가 추적 파일에 있습니다. Secret 으로 옮기십시오."
+            echo "$HITS"
             exit 1
           fi
 
@@ -156,8 +170,20 @@ jobs:
       IMAGE_REF: ghcr.io/cassiiopeia/palim:${{ github.sha }}
       GHCR_USER: ${{ github.actor }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 배포 대상 환경을 특정하는 값은 하나도 파일에 두지 않는다. 이 저장소는 공개이고
+      # 누군가 그대로 가져다 쓸 수 있으므로, 호스트·포트·네트워크·계정은 전부 Secret 이다.
+      # 다른 환경에 올릴 사람은 Secret 만 자기 값으로 채우면 된다.
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_NETWORK: ${{ secrets.DEPLOY_NETWORK }}
+      DB_HOST: ${{ secrets.PALIM_DB_HOST }}
+      DB_NAME: ${{ secrets.PALIM_DB_NAME }}
+      DB_USER: ${{ secrets.PALIM_DB_USER }}
       DB_PASSWORD: ${{ secrets.PALIM_DB_PASSWORD }}
       MASTER_KEY: ${{ secrets.PALIM_CRYPTO_MASTER_KEY }}
+      # 이걸 주입하지 않으면 관리자 계정이 코드의 기본값으로 만들어진다. 그 값은 공개
+      # 문서에도 적혀 있으므로, 계정이 처음 생기는 순간부터 "먼저 로그인하는 쪽이 가져가는"
+      # 상태가 된다. 최초 로그인 시 변경 강제는 공격자도 통과할 수 있어 방어가 되지 않는다.
+      ADMIN_PASSWORD: ${{ secrets.PALIM_ADMIN_PASSWORD }}
     steps:
       - name: SSH 배포
         uses: appleboy/ssh-action@v1.0.3
@@ -165,43 +191,57 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 2022
+          port: ${{ secrets.SERVER_SSH_PORT }}
           timeout: 60s
           command_timeout: 600s
-          envs: IMAGE_REF,GHCR_USER,GHCR_TOKEN,DB_PASSWORD,MASTER_KEY
+          envs: IMAGE_REF,GHCR_USER,GHCR_TOKEN,DEPLOY_PORT,DEPLOY_NETWORK,DB_HOST,DB_NAME,DB_USER,DB_PASSWORD,MASTER_KEY,ADMIN_PASSWORD
           script: |
             set -euo pipefail
-            # 시놀로지는 docker 가 PATH 에 없다.
-            D=/var/packages/ContainerManager/target/usr/bin/docker
+            # 컨테이너 런타임 경로. PATH 에 docker 가 없는 호스트(예: NAS 패키지 설치)를
+            # 위해 후보를 순서대로 찾는다.
+            D=$(command -v docker 2>/dev/null || true)
+            for c in /var/packages/ContainerManager/target/usr/bin/docker \
+                     /usr/local/bin/docker /usr/bin/docker; do
+              [ -n "$D" ] && break
+              [ -x "$c" ] && D="$c"
+            done
+            [ -n "$D" ] || { echo "::error::docker 실행 파일을 찾지 못했습니다"; exit 1; }
 
             echo "$GHCR_TOKEN" | "$D" login ghcr.io -u "$GHCR_USER" --password-stdin
             "$D" pull "$IMAGE_REF"
 
-            # DB 는 NAS 의 공용 PostgreSQL 을 쓴다. 같은 네트워크에 붙어야 컨테이너
-            # 이름으로 접속할 수 있다 — 호스트 포트를 거치면 방화벽 설정에 묶인다.
+            # DB 컨테이너와 같은 네트워크에 붙어야 컨테이너 이름으로 접속할 수 있다 —
+            # 호스트 포트를 거치면 방화벽 설정에 묶인다.
             "$D" rm -f palim >/dev/null 2>&1 || true
             "$D" run -d --name palim \
               --restart unless-stopped \
-              --network postgres_default \
-              -p 8095:8080 \
+              --network "$DEPLOY_NETWORK" \
+              -p "${DEPLOY_PORT}:8080" \
               -e TZ=Asia/Seoul \
               -e SPRING_PROFILES_ACTIVE=prod \
-              -e DB_HOST=postgres \
+              -e DB_HOST="$DB_HOST" \
               -e DB_PORT=5432 \
-              -e DB_NAME=palim \
-              -e DB_USER=palim \
+              -e DB_NAME="$DB_NAME" \
+              -e DB_USER="$DB_USER" \
               -e DB_PASSWORD="$DB_PASSWORD" \
               -e PALIM_CRYPTO_MASTER_KEY="$MASTER_KEY" \
+              -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
               -v /etc/localtime:/etc/localtime:ro \
               "$IMAGE_REF"
 
             "$D" logout ghcr.io >/dev/null 2>&1 || true
 
             # 기동 확인. Flyway 마이그레이션이 끝나야 UP 이 되므로 넉넉히 기다린다.
-            # 시놀로지에는 curl 이 없는 경우가 많아 wget 을 쓴다.
+            # curl 이 없는 호스트가 많아 wget 을 함께 시도한다.
+            check() {
+              if command -v curl >/dev/null 2>&1; then
+                curl -fsS "http://127.0.0.1:${DEPLOY_PORT}/actuator/health" 2>/dev/null
+              else
+                wget -q -O - "http://127.0.0.1:${DEPLOY_PORT}/actuator/health" 2>/dev/null
+              fi
+            }
             for i in $(seq 1 40); do
-              if wget -q -O - "http://127.0.0.1:8095/actuator/health" 2>/dev/null \
-                   | grep -q '"status":"UP"'; then
+              if check | grep -q '"status":"UP"'; then
                 echo "기동 확인 ($((i * 5))초)"
                 "$D" image prune -af >/dev/null 2>&1 || true
                 exit 0
