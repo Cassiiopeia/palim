@@ -18,8 +18,8 @@ public class AliasSource implements SuggestionSource {
     private static final int POINTS = 100;
 
     @Override
-    public Score score(String sourceField, List<String> samples, FieldDefinition candidate) {
-        String normalized = SuggestionSource.normalize(sourceField);
+    public Score score(Context context, FieldDefinition candidate) {
+        String normalized = context.normalizedField();
         boolean matched = candidate.aliases().stream()
                 .anyMatch(alias -> SuggestionSource.normalize(alias).equals(normalized));
         return matched

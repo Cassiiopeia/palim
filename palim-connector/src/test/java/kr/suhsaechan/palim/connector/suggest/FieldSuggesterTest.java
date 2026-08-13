@@ -22,6 +22,7 @@ class FieldSuggesterTest {
     private final FieldSuggester suggester = new FieldSuggester(
             List.of(new StockSnapshotFields()),
             List.of(new AliasSource(), new NamePatternSource(), new ValueShapeSource()));
+    // 예전 기록 근거는 DB 가 필요해 여기 넣지 않는다. 통합 테스트가 따로 확인한다.
 
     private static final String MODEL = "std_stock_snapshot";
 

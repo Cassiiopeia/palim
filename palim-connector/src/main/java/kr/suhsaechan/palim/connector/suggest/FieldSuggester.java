@@ -56,8 +56,9 @@ public class FieldSuggester {
 
         List<FieldSuggestion> best = new ArrayList<>();
         for (String sourceField : sourceFields) {
-            List<String> values = SuggestionSource.valuesOf(sourceField, sampleRows);
-            bestFor(sourceField, values, candidates).ifPresent(best::add);
+            SuggestionSource.Context context = new SuggestionSource.Context(
+                    sourceField, SuggestionSource.valuesOf(sourceField, sampleRows), targetModel);
+            bestFor(context, candidates).ifPresent(best::add);
         }
 
         // 한 표준 항목에 두 칸이 붙으면 나중 것이 앞의 것을 덮어써 조용히 자료가 어긋난다.
@@ -69,21 +70,22 @@ public class FieldSuggester {
                 .toList();
     }
 
-    private java.util.Optional<FieldSuggestion> bestFor(String sourceField, List<String> values,
+    private java.util.Optional<FieldSuggestion> bestFor(SuggestionSource.Context context,
                                                         List<FieldDefinition> candidates) {
         FieldSuggestion best = null;
         for (FieldDefinition candidate : candidates) {
             int total = 0;
             List<String> reasons = new ArrayList<>();
             for (SuggestionSource source : sources) {
-                SuggestionSource.Score score = source.score(sourceField, values, candidate);
+                SuggestionSource.Score score = source.score(context, candidate);
                 if (score.scored()) {
                     total += score.points();
                     reasons.add(score.reason());
                 }
             }
             if (total >= THRESHOLD && (best == null || total > best.score())) {
-                best = new FieldSuggestion(sourceField, candidate.key(), total, reasons);
+                best = new FieldSuggestion(context.sourceField(), candidate.key(), total,
+                        reasons);
             }
         }
         return java.util.Optional.ofNullable(best);

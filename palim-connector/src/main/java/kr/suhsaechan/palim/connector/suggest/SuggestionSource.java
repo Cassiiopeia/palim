@@ -1,7 +1,9 @@
 package kr.suhsaechan.palim.connector.suggest;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import kr.suhsaechan.palim.connector.model.FieldDefinition;
 
 /**
@@ -19,12 +21,34 @@ public interface SuggestionSource {
     /**
      * 이 원천 칸이 그 표준 항목일 가능성에 점수를 매긴다.
      *
-     * @param sourceField 원천 칸 이름
-     * @param samples     그 칸에 실제로 들어 있는 값 몇 개
-     * @param candidate   따져 볼 표준 항목
+     * @param context   무엇을 따지는지 (칸 이름 · 값 · 담을 모델)
+     * @param candidate 따져 볼 표준 항목
      * @return 점수와 근거. 해당 없으면 {@link Score#none()}
      */
-    Score score(String sourceField, List<String> samples, FieldDefinition candidate);
+    Score score(Context context, FieldDefinition candidate);
+
+    /**
+     * 판단에 필요한 것.
+     *
+     * <p>인자를 묶어 둔 이유는 근거마다 필요한 것이 다르기 때문이다. 사전은 이름만 보고, 값
+     * 모양은 값만 보며, 예전 기록은 모델까지 본다. 인자를 늘어놓으면 정보가 하나 더 필요해질
+     * 때마다 구현체 전부를 고쳐야 한다.
+     *
+     * @param sourceField 원천이 준 칸 이름
+     * @param samples     그 칸에 실제로 들어 있는 값 몇 개
+     * @param targetModel 담을 표준 모델 코드
+     */
+    record Context(String sourceField, List<String> samples, String targetModel) {
+
+        public Context {
+            samples = samples == null ? List.of() : List.copyOf(samples);
+        }
+
+        /** 이름 비교용. 대소문자·밑줄·공백·하이픈 차이는 같은 이름으로 본다. */
+        public String normalizedField() {
+            return normalize(sourceField);
+        }
+    }
 
     /**
      * 점수와 사람이 읽는 근거.
@@ -49,17 +73,16 @@ public interface SuggestionSource {
         }
     }
 
-    /** 이름 비교용 정규화. 대소문자·밑줄·공백·하이픈 차이는 같은 이름으로 본다. */
+    /** 이름 비교용 정규화. {@code BAL_QTY} 와 {@code bal qty} 는 같은 이름이다. */
     static String normalize(String raw) {
-        return raw == null ? "" : raw.toLowerCase(java.util.Locale.ROOT)
-                .replaceAll("[\\s_\\-]", "");
+        return raw == null ? "" : raw.toLowerCase(Locale.ROOT).replaceAll("[\\s_\\-]", "");
     }
 
-    /** 샘플에서 특정 칸의 값만 뽑는다. 비어 있는 값은 판단에 도움이 안 되므로 뺀다. */
+    /** 샘플에서 특정 칸의 값만 뽑는다. 빈 값은 판단에 도움이 안 되므로 뺀다. */
     static List<String> valuesOf(String sourceField, List<Map<String, Object>> rows) {
         return rows.stream()
                 .map(row -> row.get(sourceField))
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(Object::toString)
                 .filter(value -> !value.isBlank())
                 .toList();

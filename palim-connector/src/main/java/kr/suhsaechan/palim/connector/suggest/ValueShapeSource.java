@@ -20,7 +20,8 @@ public class ValueShapeSource implements SuggestionSource {
     private static final int POINTS = 40;
 
     @Override
-    public Score score(String sourceField, List<String> samples, FieldDefinition candidate) {
+    public Score score(Context context, FieldDefinition candidate) {
+        List<String> samples = context.samples();
         if (samples.isEmpty()) {
             return Score.none();
         }

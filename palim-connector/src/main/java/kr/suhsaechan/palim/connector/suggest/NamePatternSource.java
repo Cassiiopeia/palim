@@ -19,8 +19,8 @@ public class NamePatternSource implements SuggestionSource {
     private static final int POINTS = 60;
 
     @Override
-    public Score score(String sourceField, List<String> samples, FieldDefinition candidate) {
-        String normalized = SuggestionSource.normalize(sourceField);
+    public Score score(Context context, FieldDefinition candidate) {
+        String normalized = context.normalizedField();
         // 별칭에서 낱말을 빌려 온다. 별도 규칙표를 두면 항목을 늘릴 때 두 곳을 고쳐야 한다.
         boolean contains = candidate.aliases().stream()
                 .map(SuggestionSource::normalize)

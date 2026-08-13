@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +24,7 @@ import kr.suhsaechan.palim.connector.model.TargetModel;
 import kr.suhsaechan.palim.connector.model.TargetModelRepository;
 import kr.suhsaechan.palim.connector.source.SourceContext;
 import kr.suhsaechan.palim.connector.source.SourceReaderRegistry;
+import kr.suhsaechan.palim.connector.suggest.FieldMappingMemoryService;
 import kr.suhsaechan.palim.connector.source.SourceSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,7 @@ public class ConnectorAdminService {
     private final TargetModelRepository targetModelRepository;
     private final TargetFieldRepository targetFieldRepository;
     private final SourceReaderRegistry readers;
+    private final FieldMappingMemoryService memories;
 
     @Transactional(readOnly = true)
     public List<TargetModel> targetModels() {
@@ -164,7 +167,32 @@ public class ConnectorAdminService {
                 });
 
         draft.activate();
-        return mappingRepository.save(draft);
+        ConnectorMapping activated = mappingRepository.save(draft);
+
+        // 확정한 판단만 기억한다. 화면에서 고르는 중에 기억하면 고민하며 눌러 본 것까지
+        // 학습해 기억이 오염되고, 그 뒤로 잘못된 추천이 계속 나온다.
+        rememberConnections(connectorId, activated);
+        return activated;
+    }
+
+    /**
+     * 이번에 사람이 내린 연결 판단을 남긴다.
+     *
+     * <p>다음에 같은 칸 이름이 오면 시스템이 먼저 골라 준다 — 우리가 모르는 시스템도 <b>한 번만
+     * 손대면 그 뒤로는 자동</b>이 된다.
+     */
+    private void rememberConnections(UUID connectorId, ConnectorMapping mapping) {
+        Connector connector = connector(connectorId);
+        String modelCode = targetModelRepository.findById(connector.getTargetModelId())
+                .map(TargetModel::getCode)
+                .orElse(null);
+        if (modelCode == null) {
+            return;
+        }
+        Map<String, String> connections = new LinkedHashMap<>();
+        fieldMapRepository.findByMappingIdOrderBySortOrder(mapping.getId())
+                .forEach(map -> connections.put(map.getSourceField(), map.getTargetFieldKey()));
+        memories.remember(modelCode, connections);
     }
 
     @Transactional(readOnly = true)
