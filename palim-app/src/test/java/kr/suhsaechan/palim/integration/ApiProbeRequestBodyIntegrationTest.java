@@ -69,7 +69,7 @@ class ApiProbeRequestBodyIntegrationTest extends IntegrationTest {
     void 요청_본문이_비어_있지_않다() {
         String local = "http://127.0.0.1:" + server.getAddress().getPort();
         ProbeRequest request = new ProbeRequest(ApiAuthPreset.ECOUNT, true,
-                Map.of("companyCode", "677445",
+                Map.of("companyCode", "123456",
                         "userId", "tester",
                         "zoneUrl", local + "/zone",
                         "apiBase", local),
@@ -84,6 +84,6 @@ class ApiProbeRequestBodyIntegrationTest extends IntegrationTest {
         assertThat(receivedBodies.getFirst())
                 .as("본문이 비면 상대는 '값 없음'을 200 으로 돌려주고, 예외가 없어 아무도 모른다")
                 .contains("COM_CODE")
-                .contains("677445");
+                .contains("123456");
     }
 }

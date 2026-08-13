@@ -9,8 +9,19 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${error}" class="alert alert-error mb-4">
-        <span th:text="${error}">오류</span>
+    <!--/* 실패를 알릴 때는 <b>무엇을 하면 되는지</b>까지 같이 말한다.
+
+           특히 값이 빠져 멈춘 경우, 원격 서버를 부르기 전에 끝나므로 아래 단계별 결과가
+           아예 생기지 않는다. 그 사실을 말해 주지 않으면 "결과창이 왜 안 뜨지"를 별개의
+           버그로 의심하게 된다 — 실제로 그렇게 겪었다. */-->
+    <div th:if="${error}" class="alert alert-error mb-4 items-start">
+        <div class="text-sm leading-relaxed">
+            <div class="font-semibold" th:text="${error}">오류</div>
+            <div th:if="${missingField != null}" class="mt-1">
+                값이 비어 있어 <b>연결 테스트를 실행하지 않았습니다.</b> 그래서 아래에 단계별
+                결과가 없습니다. 빈 칸을 채우고 다시 실행하세요.
+            </div>
+        </div>
     </div>
 
     <!--/* 전체 흐름을 먼저 보여준다. 지금 어디쯤인지 모르면 각 칸이 왜 필요한지도 모른다. */-->
@@ -131,7 +142,10 @@
                               th:text="${form.preset != null} ? ${form.preset.accountLabel} : '회사코드'">회사코드</span>
                     </div>
                     <input type="text" th:field="*{companyCode}" class="input input-bordered"
-                           placeholder="예: 677445">
+                           th:classappend="${missingField != null and form.preset != null
+                                             and missingField == form.preset.accountLabel}
+                                           ? 'input-error'"
+                           placeholder="숫자 6자리">
                     <div class="label">
                         <span class="label-text-alt text-base-content/70" id="accountHelp">
                             로그인 화면에서 아이디 위에 넣는 값입니다.
@@ -149,7 +163,8 @@
                             </span>
                         </span>
                     </div>
-                    <input type="text" th:field="*{userId}" class="input input-bordered">
+                    <input type="text" th:field="*{userId}" class="input input-bordered"
+                           th:classappend="${missingField == '사용자 ID'} ? 'input-error'">
                     <div class="label">
                         <span class="label-text-alt text-base-content/70">
                             로그인에 쓰는 아이디. <b>인증키 발급 시 고른 허용 ID 와 같아야 합니다.</b>
@@ -163,7 +178,20 @@
                     <span class="label-text font-medium" id="secretLabel">API 인증키</span>
                 </div>
                 <input type="password" th:field="*{secret}" class="input input-bordered"
+                       th:classappend="${missingSecret} ? 'input-error'"
                        autocomplete="off" placeholder="발급받은 인증키를 붙여 넣으세요">
+
+                <!--/* 이 칸은 <b>구조적으로 매번 비어 있다.</b> 비밀값을 화면에 되돌리지 않기
+                       때문이다. 한 번 테스트한 뒤 값을 고쳐 다시 실행하려 하면 여기서 막히는데,
+                       원인이 "내가 안 넣어서"가 아니라 "화면이 지웠기 때문"이라 스스로 알아채기
+                       어렵다. 그래서 실행 이력이 있으면 눈에 띄게 알린다. */-->
+                <div th:if="${report != null or missingSecret}"
+                     class="alert alert-info py-2 mt-2">
+                    <div class="text-sm">
+                        <b>인증키를 한 번 더 넣어야 합니다.</b>
+                        보안상 화면에 남기지 않으므로, 다시 실행할 때마다 붙여 넣어야 합니다.
+                    </div>
+                </div>
                 <div class="label">
                     <span class="label-text-alt text-base-content/70" id="issueGuide"
                           th:text="${form.preset != null} ? ${form.preset.issueGuide} : ''">발급 안내</span>

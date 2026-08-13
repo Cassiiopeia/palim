@@ -32,10 +32,17 @@ import org.springframework.beans.factory.annotation.Autowired;
  */
 class ApiProbeVendorMessageIntegrationTest extends IntegrationTest {
 
-    /** 상대가 접속을 거부하며 <b>자기가 본 요청 주소</b>를 적어 보낸 응답. */
+    /**
+     * 상대가 접속을 거부하며 <b>자기가 본 요청 주소</b>를 적어 보낸 응답.
+     *
+     * <p>주소는 문서용으로 예약된 대역(RFC 5737)을 쓴다. 실제 운영 서버 주소를 테스트에 적으면
+     * 그 값이 저장소에 영구히 남는다.
+     */
+    private static final String REJECTED_IP = "203.0.113.10";
     private static final String IP_REJECTED = """
             {"Data":{"Code":"205","Datas":{},
-             "Message":"[183.98.211.213] 허용되지 않은 IP입니다. IP등록을 진행하시기 바랍니다."}}""";
+             "Message":"[%s] 허용되지 않은 IP입니다. IP등록을 진행하시기 바랍니다."}}"""
+            .formatted(REJECTED_IP);
 
     @Autowired private ApiProbeRegistry probes;
 
@@ -73,7 +80,7 @@ class ApiProbeVendorMessageIntegrationTest extends IntegrationTest {
     void 거부_사유를_짐작으로_덮지_않는다() {
         String local = "http://127.0.0.1:" + server.getAddress().getPort();
         ProbeRequest request = new ProbeRequest(ApiAuthPreset.ECOUNT, true,
-                Map.of("companyCode", "677445",
+                Map.of("companyCode", "123456",
                         "userId", "tester",
                         "zoneUrl", local + "/zone",
                         "apiBase", local),
@@ -93,7 +100,7 @@ class ApiProbeVendorMessageIntegrationTest extends IntegrationTest {
                 .doesNotContain("인증키가 이 사용자 ID");
         assertThat(login.message())
                 .as("등록할 주소는 상대가 응답에 적어 보낸다. 그 값을 그대로 짚어 줘야 한다")
-                .contains("183.98.211.213");
+                .contains(REJECTED_IP);
         assertThat(login.hasRawResponse())
                 .as("요약을 못 믿을 때 응답 원문을 볼 수 있어야 한다")
                 .isTrue();

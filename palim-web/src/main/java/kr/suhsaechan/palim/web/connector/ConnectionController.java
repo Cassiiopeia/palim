@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
+import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.source.http.ApiAuthPreset;
 import kr.suhsaechan.palim.connector.source.http.ApiProbeRegistry;
 import kr.suhsaechan.palim.connector.source.http.ProbeReport;
@@ -32,6 +34,7 @@ public class ConnectionController {
 
     private final ApiProbeRegistry probes;
     private final ConnectionAdminService connectionService;
+    private final ErrorMessageResolver errorMessages;
 
     @GetMapping("/connectors/connect")
     public String form(Model model) {
@@ -79,7 +82,20 @@ public class ConnectionController {
             }
         } catch (BusinessException e) {
             // 입력이 모자란 경우다. 원격 호출 전에 막힌 것이므로 단계 결과가 없다.
-            model.addAttribute("error", e.getMessage());
+            //
+            // getMessage() 를 쓰지 않는다 — 그것은 "API_PROBE_INCOMPLETE(K016) args=[인증키]"
+            // 같은 로그용 문자열이다. 사용자 화면에 그대로 나가면 무엇을 고쳐야 하는지 알 수 없다.
+            model.addAttribute("error", errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+            if (e.is(ErrorCode.API_PROBE_INCOMPLETE) && e.messageArgs().length > 0) {
+                // 어느 칸이 비었는지 화면이 짚어 준다. 문장만 있으면 칸을 눈으로 찾아야 한다.
+                String field = String.valueOf(e.messageArgs()[0]);
+                model.addAttribute("missingField", field);
+                // 비밀값은 다시 채워지지 않으므로 가장 자주 비는 칸이다. 따로 표시해
+                // "왜 또 비어 있지"를 설명한다.
+                model.addAttribute("missingSecret",
+                        form.getPreset() != null
+                                && field.equals(form.getPreset().getSecretLabel()));
+            }
         }
         // 비밀값은 화면으로 되돌리지 않는다. 다시 입력하게 하는 편이 안전하다.
         form.setSecret(null);
@@ -95,7 +111,12 @@ public class ConnectionController {
             redirectAttributes.addFlashAttribute("message",
                     "연동을 만들었습니다. 이제 매핑을 정의하세요.");
             return "redirect:/connectors/" + connector.getId() + "/mapping";
-        } catch (BusinessException | IllegalArgumentException e) {
+        } catch (BusinessException e) {
+            // 저장 경로도 같다 — 로그용 문자열을 화면에 내보내지 않는다.
+            redirectAttributes.addFlashAttribute("error",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+            return "redirect:/connectors/connect";
+        } catch (IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("error", e.getMessage());
             return "redirect:/connectors/connect";
         }
