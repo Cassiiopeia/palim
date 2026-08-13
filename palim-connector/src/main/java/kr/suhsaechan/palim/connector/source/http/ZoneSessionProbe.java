@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -29,6 +31,9 @@ public class ZoneSessionProbe implements ApiProbe {
 
     private static final DateTimeFormatter COMPACT_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final int SAMPLE_LIMIT = 5;
+
+    /** 거부 메시지에 박혀 오는 요청 IP. 등록해야 할 주소가 곧 이 값이다. */
+    private static final Pattern IPV4 = Pattern.compile("(\\d{1,3}(?:\\.\\d{1,3}){3})");
 
     /**
      * 접속 주소 기본값.
@@ -93,8 +98,8 @@ public class ZoneSessionProbe implements ApiProbe {
                               + "'테스트 환경으로 접속'을 끄고 다시 시도하세요."
                             : "이 회사코드에 해당하는 지역이 없습니다. 회사코드를 확인하세요.")
                         : "응답에 지역 값이 없습니다. 회사코드를 확인하세요.";
-                steps.add(ProbeStep.fail("지역 조회", hint, elapsed(started), 200,
-                        response.toString()));
+                steps.add(ProbeStep.fail("지역 조회", vendorReason(response, hint),
+                        elapsed(started), 200, response.toString()));
                 steps.add(ProbeStep.skipped("로그인"));
                 steps.add(ProbeStep.skipped("재고 조회"));
                 return finish(steps);
@@ -123,9 +128,8 @@ public class ZoneSessionProbe implements ApiProbe {
             JsonNode response = post(base + "/OAPILogin", body);
             sessionId = text(response.path("Data").path("Datas").path("SESSION_ID"));
             if (sessionId.isEmpty()) {
-                // 인증키가 특정 사용자 ID 에 묶여 있어, 발급 시 지정한 ID 와 다르면 여기서 막힌다.
-                steps.add(ProbeStep.fail("로그인",
-                        "세션을 받지 못했습니다. 인증키가 이 사용자 ID 로 발급된 것인지 확인하세요.",
+                steps.add(ProbeStep.fail("로그인", vendorReason(response,
+                        "세션을 받지 못했습니다. 인증키가 이 사용자 ID 로 발급된 것인지 확인하세요."),
                         elapsed(started), 200, response.toString()));
                 steps.add(ProbeStep.skipped("재고 조회"));
                 return finish(steps);
@@ -150,7 +154,15 @@ public class ZoneSessionProbe implements ApiProbe {
 
             List<Map<String, String>> samples = extractRows(response);
             if (samples.isEmpty()) {
-                // 연결은 됐는데 데이터가 없는 것과 연결이 안 된 것은 다르다. 구분해서 알린다.
+                // 행이 없는 이유는 둘이다 — 정말 재고가 없거나, 거부당했거나. 상대가 사유를
+                // 보내왔다면 후자다. 이것을 구분하지 않으면 권한 오류를 "재고 없음"으로 읽고
+                // 기준일만 계속 바꾸게 된다.
+                String reason = text(response.path("Data").path("Message"));
+                if (!reason.isBlank()) {
+                    steps.add(ProbeStep.fail("재고 조회", vendorReason(response, reason),
+                            elapsed(started), 200, response.toString()));
+                    return finish(steps);
+                }
                 steps.add(ProbeStep.ok("재고 조회",
                         "호출은 성공했지만 해당 기준일에 재고가 없습니다. 기준일을 바꿔 보세요.",
                         elapsed(started)));
@@ -186,6 +198,44 @@ public class ZoneSessionProbe implements ApiProbe {
                 .retrieve()
                 .body(String.class);
         return mapper.readTree(response == null ? "{}" : response);
+    }
+
+    /**
+     * 실패 사유는 <b>상대가 보낸 말을 먼저</b> 쓴다.
+     *
+     * <p>우리가 짐작한 문장을 대신 띄우면 엉뚱한 곳을 고치게 된다. 실제로 "인증키가 이 사용자
+     * ID 로 발급된 것인지 확인하세요"를 띄운 적이 있는데, 상대가 보낸 진짜 사유는 <b>서버 IP 가
+     * 허용 목록에 없다</b>였다. 키는 멀쩡했고, 키만 들여다봐서는 원인이 영영 나오지 않는다.
+     *
+     * <p>그래서 응답에 사유가 있으면 그것을 쓰고, 우리 문장은 상대가 아무 말도 하지 않을 때만
+     * 쓴다.
+     *
+     * @param fallback 상대가 사유를 보내지 않았을 때 쓸 문장
+     */
+    private static String vendorReason(JsonNode response, String fallback) {
+        String message = text(response.path("Data").path("Message"));
+        return message.isBlank() ? fallback : message + ipRegistrationHint(message);
+    }
+
+    /**
+     * 허용 IP 안내.
+     *
+     * <p>접속 IP 를 제한하는 시스템은 거부 메시지에 <b>자기가 본 요청 IP</b> 를 적어 보낸다.
+     * 그 값이 곧 등록해야 할 주소다.
+     *
+     * <p>서버가 자기 공인 IP 를 스스로 알아내려면 외부 서비스를 불러야 하고, NAT·프록시를 거치면
+     * 그렇게 얻은 값이 상대가 실제로 본 값과 다를 수 있다. 상대가 알려준 값을 그대로 옮기는 편이
+     * 언제나 정확하다.
+     */
+    private static String ipRegistrationHint(String message) {
+        if (!message.contains("IP")) {
+            return "";
+        }
+        Matcher found = IPV4.matcher(message);
+        return found.find()
+                ? " → 이 서버의 주소 %s 를 상대 시스템의 허용 IP 목록에 등록한 뒤 다시 시도하세요."
+                        .formatted(found.group(1))
+                : "";
     }
 
     /**

@@ -30,16 +30,31 @@ public record ProbeRequest(ApiAuthPreset preset, boolean sandbox, Map<String, St
     public String require(String key) {
         String value = params.get(key);
         if (!StringUtils.hasText(value)) {
-            throw new BusinessException(ErrorCode.API_PROBE_INCOMPLETE, key);
+            throw new BusinessException(ErrorCode.API_PROBE_INCOMPLETE, fieldLabel(key));
         }
         return value.trim();
     }
 
     public String requireSecret() {
         if (!StringUtils.hasText(secret)) {
-            throw new BusinessException(ErrorCode.API_PROBE_INCOMPLETE, "인증키");
+            throw new BusinessException(ErrorCode.API_PROBE_INCOMPLETE, preset.getSecretLabel());
         }
         return secret.trim();
+    }
+
+    /**
+     * 화면에 보이는 칸 이름.
+     *
+     * <p>내부 파라미터 이름을 그대로 띄우면 사용자는 자기 화면에서 그 칸을 찾지 못한다.
+     * {@code companyCode} 를 보고 「회사코드」 칸을 떠올려야 하는 것은 우리 사정이지 사용자
+     * 사정이 아니다. 같은 자리를 시스템마다 다르게 부르므로 프리셋이 쓰는 말을 그대로 쓴다.
+     */
+    private String fieldLabel(String key) {
+        return switch (key) {
+            case "companyCode", "domain" -> preset.getAccountLabel();
+            case "userId" -> "사용자 ID";
+            default -> key;
+        };
     }
 
     /** 기준일. 지정하지 않으면 오늘로 본다. */
