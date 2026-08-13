@@ -108,7 +108,9 @@ public enum ApiAuthPreset {
     public String getIssueGuide() {
         return switch (this) {
             case ECOUNT -> "이카운트는 관리자가 발급한 인증키가 있어야 합니다. "
-                    + "먼저 테스트 인증키로 검증한 뒤 정식 인증키를 받는 순서입니다.";
+                    + "먼저 테스트 인증키로 검증한 뒤 정식 인증키를 받는 순서입니다. "
+                    + "인증키와 별개로 「API인증키발급 > IP등록」에 이 서버의 주소를 등록해야 "
+                    + "합니다 — 등록하지 않으면 키가 맞아도 로그인에서 막힙니다.";
             case ONEWMS -> "별도 발급이 없습니다. 평소 로그인에 쓰는 계정을 그대로 넣습니다.";
             case CUSTOM_FORM -> "로그인에 쓰는 계정을 넣고, 접속 주소를 직접 지정합니다.";
         };
@@ -117,6 +119,26 @@ public enum ApiAuthPreset {
     /** 이 시스템이 테스트/정식 키를 구분하는가. 구분하지 않으면 그 선택을 감춘다. */
     public boolean hasKeyStages() {
         return this == ECOUNT;
+    }
+
+    /**
+     * 접속 IP 를 <b>미리 등록해야</b> 열어 주는 시스템의 안내. 해당 없으면 빈 문자열.
+     *
+     * <p>키만 받으면 될 것 같지만, 상대가 "어느 서버에서 부르는지"까지 등록해야 여는 경우가
+     * 있다. 화면이 이것을 미리 말해 주지 않으면 키가 맞는데도 로그인에서 막히고, 그 화면만
+     * 봐서는 키를 의심하게 되어 멀쩡한 키를 재발급받는 데 시간을 쓴다.
+     */
+    public String getIpAllowlistGuide() {
+        return switch (this) {
+            case ECOUNT -> "이카운트에서 「Self-Customizing > 정보관리 > API인증키발급 > IP등록」"
+                    + " 에 이 서버의 주소를 추가하세요.";
+            case ONEWMS, CUSTOM_FORM -> "";
+        };
+    }
+
+    /** 화면이 IP 등록 안내를 띄울지 결정한다. */
+    public boolean needsIpAllowlist() {
+        return !getIpAllowlistGuide().isEmpty();
     }
 
     /**

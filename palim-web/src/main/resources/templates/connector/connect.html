@@ -176,6 +176,27 @@
                 </div>
             </label>
 
+            <!--/* ⑤ 키를 받아도 여기서 막힌다.
+
+                   상대 시스템은 "누가 부르는지"(인증키)와 "어디서 부르는지"(서버 주소)를 따로
+                   본다. 키만 받아 두고 IP 를 등록하지 않으면 로그인에서 거부되는데, 그 화면만
+                   봐서는 키를 의심하게 되어 멀쩡한 키를 다시 발급받게 된다. 그래서 실패한 뒤가
+                   아니라 입력하는 자리에서 미리 알린다. */-->
+            <div id="ipNoticeBlock" class="alert alert-warning items-start"
+                 th:style="${form.preset != null and form.preset.needsIpAllowlist()}
+                           ? '' : 'display:none'">
+                <div class="text-sm leading-relaxed">
+                    <div class="font-semibold">인증키와 별개로 <b>서버 IP 등록</b>이 필요합니다</div>
+                    <div class="mt-1" id="ipGuideText"
+                         th:text="${form.preset != null} ? ${form.preset.ipAllowlistGuide} : ''">등록 위치 안내</div>
+                    <div class="mt-1 text-base-content/80">
+                        주소를 모르면 <b>일단 그대로 테스트를 실행하세요.</b> 상대 서버가 거부하면
+                        응답에 <b>자기가 본 요청 주소</b>가 그대로 찍혀 나옵니다 — 그 값을 등록하면
+                        됩니다.
+                    </div>
+                </div>
+            </div>
+
             <details id="manualEndpoint" class="collapse collapse-arrow bg-base-200"
                      th:open="${form.preset != null and form.preset.needsManualEndpoint()}">
                 <summary class="collapse-title text-sm font-medium">
@@ -396,6 +417,12 @@
           // 고를 이유가 없는 선택지는 "무엇을 골라야 하지"라는 부담만 남긴다.
           var stage = document.getElementById('keyStageBlock');
           if (stage) { stage.style.display = info.keyStages ? '' : 'none'; }
+          // IP 등록을 요구하지 않는 시스템에 이 경고를 남겨 두면, 하지 않아도 될 일을
+          // 찾아 헤매게 된다.
+          var ipNotice = document.getElementById('ipNoticeBlock');
+          var ipGuide = document.getElementById('ipGuideText');
+          if (ipNotice) { ipNotice.style.display = info.needsIp ? '' : 'none'; }
+          if (ipGuide) { ipGuide.textContent = info.ipGuide; }
         }
         select.addEventListener('change', apply);
         apply();
