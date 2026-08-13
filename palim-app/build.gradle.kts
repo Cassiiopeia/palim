@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation(project(":palim-collector"))
     implementation(project(":palim-monitor"))
+    implementation(project(":palim-reconcile"))
     implementation(project(":palim-web"))
 
     // @EnableJpaAuditing 을 이 모듈이 선언하므로 컴파일 시점에 필요하다.
@@ -40,6 +41,7 @@ dependencies {
     testImplementation(project(":palim-audit"))
     testImplementation(project(":palim-automation"))
     testImplementation(project(":palim-auth"))
+    testImplementation(project(":palim-reconcile"))
     testImplementation(project(":palim-channel"))
     testImplementation(project(":palim-connector"))
     testImplementation(project(":palim-incident"))
