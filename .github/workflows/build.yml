@@ -39,7 +39,7 @@ jobs:
       # docs/archive 는 과거 요구사항 문서라 로컬에는 두되 추적하지 않는다.
       - name: 사내 자료 차단
         run: |
-          if git ls-files | grep -E '^docs/somansa/|^docs/archive/|somansa.*redmine|redmine.*attachments'; then
+          if git ls-files | grep -E '^docs/somansa/|^docs/archive/|^\.local/|somansa.*redmine|redmine.*attachments'; then
             echo "::error::사내·발주사 자료가 추적되고 있습니다. 즉시 제거하십시오."
             exit 1
           fi
