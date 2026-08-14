@@ -134,11 +134,14 @@ class RunHistoryScreenRenderIntegrationTest extends IntegrationTest {
 
     @Test
     @WithMockUser
-    @DisplayName("커넥터 목록이 행이 있는 상태에서 그려진다")
+    @DisplayName("목록이 연결과 칸 맞추기를 나란히 보여준다")
     void 커넥터_목록이_그려진다() throws Exception {
         mockMvc.perform(get("/connectors"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("실행 이력 확인용")))
+                // 연결만 하면 끝난 것처럼 보이던 문제를 이 두 칸이 막는다
+                .andExpect(content().string(containsString("연결")))
+                .andExpect(content().string(containsString("칸 맞추기")))
                 .andExpect(RenderAssertions.fullyRendered());
     }
 }

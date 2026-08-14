@@ -58,7 +58,7 @@ public class ConnectorController {
 
     @GetMapping("/connectors")
     public String list(Model model) {
-        model.addAttribute("title", "연동 커넥터");
+        model.addAttribute("title", "재고 가져오는 곳");
         model.addAttribute("connectors",
                 queryService.list(ConnectorAdminService.DEFAULT_TENANT));
         return "connector/list";

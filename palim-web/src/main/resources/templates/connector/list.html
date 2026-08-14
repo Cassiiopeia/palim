@@ -11,19 +11,21 @@
 
     <div class="flex justify-between items-center mb-4">
         <p class="text-sm text-base-content/70">
-            외부 시스템 데이터를 표준 모델로 들이는 연동 정의입니다.
-            새 원천이 붙어도 배포 없이 여기서 추가합니다.
+            재고를 가져오는 시스템입니다. 새 시스템이 붙어도 배포 없이 여기서 추가합니다.
         </p>
-        <a th:href="@{/connectors/new}" class="btn btn-primary btn-sm">새 연동 만들기</a>
+        <div class="flex gap-2">
+            <a th:href="@{/connectors/connect}" class="btn btn-primary btn-sm">+ 시스템 붙이기</a>
+            <a th:href="@{/connectors/new}" class="btn btn-ghost btn-sm">엑셀·CSV 로 만들기</a>
+        </div>
     </div>
 
     <div th:if="${connectors.isEmpty()}" class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
-            <h2 class="card-title">아직 연동이 없습니다</h2>
+            <h2 class="card-title">아직 연결한 시스템이 없습니다</h2>
             <p class="text-base-content/70">
-                엑셀·CSV 파일이나 API 를 표준 모델에 연결하면 대사·리포트에 바로 쓸 수 있습니다.
+                전산 시스템과 물류 시스템을 붙이면 매일 재고를 가져와 맞춰 봅니다.
             </p>
-            <a th:href="@{/connectors/new}" class="btn btn-primary mt-2">첫 연동 만들기</a>
+            <a th:href="@{/connectors/connect}" class="btn btn-primary mt-2">첫 시스템 붙이기</a>
         </div>
     </div>
 
@@ -33,48 +35,41 @@
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>이름</th>
-                        <th>목표 모델</th>
-                        <th>원천</th>
-                        <th>매핑</th>
-                        <th>마지막 실행</th>
-                        <th class="text-right">동작</th>
+                        <th>시스템</th>
+                        <th>연결</th>
+                        <th>칸 맞추기</th>
+                        <th>자동 수집</th>
+                        <th>마지막</th>
+                        <th></th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr th:each="c : ${connectors}">
                         <td>
-                            <div class="font-medium" th:text="${c.name}">이름</div>
-                            <div class="text-xs text-base-content/60" th:text="${c.code}">코드</div>
-                        </td>
-                        <td th:text="${c.targetModelName}">모델</td>
-                        <td>
-                            <span class="badge badge-ghost badge-sm" th:text="${c.sourceType}">UPLOAD</span>
+                            <a th:href="@{/connectors/{id}(id=${c.id})}"
+                               class="link link-hover font-medium" th:text="${c.name}">이름</a>
+                            <div class="text-xs text-base-content/60" th:text="${c.sourceType}">원천</div>
                         </td>
                         <td>
-                            <span th:if="${c.readyForLive}" class="badge badge-success badge-sm"
-                                  th:text="|v${c.activeVersion} 확정|">확정</span>
-                            <span th:unless="${c.readyForLive}" class="badge badge-warning badge-sm">
-                                미확정 · 테스트만
-                            </span>
+                            <span th:if="${c.connected}" class="badge badge-success badge-sm">연결됨</span>
+                            <span th:unless="${c.connected}" class="badge badge-warning badge-sm"
+                                  th:text="${c.connectionLabel}">설정 필요</span>
                         </td>
                         <td>
-                            <span th:if="${c.lastStatus == null}" class="text-base-content/50">
-                                실행 없음
-                            </span>
-                            <div th:unless="${c.lastStatus == null}">
-                                <span class="badge badge-sm"
-                                      th:classappend="${c.hasFailure} ? 'badge-error' : 'badge-success'"
-                                      th:text="${c.lastStatus}">상태</span>
-                                <div class="text-xs text-base-content/60"
-                                     th:text="|성공 ${c.lastSuccess} · 실패 ${c.lastFailed}|">건수</div>
-                            </div>
+                            <span th:if="${c.readyForLive}" class="badge badge-success badge-sm">맞춤</span>
+                            <span th:unless="${c.readyForLive}" class="badge badge-warning badge-sm">안 함</span>
                         </td>
-                        <td class="text-right whitespace-nowrap">
-                            <a class="btn btn-ghost btn-xs"
-                               th:href="@{/connectors/{id}/mapping(id=${c.id})}">매핑</a>
-                            <a class="btn btn-ghost btn-xs"
-                               th:href="@{/connectors/{id}/runs(id=${c.id})}">이력</a>
+                        <td class="text-sm">
+                            <span th:if="${c.scheduled}">매일</span>
+                            <span th:unless="${c.scheduled}" class="text-base-content/50">—</span>
+                        </td>
+                        <td class="text-sm">
+                            <span th:if="${c.lastRunAt != null}"
+                                  th:text="${#temporals.format(c.lastRunAt, 'MM-dd HH:mm')}">—</span>
+                            <span th:if="${c.lastRunAt == null}" class="text-base-content/50">실행 없음</span>
+                        </td>
+                        <td class="text-right">
+                            <a th:href="@{/connectors/{id}(id=${c.id})}" class="btn btn-ghost btn-xs">보기</a>
                         </td>
                     </tr>
                     </tbody>
