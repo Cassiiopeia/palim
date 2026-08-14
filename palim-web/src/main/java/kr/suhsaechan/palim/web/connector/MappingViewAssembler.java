@@ -107,7 +107,7 @@ public class MappingViewAssembler {
 
         if (SYSTEM_FILLED.contains(key)) {
             return new MappingRowView(key, field.getDisplayName(), field.isRequired(), "AUTO",
-                    null, null, autoHint(key), List.of());
+                    null, null, autoHint(key), List.of(), meaning(key));
         }
 
         ConnectorFieldMap saved = existing.get(key);
@@ -117,7 +117,7 @@ public class MappingViewAssembler {
                     : StringUtils.hasText(saved.getSourceField()) ? "SELECT" : "NONE";
             return new MappingRowView(key, field.getDisplayName(), field.isRequired(), mode,
                     saved.getSourceField(), constant,
-                    preview(previews.get(saved.getSourceField())), List.of());
+                    preview(previews.get(saved.getSourceField())), List.of(), meaning(key));
         }
 
         // 저장된 것이 없으면 추천을 본다. 추천은 사람이 고치라고 «미리 골라 두는» 것이다.
@@ -125,10 +125,10 @@ public class MappingViewAssembler {
         if (suggestion != null) {
             return new MappingRowView(key, field.getDisplayName(), field.isRequired(), "SELECT",
                     suggestion.sourceField(), null,
-                    preview(previews.get(suggestion.sourceField())), suggestion.reasons());
+                    preview(previews.get(suggestion.sourceField())), suggestion.reasons(), meaning(key));
         }
         return new MappingRowView(key, field.getDisplayName(), field.isRequired(), "NONE",
-                null, null, null, List.of());
+                null, null, null, List.of(), meaning(key));
     }
 
     private Map<String, FieldSuggestion> suggestions(SourceSchema schema, String targetModel) {
@@ -179,6 +179,33 @@ public class MappingViewAssembler {
         } catch (NumberFormatException e) {
             return value.length() <= 24 ? value : value.substring(0, 24) + "…";
         }
+    }
+
+    /**
+     * 이 항목이 무엇인지 사람 말로.
+     *
+     * <p>표준 이름만 보고는 무엇을 넣어야 하는지 알 수 없다 — 「품목」에 실제로 들어가는 것은
+     * 품목 <b>코드</b>이고, 「출처」는 어느 시스템에서 왔는지다. 뜻을 모르면 고르지 못하고,
+     * 고르지 못하면 매핑이 끝나지 않는다.
+     */
+    private static String meaning(String fieldKey) {
+        return switch (fieldKey) {
+            case "item_ref" -> "품목을 구분하는 값. 이카운트는 품목코드를 씁니다";
+            case "quantity" -> "재고 수량. 원천이 보내는 그대로";
+            case "base_quantity" -> "기준 단위로 환산한 수량. 비워 두면 위 수량을 그대로 씁니다";
+            case "unit" -> "원천이 세는 단위 (EA·BOX 등)";
+            case "base_unit" -> "우리가 세는 단위. 대조는 이 단위로 맞춰 봅니다";
+            case "raw_item_name" -> "품목 이름. 나중에 두 시스템의 같은 물건을 이을 때 씁니다";
+            case "warehouse_code" -> "창고를 구분하는 코드";
+            case "warehouse_name" -> "창고 이름";
+            case "location_code" -> "창고 안 자리";
+            case "lot_code" -> "같은 품목을 유통기한·입고분으로 나눈 묶음";
+            case "expiry_date" -> "유통기한";
+            case "available_quantity" -> "지금 팔 수 있는 수량";
+            case "reserved_quantity" -> "주문에 잡혀 있는 수량";
+            case "defective_quantity" -> "불량으로 빼 둔 수량";
+            default -> null;
+        };
     }
 
     private static String autoHint(String fieldKey) {

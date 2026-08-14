@@ -112,6 +112,14 @@ class MappingScreenRenderIntegrationTest extends IntegrationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("자동")))
                 // 우리 항목에 자리가 없는 칸도 숨기지 않는다
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("REMARK")))
+                // 무엇이 왔는지 먼저 보여준다 — 이걸 봐야 무엇에 넣을지 정할 수 있다
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("받아온 자료")))
+                // 이름만 보고는 무엇을 넣을지 모른다. 「품목」에 실제로 들어가는 것은 품목 코드다
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.containsString("품목을 구분하는 값")))
+                // 「기준 시각」은 상대가 주는 값이 아니라 우리가 아는 값이라 묻지 않는다
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.containsString("재고를 물어본 날짜가 들어갑니다")))
                 // 파일 원천이 아니므로 업로드 단계가 없어야 한다
                 .andExpect(content().string(
                         org.hamcrest.Matchers.not(
