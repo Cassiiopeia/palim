@@ -46,4 +46,15 @@ public record ConnectorSummary(UUID id, String code, String name, String targetM
     public boolean scheduled() {
         return StringUtils.hasText(scheduleCron);
     }
+
+    /**
+     * 실제로 매일 도는가.
+     *
+     * <p>시각만 정해 두면 도는 것이 아니다 — <b>확정된 칸 맞추기</b>가 있어야 하고, 파일로
+     * 올리는 방식은 애초에 자동으로 돌지 않는다. 시각만 보고 「매일」이라고 하면 스케줄러는
+     * 영원히 건너뛰는데 화면만 다 됐다고 말한다. 그러면 며칠 뒤 자료가 없는 것을 보고서야 안다.
+     */
+    public boolean collectsDaily() {
+        return scheduled() && readyForLive() && !"UPLOAD".equals(sourceType);
+    }
 }
