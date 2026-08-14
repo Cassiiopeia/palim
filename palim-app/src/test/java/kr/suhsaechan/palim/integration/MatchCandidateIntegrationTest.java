@@ -49,7 +49,8 @@ class MatchCandidateIntegrationTest extends IntegrationTest {
         baseAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         erp = "erp-" + UUID.randomUUID().toString().substring(0, 6);
         wms = "wms-" + UUID.randomUUID().toString().substring(0, 6);
-        rules.deleteAll();
+        // 규칙을 지우지 않는다. 기본 규칙은 마이그레이션이 심어 두는 것이고, 그것이 실제로
+        // 작동하는지가 이 화면의 쓸모를 가른다 — 지우고 시험하면 「규칙이 없을 때」만 보게 된다.
         normalizer.clearCache();
     }
 
@@ -170,5 +171,33 @@ class MatchCandidateIntegrationTest extends IntegrationTest {
         assertThat(normalizer.normalize("제품 D 50g"))
                 .as("띄어쓰기만 달라도 못 맞추면 규칙 없이는 아무것도 못 한다")
                 .isEqualTo("제품d50g");
+    }
+
+    /**
+     * <b>규칙을 손수 넣지 않아도</b> 흔한 표기 차이는 흡수되는가.
+     *
+     * <p>규칙이 하나도 없으면 이름이 글자 하나만 달라도 다른 물건으로 본다. 그러면 「이을 만한
+     * 것」이 늘 비어 있고, 사람이 수백 품목을 눈으로 찾아 손으로 이어야 한다. 처음 쓰는 사람이
+     * 정규식을 짜서 넣기를 기대할 수는 없다.
+     *
+     * <p>특히 <b>유통기한이 이름에 붙어 오는 것</b>이 흔하다. 떼지 않으면 같은 제품이 로트마다
+     * 다른 물건이 되어 영영 안 묶인다.
+     */
+    @Test
+    @DisplayName("기본 규칙만으로 유통기한 표기 차이를 흡수한다")
+    void 기본_규칙이_있다() {
+        normalizer.clearCache();
+
+        assertThat(normalizer.normalize("제품A 227g (26.10.17)"))
+                .as("괄호에 붙은 유통기한 — 로트가 달라도 같은 제품이다")
+                .isEqualTo(normalizer.normalize("제품A 227g (27.04.07)"));
+
+        assertThat(normalizer.normalize("C227P_26.10.17"))
+                .as("품목코드에 붙은 유통기한")
+                .isEqualTo(normalizer.normalize("C227P_27.04.07"));
+
+        assertThat(normalizer.normalize("제품A-227g"))
+                .as("이음 기호는 원천마다 제각각이라 이것만으로 갈리는 일이 잦다")
+                .isEqualTo(normalizer.normalize("제품A 227g"));
     }
 }
