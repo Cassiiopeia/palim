@@ -1,28 +1,57 @@
 <!DOCTYPE html>
+<!--/* 홈.
+
+       같은 자리가 시간에 따라 다른 것을 보여준다. 준비가 안 끝났으면 «다음 한 걸음» 하나만,
+       끝났으면 «오늘 결과». 여러 개를 나열하면 무엇부터 할지 다시 고민하게 된다. */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${title}, ~{::content})}">
 <body>
-<th:block th:fragment="content">
+<div th:fragment="content" th:remove="tag">
 
-    <div class="alert alert-info">
-        <span>AI 업무자동화 대시보드는 준비 중입니다. 모듈이 추가되면 이곳에서 실행·이력을 봅니다.</span>
-    </div>
-
-    <div class="card bg-base-100 shadow-sm mt-6">
+    <!--/* 맞춰 본 적이 있으면 그것이 먼저다. 매일 여는 화면이 되어야 하기 때문이다. */-->
+    <div th:if="${today.ran}" class="card bg-base-100 shadow-sm mb-6">
         <div class="card-body">
-            <h2 class="card-title text-base">시작하기</h2>
-            <ul class="steps steps-vertical">
-                <li class="step step-primary">
-                    <a th:href="@{/settings/notification}" class="link">텔레그램 연결</a>
-                </li>
-                <li class="step">첫 자동화 모듈 등록 (준비 중)</li>
-                <li class="step">
-                    <a th:href="@{/monitor/notifications}" class="link">알림 이력에서 발송 확인</a>
-                </li>
-            </ul>
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <h2 class="card-title text-base">오늘 맞춰 봤습니다</h2>
+                <span class="text-sm text-base-content/60"
+                      th:text="${#temporals.format(today.at, 'MM-dd HH:mm')}">06:30</span>
+            </div>
+
+            <div class="flex flex-wrap gap-6 mt-2">
+                <div>
+                    <div class="text-sm text-base-content/70">지금 볼 것</div>
+                    <div class="text-2xl font-semibold"
+                         th:classappend="${today.needsAttention} ? 'text-error' : ''"
+                         th:text="${today.confirmed} + '건'">0건</div>
+                </div>
+                <div>
+                    <div class="text-sm text-base-content/70">지켜볼 것</div>
+                    <div class="text-2xl font-semibold" th:text="${today.observing} + '건'">0건</div>
+                </div>
+                <!--/* 미매칭은 «재고를 맞출 일» 이 아니라 «품목을 이을 일» 이라 따로 센다. */-->
+                <div th:if="${today.unmatched > 0}">
+                    <div class="text-sm text-base-content/70">아직 안 이어진 품목</div>
+                    <div class="text-2xl font-semibold" th:text="${today.unmatched} + '건'">0건</div>
+                </div>
+            </div>
+
+            <div class="card-actions justify-end">
+                <a th:href="@{/reconcile}" class="btn btn-sm">대조 결과 보기</a>
+                <a th:if="${today.unmatched > 0}" th:href="@{/reconcile/units}"
+                   class="btn btn-sm btn-ghost">품목 맞추러 가기</a>
+            </div>
         </div>
     </div>
 
-</th:block>
+    <div th:unless="${today.ran}" class="prose max-w-none mb-6">
+        <p class="text-base-content/70">
+            전산 시스템과 물류 시스템의 재고를 매일 자동으로 맞춰 봅니다.
+            아래 순서대로 준비하면 됩니다. <b>지금 손봐야 할 곳은 색으로 표시</b>됩니다.
+        </p>
+    </div>
+
+    <div th:replace="~{fragments/setup-steps :: steps(${steps})}"></div>
+
+</div>
 </body>
 </html>

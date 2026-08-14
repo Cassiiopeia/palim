@@ -1,24 +1,19 @@
 package kr.suhsaechan.palim.web.setup;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 /**
- * 준비 상태판.
+ * 옛 준비 상태판 주소.
  *
- * <p>처음 오는 사람의 진입점이다. 흩어진 화면을 순서대로 잇고, 지금 막힌 곳을 짚어 준다.
+ * <p>이 화면은 홈으로 합쳐졌다. 주소를 없애지 않고 넘기는 이유는 북마크한 사람이 있을 수
+ * 있어서다 — 404 를 만나면 「없어졌나」로 읽힌다.
  */
 @Controller
-@RequiredArgsConstructor
 public class SetupController {
 
-    private final SetupService setupService;
-
     @GetMapping("/setup")
-    public String index(Model model) {
-        model.addAttribute("steps", setupService.steps());
-        return "setup/index";
+    public String index() {
+        return "redirect:/";
     }
 }

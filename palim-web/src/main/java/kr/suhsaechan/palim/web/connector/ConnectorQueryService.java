@@ -33,7 +33,8 @@ public class ConnectorQueryService {
                                am.version AS active_version,
                                r.status AS last_status, r.started_at AS last_run_at,
                                coalesce(r.success_count, 0)::int AS last_success,
-                               coalesce(r.failed_count, 0)::int AS last_failed
+                               coalesce(r.failed_count, 0)::int AS last_failed,
+                               c.connection_status, c.schedule_cron
                         FROM connector c
                         JOIN target_model m ON m.id = c.target_model_id
                         LEFT JOIN connector_mapping am

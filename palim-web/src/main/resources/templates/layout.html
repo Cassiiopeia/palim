@@ -67,24 +67,22 @@
             </div>
 
             <!--/*
-              동결 화면(재고·매핑·수집·인시던트·채널 설정)은 내비게이션에서 제거했다.
-              컨트롤러·템플릿은 @Deprecated 로 보존한다 — 07-DECISIONS 023.
+              메뉴는 «여정 순서» 다. 「재고 맞추기」 세 항목이 사장님이 걷는 길 그대로이고,
+              원천이 몇 개로 늘어나도 메뉴는 안 늘어난다 — 「재고 가져오는 곳」 안에서 행이 늘 뿐이다.
+
+              「시작하기」를 빼고 홈이 그 일을 한다. 순서를 안내하는 화면이 메뉴의 한 항목이면
+              여러 기능 중 하나로 보인다.
+
+              동결 화면(재고·매핑·수집·인시던트·채널 설정)은 내비게이션에서 제거했다 — 07-DECISIONS 023.
             */-->
             <ul class="menu p-2 flex-1">
-                <li class="menu-title">운영</li>
-                <li><a th:href="@{/}">대시보드</a></li>
+                <li><a th:href="@{/}">홈</a></li>
                 <li><a th:href="@{/monitor/notifications}">알림 이력</a></li>
 
-                <li><a th:href="@{/setup}" class="font-semibold">시작하기</a></li>
-                <li class="menu-title">데이터 연동</li>
-                <li><a th:href="@{/connectors}">연동 커넥터</a></li>
-                <li><a th:href="@{/connectors/connect}">외부 시스템 연결</a></li>
-                <li><a th:href="@{/connectors/models}">목표 모델</a></li>
-                <li><a th:href="@{/connectors/units}">단위 환산</a></li>
-
-                <li class="menu-title">재고 대조</li>
-                <li><a th:href="@{/reconcile}">맞춰 보기</a></li>
-                <li><a th:href="@{/reconcile/units}">품목 잇기</a></li>
+                <li class="menu-title">재고 맞추기</li>
+                <li><a th:href="@{/connectors}">재고 가져오는 곳</a></li>
+                <li><a th:href="@{/reconcile/units}">품목 맞추기</a></li>
+                <li><a th:href="@{/reconcile}">대조 결과</a></li>
 
                 <li class="menu-title">인플루언서</li>
                 <li><a th:href="@{/influencer/grades}">등급표</a></li>
@@ -93,12 +91,18 @@
                 <li><a th:href="@{/influencer/campaigns}">캠페인 관리</a></li>
 
                 <li class="menu-title">설정</li>
-                <li><a th:href="@{/settings/system}">시스템 설정</a></li>
                 <li><a th:href="@{/settings/notification}">알림 설정</a></li>
-
-                <li class="menu-title">보안</li>
-                <li><a th:href="@{/audit}">감사 로그</a></li>
+                <li><a th:href="@{/settings/system}">시스템 설정</a></li>
                 <li><a th:href="@{/settings/account}">계정 설정</a></li>
+                <li>
+                    <details>
+                        <summary>고급</summary>
+                        <ul>
+                            <li><a th:href="@{/connectors/models}">표준 표</a></li>
+                            <li><a th:href="@{/audit}">감사 로그</a></li>
+                        </ul>
+                    </details>
+                </li>
             </ul>
 
             <div class="p-2 border-t border-base-300">

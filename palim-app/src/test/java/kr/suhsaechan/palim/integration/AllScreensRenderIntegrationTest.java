@@ -40,7 +40,6 @@ class AllScreensRenderIntegrationTest extends IntegrationTest {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {
             "/",
-            "/setup",
             "/connectors",
             "/connectors/new",
             "/connectors/units",
