@@ -63,10 +63,17 @@
                             <span th:if="${c.scheduled}">매일</span>
                             <span th:unless="${c.scheduled}" class="text-base-content/50">—</span>
                         </td>
+                        <!--/* 실패를 목록에서 보여준다. 상세로 들어가야만 보이면, 매일 도는 수집이
+                               조용히 죽어 있어도 아무도 모른 채 며칠이 지난다. */-->
                         <td class="text-sm">
+                            <span th:if="${c.lastRunAt == null}" class="text-base-content/50">실행 없음</span>
                             <span th:if="${c.lastRunAt != null}"
                                   th:text="${#temporals.format(c.lastRunAt, 'MM-dd HH:mm')}">—</span>
-                            <span th:if="${c.lastRunAt == null}" class="text-base-content/50">실행 없음</span>
+                            <span th:if="${c.hasFailure}" class="badge badge-error badge-sm ml-1"
+                                  th:text="${c.lastFailed > 0} ? ${c.lastFailed} + '건 실패' : '실패'">실패</span>
+                            <span th:if="${c.lastRunAt != null and !c.hasFailure}"
+                                  class="text-base-content/60 ml-1"
+                                  th:text="${c.lastSuccess} + '건'">0건</span>
                         </td>
                         <td class="text-right">
                             <a th:href="@{/connectors/{id}(id=${c.id})}" class="btn btn-ghost btn-xs">보기</a>
