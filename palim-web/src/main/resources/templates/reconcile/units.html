@@ -7,25 +7,21 @@
        확인 전과 후를 «분명히» 가른다. 제안 상태를 확정처럼 보이게 하면 아무도 확인하지 않고,
        그러면 확인 단계를 둔 의미가 없어진다.
 
+       그 구분은 «색» 이 아니라 구역·순서·라벨로 짓는다. 제안에 초록을 칠하면 다른 화면의
+       «성공» 과 같은 색이 되어 오히려 확정으로 읽힌다 — 확인을 건너뛰게 만드는 것이 바로
+       그 초록이다(11-UI-RULES C7).
+
        daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${title}, ~{::content})}">
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${flashSuccess}" class="alert alert-success mb-6">
-        <span class="text-sm" th:text="${flashSuccess}">완료</span>
-    </div>
-    <div th:if="${flashError}" class="alert alert-error mb-6">
-        <span class="text-sm" th:text="${flashError}">오류</span>
-    </div>
-
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold tracking-tight">품목 잇기</h1>
-        <p class="text-sm text-base-content/70 mt-0.5">
-            두 시스템이 같은 물건을 다르게 부릅니다. 무엇과 무엇이 같은지 여기서 정합니다.
-        </p>
-    </div>
+    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). 여기서 다시 그리면 같은 제목이
+           두 줄로, 같은 flash 가 두 박스로 겹친다. */-->
+    <p class="text-sm text-base-content/60 -mt-4 mb-6">
+        두 시스템이 같은 물건을 다르게 부릅니다. 무엇과 무엇이 같은지 여기서 정합니다.
+    </p>
 
     <!--/* 확인을 기다리는 것. 여기 남아 있으면 아직 대조에 들어가지 않는다. */-->
     <section class="mb-8" th:unless="${#lists.isEmpty(pending)}">
@@ -37,48 +33,58 @@
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
-        <div class="alert alert-warning mb-3">
+        <!--/* 아직 아무 일도 일어나지 않았으므로 경고색을 쓰지 않는다(11-UI-RULES B4).
+               읽어야 할 내용이라 박스는 두되 색 없는 alert 로 둔다. */-->
+        <div class="alert mb-3">
             <div class="text-sm">
                 시스템이 <b>이름이 비슷해서</b> 묶어 둔 것입니다. 맞는지 눈으로 보고 확인해 주세요 —
                 틀린 채로 두면 엉뚱한 재고를 합쳐 놓고 «맞는다» 고 보고하게 됩니다.
             </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                <tr class="text-xs">
-                    <th>어디서</th>
-                    <th>품목</th>
-                    <th class="text-right">환산</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="m : ${pending}">
-                    <td class="text-sm" th:text="${m.source}">원천</td>
-                    <td class="font-mono text-xs" th:text="${m.itemRef}">품목</td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${m.factor}">1</td>
-                    <td class="text-right">
-                        <div class="flex gap-1 justify-end">
-                            <form th:action="@{/reconcile/units/members/{id}/confirm(id=${m.id})}"
-                                  method="post">
-                                <button type="submit" class="btn btn-primary btn-xs">맞습니다</button>
-                            </form>
-                            <form th:action="@{/reconcile/units/members/{id}/detach(id=${m.id})}"
-                                  method="post">
-                                <button type="submit" class="btn btn-ghost btn-xs">아닙니다</button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>어디서</th>
+                            <th>품목</th>
+                            <th class="text-right">환산</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="m : ${pending}">
+                            <td class="text-sm" th:text="${m.source}">원천</td>
+                            <td class="font-mono text-xs" th:text="${m.itemRef}">품목</td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${m.factor}">1</td>
+                            <td class="text-right">
+                                <div class="flex gap-1 justify-end">
+                                    <!--/* 이 화면의 주 동작. 여기를 눌러야 대조에 들어간다. */-->
+                                    <form th:action="@{/reconcile/units/members/{id}/confirm(id=${m.id})}"
+                                          method="post">
+                                        <button type="submit" class="btn btn-primary btn-sm">맞습니다</button>
+                                    </form>
+                                    <form th:action="@{/reconcile/units/members/{id}/detach(id=${m.id})}"
+                                          method="post">
+                                        <button type="submit" class="btn btn-ghost btn-sm">아닙니다</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!--/* 이름이 비슷해 묶인 후보. 양쪽에서 하나씩 온 것이 바로 이을 수 있는 짝이다. */-->
+    <!--/* 이름이 비슷해 묶인 후보. 양쪽에서 하나씩 온 것이 바로 이을 수 있는 짝이다.
+
+           후보마다 카드를 쌓으면 카드 안에 표와 폼이 또 들어가 박스가 3겹이 된다 —
+           표 하나로 편다(11-UI-RULES B7). */-->
     <section class="mb-8" th:if="${candidates != null and not #lists.isEmpty(candidates)}">
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">이을 만한 것</h2>
@@ -86,60 +92,75 @@
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
-        <div class="flex flex-col gap-3">
-            <div th:each="c : ${candidates}" class="card bg-base-100 border border-base-300">
-                <div class="card-body gap-3 py-4">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="badge badge-success badge-sm" th:if="${c.hasBothSides()}">
-                            양쪽에 있음
-                        </span>
-                        <span class="badge badge-ghost badge-sm" th:unless="${c.hasBothSides()}">
-                            한쪽에만 있음
-                        </span>
-                        <span class="text-xs text-base-content/50 font-mono"
-                              th:text="${c.normalizedName}">이름</span>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="table table-xs">
-                            <tbody>
-                            <tr th:each="i : ${c.items}">
-                                <td class="w-24 text-xs" th:text="${i.source}">원천</td>
-                                <td class="font-mono text-xs" th:text="${i.itemRef}">코드</td>
-                                <td class="text-xs" th:text="${i.rawName}">품명</td>
-                                <td class="text-right font-mono text-xs tabular-nums"
-                                    th:text="${i.quantity}">0</td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <form th:action="@{/reconcile/units/from-candidate}" method="post"
-                          class="flex flex-wrap gap-2 items-end">
-                        <input type="hidden" name="sources" th:each="i : ${c.items}"
-                               th:value="${i.source}">
-                        <input type="hidden" name="itemRefs" th:each="i : ${c.items}"
-                               th:value="${i.itemRef}">
-                        <label class="form-control">
-                            <div class="label py-0"><span class="label-text text-xs">부를 이름</span></div>
-                            <input type="text" name="name" required
-                                   th:value="${c.items[0].rawName}"
-                                   class="input input-bordered input-sm w-56">
-                        </label>
-                        <label class="form-control">
-                            <div class="label py-0"><span class="label-text text-xs">코드</span></div>
-                            <input type="text" name="code" required
-                                   th:value="'U-' + ${c.normalizedName}"
-                                   class="input input-bordered input-sm w-40 font-mono">
-                        </label>
-                        <button type="submit" class="btn btn-outline btn-sm">이대로 묶기</button>
-                    </form>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>묶음</th>
+                            <th>담긴 품목</th>
+                            <th>새 품목으로 묶기</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="c : ${candidates}">
+                            <td class="align-top">
+                                <!--/* 양쪽·한쪽은 상태가 아니라 분류다 — 색을 쓰지 않는다. */-->
+                                <span class="badge badge-ghost badge-sm"
+                                      th:text="${c.hasBothSides()} ? '양쪽에 있음' : '한쪽에만 있음'">
+                                    양쪽에 있음
+                                </span>
+                                <div class="font-mono text-xs text-base-content/60 mt-1"
+                                     th:text="${c.normalizedName}">이름</div>
+                            </td>
+                            <td class="align-top">
+                                <div th:each="i : ${c.items}"
+                                     class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                                    <span class="text-xs text-base-content/60 w-24 shrink-0"
+                                          th:text="${i.source}">원천</span>
+                                    <span class="font-mono text-xs w-28 shrink-0"
+                                          th:text="${i.itemRef}">코드</span>
+                                    <span class="text-sm flex-1" th:text="${i.rawName}">품명</span>
+                                    <span class="font-mono text-xs tabular-nums text-base-content/60"
+                                          th:text="${i.quantity}">0</span>
+                                </div>
+                            </td>
+                            <td class="align-top">
+                                <form th:action="@{/reconcile/units/from-candidate}" method="post"
+                                      class="flex flex-wrap gap-2 items-end">
+                                    <input type="hidden" name="sources" th:each="i : ${c.items}"
+                                           th:value="${i.source}">
+                                    <input type="hidden" name="itemRefs" th:each="i : ${c.items}"
+                                           th:value="${i.itemRef}">
+                                    <label class="form-control">
+                                        <div class="label">
+                                            <span class="label-text font-medium">부를 이름</span>
+                                        </div>
+                                        <input type="text" name="name" required
+                                               th:value="${c.items[0].rawName}"
+                                               class="input input-bordered input-sm w-48">
+                                    </label>
+                                    <label class="form-control">
+                                        <div class="label">
+                                            <span class="label-text font-medium">코드</span>
+                                        </div>
+                                        <input type="text" name="code" required
+                                               th:value="'U-' + ${c.normalizedName}"
+                                               class="input input-bordered input-sm w-40 font-mono">
+                                    </label>
+                                    <button type="submit" class="btn btn-outline btn-sm">이대로 묶기</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </section>
 
-    <!--/* 이미 정한 것들. */-->
+    <!--/* 이미 정한 것들. 확인을 통과했다는 사실은 «이 구역에 있다» 는 것으로 말한다. */-->
     <section>
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">정해 둔 품목</h2>
@@ -149,27 +170,34 @@
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
-        <div th:if="${#lists.isEmpty(units)}" class="text-sm text-base-content/60 py-6">
-            아직 정한 것이 없습니다. 위에서 이을 만한 것을 묶어 보세요.
+        <div th:if="${#lists.isEmpty(units)}" class="card bg-base-100 shadow-sm">
+            <div class="card-body items-center text-center py-12">
+                <p class="text-base-content/70">아직 정한 것이 없습니다.</p>
+                <p class="text-sm text-base-content/60">위에서 이을 만한 것을 묶어 보세요.</p>
+            </div>
         </div>
 
-        <div class="overflow-x-auto" th:unless="${#lists.isEmpty(units)}">
-            <table class="table table-sm">
-                <thead>
-                <tr class="text-xs">
-                    <th>코드</th>
-                    <th>이름</th>
-                    <th>세는 단위</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="u : ${units}">
-                    <td class="font-mono text-xs" th:text="${u.code}">코드</td>
-                    <td th:text="${u.name}">이름</td>
-                    <td class="text-sm text-base-content/70" th:text="${u.baseUnit}">EA</td>
-                </tr>
-                </tbody>
-            </table>
+        <div th:unless="${#lists.isEmpty(units)}" class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>코드</th>
+                            <th>이름</th>
+                            <th>세는 단위</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="u : ${units}">
+                            <td class="font-mono text-xs" th:text="${u.code}">코드</td>
+                            <td class="font-medium" th:text="${u.name}">이름</td>
+                            <td class="text-sm text-base-content/60" th:text="${u.baseUnit}">EA</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </section>
 

@@ -63,8 +63,10 @@ class ConnectScreenRenderIntegrationTest extends IntegrationTest {
                         .param("userId", "tester")
                         .param("secret", ""))
                 .andExpect(status().isOk())
-                // 비밀값은 화면에 되돌리지 않으므로 «왜 또 비어 있지» 를 설명해야 한다
-                .andExpect(content().string(containsString("인증키를 한 번 더 넣어야 합니다")))
+                // 비밀값은 화면에 되돌리지 않으므로 «왜 또 비어 있지» 를 설명해야 한다.
+                // 이 설명은 «실패했을 때만» 뜨는 알림이 아니라 인증키 칸에 항상 붙어 있는 한 줄이다
+                // — 같은 사실을 상황에 따라 두 번 말하면 두 번 다 새 정보처럼 읽힌다.
+                .andExpect(content().string(containsString("다시 실행할 때마다 붙여 넣어야 합니다")))
                 // 실패한 뒤에도 다시 실행할 수 있어야 한다 — 버튼이 잘리면 여기서 막힌다
                 .andExpect(content().string(containsString("연결 확인하기")))
                 .andExpect(RenderAssertions.fullyRendered());

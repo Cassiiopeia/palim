@@ -28,8 +28,9 @@
         <div class="navbar bg-base-100 shadow-sm lg:hidden">
             <div class="flex-none">
                 <label for="sidebar-toggle" class="btn btn-square btn-ghost" aria-label="메뉴 열기">
+                    <!--/* 옆 label 에 aria-label 이 있다. 아이콘까지 읽으면 같은 말이 두 번 나온다. */-->
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                         viewBox="0 0 24 24" stroke="currentColor">
+                         viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
@@ -41,19 +42,35 @@
         </div>
 
         <main class="flex-1 p-4 lg:p-8">
-            <header class="mb-6">
-                <h1 class="text-2xl font-bold" th:text="${title}">제목</h1>
-            </header>
+            <!--/*
+              본문 최대 폭은 «여기서만» 정한다. 화면이 각자 max-w 를 들면 폼 화면만 좁고 표
+              화면만 전폭이 되어, 넓은 모니터에서 화면을 옮길 때마다 글줄 시작점이 흔들린다.
+            */-->
+            <div class="mx-auto w-full max-w-7xl">
+                <header class="mb-6">
+                    <h1 class="text-2xl font-bold" th:text="${title}">제목</h1>
+                    <!--/*
+                      화면 부제 자리. 자리를 주지 않으면 각 화면이 부제를 만들려고 h1 을 또 그리거나
+                      alert-info 로 파란 박스를 세운다 — 실제로 그렇게 됐다. 색 없는 한 줄이면 된다.
+                    */-->
+                    <p th:if="${subtitle}" class="text-sm text-base-content/60 mt-1"
+                       th:text="${subtitle}"></p>
+                </header>
 
-            <!--/* 처리 결과 안내. 상태 변경 후 리다이렉트로 전달된다. */-->
-            <div th:if="${flashSuccess}" class="alert alert-success mb-4" role="status">
-                <span th:text="${flashSuccess}"></span>
-            </div>
-            <div th:if="${flashError}" class="alert alert-error mb-4" role="alert">
-                <span th:text="${flashError}"></span>
-            </div>
+                <!--/*
+                  처리 결과 안내. 상태 변경 후 리다이렉트로 전달된다.
+                  flash 는 «이 자리 하나» 다. 본문에서 같은 값을 다시 그리면 같은 색 박스가
+                  세로로 두 개 겹친다.
+                */-->
+                <div th:if="${flashSuccess}" class="alert alert-success mb-4" role="status">
+                    <span class="text-sm" th:text="${flashSuccess}"></span>
+                </div>
+                <div th:if="${flashError}" class="alert alert-error mb-4" role="alert">
+                    <span class="text-sm" th:text="${flashError}"></span>
+                </div>
 
-            <th:block th:replace="${content}"></th:block>
+                <th:block th:replace="${content}"></th:block>
+            </div>
         </main>
     </div>
 
@@ -74,32 +91,36 @@
               여러 기능 중 하나로 보인다.
 
               동결 화면(재고·매핑·수집·인시던트·채널 설정)은 내비게이션에서 제거했다 — 07-DECISIONS 023.
+
+              아이콘은 «자리 표시» 다. 항목마다 모양이 다르면 글자를 읽지 않고 위치로 찾게 된다.
+              그래서 색을 주지 않는다(currentColor) — 색이 붙는 순간 아이콘이 상태를 말하는 것처럼
+              보이고, 상태색이 뜻을 잃는다.
             */-->
             <ul class="menu p-2 flex-1">
-                <li><a th:href="@{/}">홈</a></li>
-                <li><a th:href="@{/monitor/notifications}">알림 이력</a></li>
+                <li><a th:href="@{/}"><svg th:replace="~{fragments/icons :: house}"></svg>홈</a></li>
+                <li><a th:href="@{/monitor/notifications}"><svg th:replace="~{fragments/icons :: bell}"></svg>알림 이력</a></li>
 
                 <li class="menu-title">재고 맞추기</li>
-                <li><a th:href="@{/connectors}">재고 가져오는 곳</a></li>
-                <li><a th:href="@{/reconcile/units}">품목 맞추기</a></li>
-                <li><a th:href="@{/reconcile}">대조 결과</a></li>
+                <li><a th:href="@{/connectors}"><svg th:replace="~{fragments/icons :: plug-zap}"></svg>재고 가져오는 곳</a></li>
+                <li><a th:href="@{/reconcile/units}"><svg th:replace="~{fragments/icons :: link-2}"></svg>품목 맞추기</a></li>
+                <li><a th:href="@{/reconcile}"><svg th:replace="~{fragments/icons :: scale}"></svg>대조 결과</a></li>
 
                 <li class="menu-title">인플루언서</li>
-                <li><a th:href="@{/influencer/grades}">등급표</a></li>
-                <li><a th:href="@{/influencer/rising}">라이징 레이더</a></li>
-                <li><a th:href="@{/influencer/trends}">트렌드 보드</a></li>
-                <li><a th:href="@{/influencer/campaigns}">캠페인 관리</a></li>
+                <li><a th:href="@{/influencer/grades}"><svg th:replace="~{fragments/icons :: award}"></svg>등급표</a></li>
+                <li><a th:href="@{/influencer/rising}"><svg th:replace="~{fragments/icons :: trending-up}"></svg>라이징 레이더</a></li>
+                <li><a th:href="@{/influencer/trends}"><svg th:replace="~{fragments/icons :: chart-line}"></svg>트렌드 보드</a></li>
+                <li><a th:href="@{/influencer/campaigns}"><svg th:replace="~{fragments/icons :: megaphone}"></svg>캠페인 관리</a></li>
 
                 <li class="menu-title">설정</li>
-                <li><a th:href="@{/settings/notification}">알림 설정</a></li>
-                <li><a th:href="@{/settings/system}">시스템 설정</a></li>
-                <li><a th:href="@{/settings/account}">계정 설정</a></li>
+                <li><a th:href="@{/settings/notification}"><svg th:replace="~{fragments/icons :: bell-cog}"></svg>알림 설정</a></li>
+                <li><a th:href="@{/settings/system}"><svg th:replace="~{fragments/icons :: settings}"></svg>시스템 설정</a></li>
+                <li><a th:href="@{/settings/account}"><svg th:replace="~{fragments/icons :: user-round-cog}"></svg>계정 설정</a></li>
                 <li>
                     <details>
-                        <summary>고급</summary>
+                        <summary><svg th:replace="~{fragments/icons :: sliders}"></svg>고급</summary>
                         <ul>
-                            <li><a th:href="@{/connectors/models}">표준 표</a></li>
-                            <li><a th:href="@{/audit}">감사 로그</a></li>
+                            <li><a th:href="@{/connectors/models}"><svg th:replace="~{fragments/icons :: table-2}"></svg>표준 표</a></li>
+                            <li><a th:href="@{/audit}"><svg th:replace="~{fragments/icons :: scroll-text}"></svg>감사 로그</a></li>
                         </ul>
                     </details>
                 </li>

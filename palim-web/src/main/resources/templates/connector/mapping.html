@@ -13,39 +13,37 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${flashError}" class="alert alert-error mb-6">
-        <span class="text-sm" th:text="${flashError}">오류</span>
-    </div>
-    <div th:if="${flashSuccess}" class="alert alert-success mb-6">
-        <span class="text-sm" th:text="${flashSuccess}">완료</span>
-    </div>
+    <!--/* flash 는 layout 이 그린다. 여기서 다시 그리면 같은 박스가 두 개 겹친다. */-->
 
-    <ul class="steps steps-horizontal w-full mb-8 text-sm">
-        <li class="step step-success">시스템 연결</li>
+    <!--/* 지나온 단계와 현재 단계를 같은 색으로 칠한다. 한 rail 에 초록과 파랑이 섞이면
+           초록이 «성공» 인지 «지나옴» 인지 알 수 없다. */-->
+    <ul class="steps steps-horizontal w-full mb-6 text-sm">
+        <li class="step step-primary">시스템 연결</li>
         <li class="step step-primary">칸 연결</li>
         <li th:classappend="${schema != null} ? 'step-primary'" class="step">시험 실행</li>
         <li class="step">매일 자동</li>
     </ul>
 
+    <!--/* 화면 제목은 layout 의 h1 하나뿐이다. 여기 h1 을 두면 «연동A · 매핑» 바로 아래
+           «연동A» 가 한 번 더 나온다. */-->
     <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight" th:text="${connector.name}">연동</h1>
-            <p class="text-sm text-base-content/70 mt-0.5" th:if="${schema != null}">
+            <p class="text-sm text-base-content/60" th:if="${schema != null}">
                 저쪽에서 <b th:text="${#lists.size(schema.fields)} + '개 칸'">칸</b> 받아왔습니다
             </p>
         </div>
         <div class="flex gap-2">
-            <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">목록</a>
+            <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 목록</a>
             <a th:href="@{/connectors/{id}/runs(id=${connector.id})}"
                class="btn btn-ghost btn-sm">실행 이력</a>
         </div>
     </div>
 
     <!--/* 파일 원천만 업로드 단계가 있다. API 는 칸 이름을 이미 안다. */-->
-    <div class="card bg-base-100 border border-base-300 mb-6" th:unless="${fetchesItself}">
+    <div class="card bg-base-100 shadow-sm mb-6" th:unless="${fetchesItself}">
         <div class="card-body gap-3">
             <h2 class="card-title text-base">원천 파일 올리기</h2>
-            <p class="text-sm text-base-content/70">
+            <p class="text-sm text-base-content/60">
                 헤더를 읽어 칸 목록을 뽑습니다. 이 단계에서는 저장되지 않습니다.
             </p>
             <form th:action="@{/connectors/{id}/schema(id=${connector.id})}" method="post"
@@ -53,11 +51,13 @@
                 <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
                        class="file-input file-input-bordered file-input-sm">
                 <label class="form-control">
-                    <div class="label py-0"><span class="label-text text-xs">헤더 행</span></div>
+                    <div class="label"><span class="label-text font-medium">헤더 행</span></div>
                     <input type="number" name="headerRow" min="1" value="1"
                            th:value="${headerRow} ?: 1" class="input input-bordered input-sm w-20">
                 </label>
-                <button type="submit" class="btn btn-primary btn-sm">칸 읽기</button>
+                <!--/* 되돌릴 수 있는 미리보기다. 되돌리기 어려운 «실제 적재» 와 같은 색이면
+                       무게가 같아 보인다. */-->
+                <button type="submit" class="btn btn-outline btn-sm">칸 읽기</button>
             </form>
         </div>
     </div>
@@ -83,7 +83,9 @@
                 <div class="flex-1 h-px bg-base-300"></div>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="card bg-base-100 shadow-sm">
+              <div class="card-body p-0">
+                <div class="overflow-x-auto">
                 <table class="table table-sm">
                     <thead>
                     <tr class="text-xs">
@@ -97,13 +99,16 @@
                         <td>
                             <input type="hidden" name="targetKeys" th:value="${r.targetKey}">
                             <span class="font-medium" th:text="${r.label}">항목</span>
-                            <span th:if="${r.required}" class="text-error font-bold">*</span>
+                            <!--/* 필수 표시는 실패가 아니라 라벨이다. 빨강을 쓰면 이 화면군에서
+                                   error 가 «실패» 와 «필수» 두 뜻이 된다. */-->
+                            <span th:if="${r.required}" class="text-base-content/60">*</span>
                         </td>
 
                         <td>
                             <!--/* 저쪽에 있을 수 없는 값은 고르게 하지 않는다. 물어볼 이유가
-                                   없는 것을 물으면 사람은 답을 찾느라 화면을 떠난다. */-->
-                            <span th:if="${r.auto}" class="badge badge-primary badge-outline">자동</span>
+                                   없는 것을 물으면 사람은 답을 찾느라 화면을 떠난다.
+                                   «자동» 은 상태가 아니라 분류라 색을 쓰지 않는다. */-->
+                            <span th:if="${r.auto}" class="badge badge-ghost badge-sm">자동</span>
                             <input th:if="${r.auto}" type="hidden" name="sourceFields" value="">
 
                             <div th:unless="${r.auto}" class="flex flex-wrap gap-2 items-center">
@@ -126,21 +131,24 @@
 
                         <td>
                             <span th:if="${r.preview != null and !r.auto}"
-                                  class="font-mono text-xs text-base-content/70 tabular-nums"
+                                  class="font-mono text-xs text-base-content/60 tabular-nums"
                                   th:text="${r.preview}">값</span>
-                            <span th:if="${r.auto}" class="text-xs text-primary"
+                            <!--/* 안내 문구지 상태가 아니다 — 색을 켜면 여기가 문제로 읽힌다. */-->
+                            <span th:if="${r.auto}" class="text-xs text-base-content/60"
                                   th:text="${r.preview}">시스템이 채웁니다</span>
                             <span th:if="${r.preview == null and !r.auto}"
                                   class="text-xs text-base-content/40">—</span>
 
                             <!--/* 추천으로 채워진 줄은 표시를 남긴다. 사람이 직접 고른 것과
                                    구분되지 않으면 «이건 내가 안 골랐는데» 가 생긴다. */-->
-                            <div th:if="${r.suggested}" class="text-xs text-base-content/50 mt-0.5"
+                            <div th:if="${r.suggested}" class="text-xs text-base-content/60 mt-0.5"
                                  th:text="${#strings.listJoin(r.reasons, ' · ')}">근거</div>
                         </td>
                     </tr>
                     </tbody>
                 </table>
+                </div>
+              </div>
             </div>
         </section>
 
@@ -156,16 +164,20 @@
                 </span>
                 <div class="flex-1 h-px bg-base-300"></div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="card bg-base-100 shadow-sm">
+              <div class="card-body p-0">
+                <div class="overflow-x-auto">
                 <table class="table table-sm">
                     <tbody>
                     <tr th:each="l : ${leftovers}">
                         <td class="w-1/4 font-mono text-sm" th:text="${l.sourceField}">칸</td>
-                        <td class="font-mono text-xs text-base-content/70 tabular-nums"
+                        <td class="font-mono text-xs text-base-content/60 tabular-nums"
                             th:text="${l.preview} ?: '—'">값</td>
                     </tr>
                     </tbody>
                 </table>
+                </div>
+              </div>
             </div>
             <p class="text-xs text-base-content/60 mt-2">
                 연결하지 않은 칸도 값은 그대로 남습니다. 다만 대조·집계에는 쓰지 않습니다.
@@ -173,7 +185,7 @@
         </section>
 
         <div class="flex justify-end gap-2">
-            <button type="submit" class="btn btn-primary">연결 저장</button>
+            <button type="submit" class="btn btn-sm">연결 저장</button>
         </div>
     </form>
 
@@ -203,13 +215,13 @@
             <h2 class="text-base font-semibold">확정하고 담기</h2>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
-        <p class="text-sm text-base-content/70 mb-3">
+        <p class="text-sm text-base-content/60 mb-3">
             확정하면 이 연결이 실행 기록에 남습니다. 나중에 바꿔도
             <b>과거 자료가 어느 기준으로 들어왔는지</b> 설명할 수 있습니다.
         </p>
         <div class="flex flex-wrap gap-2 items-end">
             <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post">
-                <button type="submit" class="btn btn-secondary btn-sm">연결 확정</button>
+                <button type="submit" class="btn btn-sm">연결 확정</button>
             </form>
             <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
                   enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
@@ -218,6 +230,7 @@
                        th:unless="${fetchesItself}"
                        class="file-input file-input-bordered file-input-sm">
                 <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
+                <!--/* 이 화면의 유일한 primary. 되돌리기 어려운 동작 하나만 파랑을 갖는다. */-->
                 <button type="submit" class="btn btn-primary btn-sm"
                         th:text="${fetchesItself} ? '지금 가져와서 담기' : '실제 적재'">실제 적재</button>
             </form>

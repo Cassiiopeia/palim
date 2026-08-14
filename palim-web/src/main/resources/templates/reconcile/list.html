@@ -5,62 +5,66 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${flashSuccess}" class="alert alert-success mb-6">
-        <span class="text-sm" th:text="${flashSuccess}">완료</span>
-    </div>
-    <div th:if="${flashError}" class="alert alert-error mb-6">
-        <span class="text-sm" th:text="${flashError}">오류</span>
-    </div>
+    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). */-->
+    <p class="text-sm text-base-content/60 -mt-4 mb-6">
+        두 시스템의 재고를 같은 기준으로 맞춰 보고, 시간 탓으로 설명되지 않는 차이만 남깁니다.
+    </p>
 
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold tracking-tight">재고 대조</h1>
-        <p class="text-sm text-base-content/70 mt-0.5">
-            두 시스템의 재고를 같은 기준으로 맞춰 보고, 시간 탓으로 설명되지 않는 차이만 남깁니다.
-        </p>
-    </div>
-
-    <div th:if="${#lists.isEmpty(definitions)}"
-         class="card bg-base-100 border border-base-300">
+    <div th:if="${#lists.isEmpty(definitions)}" class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">아직 맞춰 볼 것이 없습니다.</p>
-            <p class="text-sm text-base-content/50">
+            <p class="text-sm text-base-content/60">
                 두 시스템을 연결하고 품목을 이어야 대조를 시작할 수 있습니다.
             </p>
             <a th:href="@{/connectors}" class="btn btn-primary btn-sm mt-2">시스템 연결하러 가기</a>
         </div>
     </div>
 
-    <div class="overflow-x-auto" th:unless="${#lists.isEmpty(definitions)}">
-        <table class="table">
-            <thead>
-            <tr class="text-xs">
-                <th>이름</th>
-                <th>맞춰 볼 두 곳</th>
-                <th>이 정도 차이는 넘어감</th>
-                <th></th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="d : ${definitions}">
-                <td>
-                    <a th:href="@{/reconcile/{id}(id=${d.id})}" class="link link-hover font-medium"
-                       th:text="${d.name}">이름</a>
-                </td>
-                <td class="text-sm text-base-content/70">
-                    <span th:text="${d.leftSource}">좌</span>
-                    <span class="mx-1 opacity-50">↔</span>
-                    <span th:text="${d.rightSource}">우</span>
-                </td>
-                <td class="font-mono text-xs tabular-nums" th:text="${d.tolerance}">0</td>
-                <td class="text-right">
-                    <form th:action="@{/reconcile/{id}/run(id=${d.id})}" method="post">
-                        <button type="submit" class="btn btn-primary btn-sm">지금 맞춰 보기</button>
-                    </form>
-                </td>
-            </tr>
-            </tbody>
-        </table>
-    </div>
+    <section th:unless="${#lists.isEmpty(definitions)}">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">정해 둔 대조</h2>
+            <span class="text-xs text-base-content/60">
+                <b th:text="${#lists.size(definitions)}">0</b>개
+            </span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>이름</th>
+                            <th>맞춰 볼 두 곳</th>
+                            <th>이 정도 차이는 넘어감</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="d : ${definitions}">
+                            <td>
+                                <a th:href="@{/reconcile/{id}(id=${d.id})}"
+                                   class="link link-hover font-medium" th:text="${d.name}">이름</a>
+                            </td>
+                            <td class="text-sm text-base-content/60">
+                                <span th:text="${d.leftSource}">좌</span>
+                                <span class="mx-1 text-base-content/40">↔</span>
+                                <span th:text="${d.rightSource}">우</span>
+                            </td>
+                            <td class="font-mono text-xs tabular-nums" th:text="${d.tolerance}">0</td>
+                            <td class="text-right">
+                                <form th:action="@{/reconcile/{id}/run(id=${d.id})}" method="post">
+                                    <button type="submit" class="btn btn-primary btn-sm">지금 맞춰 보기</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
 
 </div>
 </body>

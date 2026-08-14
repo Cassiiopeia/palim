@@ -10,18 +10,28 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
+    <!--/* 흐름 화면에는 rail 을 끝까지 둔다. 여기서 사라지면 사용자가 몇 단계째인지 잃는다. */-->
+    <ul class="steps steps-horizontal w-full mb-6 text-sm">
+        <li class="step step-primary">시스템 연결</li>
+        <li class="step step-primary">칸 연결</li>
+        <li class="step" th:classappend="${!runs.isEmpty()} ? 'step-primary'">시험 실행</li>
+        <li class="step">매일 자동</li>
+    </ul>
+
+    <!--/* 같은 목적지로 가는 링크는 화면이 달라도 같은 이름을 쓴다 — 「칸 연결」. */-->
     <div class="flex gap-2 mb-4">
         <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 목록</a>
         <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}" class="btn btn-ghost btn-sm">
-            매핑 편집
+            칸 연결
         </a>
     </div>
 
     <div th:if="${runs.isEmpty()}" class="card bg-base-100 shadow-sm">
-        <div class="card-body items-center text-center py-10">
+        <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">아직 실행 기록이 없습니다.</p>
-            <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}" class="btn btn-sm mt-2">
-                매핑 화면으로
+            <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}"
+               class="btn btn-primary btn-sm mt-2">
+                칸 연결
             </a>
         </div>
     </div>
@@ -31,7 +41,7 @@
             <div class="overflow-x-auto">
                 <table class="table table-sm">
                     <thead>
-                    <tr>
+                    <tr class="text-xs">
                         <th>시작</th>
                         <th>모드</th>
                         <th>매핑</th>
@@ -43,19 +53,29 @@
                     </thead>
                     <tbody>
                     <tr th:each="r, it : ${runs}">
-                        <td class="whitespace-nowrap text-xs" th:text="${r.startedAt}">시각</td>
+                        <!--/* ISO-8601 원문을 그대로 뿌리지 않는다. 포맷터는 null 을 받으면
+                               터지므로 없을 때를 따로 그린다. */-->
+                        <td class="whitespace-nowrap text-xs">
+                            <span th:if="${r.startedAt != null}"
+                                  th:text="${#temporals.format(r.startedAt, 'MM-dd HH:mm')}">시각</span>
+                            <span th:if="${r.startedAt == null}" class="text-base-content/40">—</span>
+                        </td>
+                        <!--/* 모드는 상태가 아니라 분류다 — 색을 쓰지 않는다. */-->
                         <td>
-                            <span class="badge badge-sm"
-                                  th:classappend="${r.isTest()} ? 'badge-ghost' : 'badge-primary'"
+                            <span class="badge badge-sm badge-ghost"
                                   th:text="${r.isTest()} ? '테스트' : '적재'">모드</span>
                         </td>
                         <td class="text-xs" th:text="|v${r.mappingVersion}|">v1</td>
+                        <!--/* 잘 끝난 실행에는 색을 켜지 않는다. 모든 행이 초록이면 한 줄 고장난
+                               표가 다 정상인 표와 똑같이 시끄러워진다. */-->
                         <td>
                             <span class="badge badge-sm"
-                                  th:classappend="${r.status == 'SUCCEEDED'} ? 'badge-success'
-                                                : (${r.status == 'PARTIAL'} ? 'badge-warning'
-                                                : (${r.status == 'ROLLED_BACK'} ? 'badge-ghost' : 'badge-error'))"
-                                  th:text="${r.status}">상태</span>
+                                  th:classappend="${r.status == 'PARTIAL'} ? 'badge-warning'
+                                                : (${r.status == 'FAILED'} ? 'badge-error' : 'badge-ghost')"
+                                  th:text="${r.status == 'SUCCEEDED'} ? '성공'
+                                         : (${r.status == 'PARTIAL'} ? '일부 실패'
+                                         : (${r.status == 'ROLLED_BACK'} ? '되돌림'
+                                         : (${r.status == 'RUNNING'} ? '실행 중' : '실패')))">상태</span>
                             <div th:if="${r.errorSummary != null}"
                                  class="text-xs text-error mt-1" th:text="${r.errorSummary}">사유</div>
                         </td>
@@ -67,9 +87,12 @@
                         <td class="text-xs">
                             <span th:if="${r.elapsedSeconds() != null}"
                                   th:text="|${r.elapsedSeconds()}초|">0초</span>
+                            <!--/* 빈 칸은 «값이 없다» 인지 «아직 안 그렸다» 인지 구분되지 않는다. */-->
+                            <span th:if="${r.elapsedSeconds() == null}"
+                                  class="text-base-content/40">—</span>
                         </td>
                         <td class="text-right whitespace-nowrap">
-                            <a class="btn btn-ghost btn-xs"
+                            <a class="btn btn-ghost btn-sm"
                                th:href="@{/connectors/{id}/runs/{runId}(id=${connector.id},runId=${r.id})}">
                                 상세
                             </a>
@@ -80,7 +103,7 @@
                             <form th:if="${it.index == 0 and !r.rolledBack()}"
                                   th:action="@{/connectors/{id}/runs/{runId}/rollback(id=${connector.id},runId=${r.id})}"
                                   method="post" class="inline">
-                                <button type="submit" class="btn btn-ghost btn-xs text-error">
+                                <button type="submit" class="btn btn-ghost btn-sm text-error">
                                     되돌리기
                                 </button>
                             </form>

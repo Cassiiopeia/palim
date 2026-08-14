@@ -5,21 +5,16 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${flashError}" class="alert alert-error mb-6">
-        <span class="text-sm" th:text="${flashError}">오류</span>
-    </div>
-
-    <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight" th:text="${definition.name}">대조</h1>
-            <p class="text-sm text-base-content/70 mt-0.5">
-                <span th:text="${definition.leftSource}">좌</span>
-                <span class="mx-1 opacity-50">↔</span>
-                <span th:text="${definition.rightSource}">우</span>
-            </p>
-        </div>
+    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). 이 화면만 flashError 를 다시
+           그려서 «성공은 한 번, 실패는 두 번» 나오던 것을 없앤다. */-->
+    <div class="flex flex-wrap items-center justify-between gap-3 -mt-4 mb-6">
+        <p class="text-sm text-base-content/60">
+            <span th:text="${definition.leftSource}">좌</span>
+            <span class="mx-1 text-base-content/40">↔</span>
+            <span th:text="${definition.rightSource}">우</span>
+        </p>
         <div class="flex gap-2">
-            <a th:href="@{/reconcile}" class="btn btn-ghost btn-sm">목록</a>
+            <a th:href="@{/reconcile}" class="btn btn-ghost btn-sm">← 대조 목록</a>
             <form th:action="@{/reconcile/{id}/run(id=${definition.id})}" method="post">
                 <button type="submit" class="btn btn-primary btn-sm">지금 맞춰 보기</button>
             </form>
@@ -29,44 +24,58 @@
     <section>
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">맞춰 본 기록</h2>
+            <span class="text-xs text-base-content/60">
+                <b th:text="${#lists.size(runs)}">0</b>회
+            </span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
-        <div th:if="${#lists.isEmpty(runs)}" class="text-sm text-base-content/60 py-6">
-            아직 맞춰 본 적이 없습니다.
+        <div th:if="${#lists.isEmpty(runs)}" class="card bg-base-100 shadow-sm">
+            <div class="card-body items-center text-center py-12">
+                <p class="text-base-content/70">아직 맞춰 본 적이 없습니다.</p>
+            </div>
         </div>
 
-        <div class="overflow-x-auto" th:unless="${#lists.isEmpty(runs)}">
-            <table class="table table-sm">
-                <thead>
-                <tr class="text-xs">
-                    <th>기준 시각</th>
-                    <th>결과</th>
-                    <th class="text-right">차이</th>
-                    <th class="text-right">안 이어진 품목</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="r : ${runs}">
-                    <td class="font-mono text-xs" th:text="${r.baseAt}">시각</td>
-                    <td>
-                        <span th:if="${r.success}" class="badge badge-success badge-sm">맞춰 봄</span>
-                        <span th:unless="${r.success}" class="badge badge-warning badge-sm">못 맞춤</span>
-                        <div th:if="${r.message}" class="text-xs text-base-content/60 mt-0.5"
-                             th:text="${r.message}">사유</div>
-                    </td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${r.diffCount}">0</td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${r.unmatchedCount}">0</td>
-                    <td class="text-right">
-                        <a th:href="@{/reconcile/runs/{id}(id=${r.id})}"
-                           class="btn btn-ghost btn-xs">결과 보기</a>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
+        <div th:unless="${#lists.isEmpty(runs)}" class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>기준 시각</th>
+                            <th>결과</th>
+                            <th class="text-right">차이</th>
+                            <th class="text-right">안 이어진 품목</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${runs}">
+                            <!--/* 못 맞춘 회차는 기준 시각을 정하지 못한 것이라 값이 없다. */-->
+                            <td class="font-mono text-xs"
+                                th:classappend="${r.success} ? '' : 'text-base-content/40'"
+                                th:text="${r.success} ? ${#temporals.format(r.baseAt, 'yyyy-MM-dd HH:mm:ss')} : '—'">시각</td>
+                            <td>
+                                <!--/* 정상에는 색을 쓰지 않는다 — 모든 행이 초록이면 색이 배경이 된다.
+                                       실패는 목록·상세·flash 가 모두 error 로 말한다(11-UI-RULES C2·C6). */-->
+                                <span th:if="${r.success}" class="text-sm text-base-content/60">맞춰 봄</span>
+                                <span th:unless="${r.success}" class="badge badge-error badge-sm">못 맞춤</span>
+                                <div th:if="${r.message}" class="text-xs text-base-content/60 mt-0.5"
+                                     th:text="${r.message}">사유</div>
+                            </td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${r.diffCount}">0</td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${r.unmatchedCount}">0</td>
+                            <td class="text-right">
+                                <a th:href="@{/reconcile/runs/{id}(id=${r.id})}"
+                                   class="btn btn-ghost btn-sm">결과 보기</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </section>
 

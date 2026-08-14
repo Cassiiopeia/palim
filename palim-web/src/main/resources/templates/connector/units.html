@@ -10,7 +10,14 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div class="alert alert-info mb-4">
+    <!--/* 사이드바에 없는 화면이라 여기 말고는 돌아갈 길이 없다. */-->
+    <div class="flex gap-2 mb-4">
+        <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 재고 가져오는 곳</a>
+    </div>
+
+    <!--/* 이 화면이 어떻게 도는지에 대한 상시 설명이다. 색을 켜면 «방금 무슨 일이 났나» 로
+           읽히고, 저장 직후에는 layout 의 flash 바로 아래 색 박스가 두 개 붙는다. */-->
+    <div class="alert mb-4">
         <div>
             <p class="text-sm">
                 원천이 <span class="font-medium">단위를 명시했는데</span> 환산 규칙이 없으면
@@ -29,22 +36,22 @@
             <form th:action="@{/connectors/units}" method="post"
                   class="flex flex-wrap gap-3 items-end mt-2">
                 <label class="form-control">
-                    <div class="label py-1"><span class="label-text text-xs">품목 (비우면 전역)</span></div>
+                    <div class="label"><span class="label-text font-medium">품목 (비우면 전역)</span></div>
                     <input type="text" name="itemRef" class="input input-bordered input-sm w-56"
                            placeholder="예: 제품A 227g (27.05.14)">
                 </label>
                 <label class="form-control">
-                    <div class="label py-1"><span class="label-text text-xs">원천 단위</span></div>
+                    <div class="label"><span class="label-text font-medium">원천 단위</span></div>
                     <input type="text" name="fromUnit" required
                            class="input input-bordered input-sm w-24" placeholder="BOX">
                 </label>
                 <label class="form-control">
-                    <div class="label py-1"><span class="label-text text-xs">기준 단위</span></div>
+                    <div class="label"><span class="label-text font-medium">기준 단위</span></div>
                     <input type="text" name="toUnit" required
                            class="input input-bordered input-sm w-24" placeholder="EA">
                 </label>
                 <label class="form-control">
-                    <div class="label py-1"><span class="label-text text-xs">배율</span></div>
+                    <div class="label"><span class="label-text font-medium">배율</span></div>
                     <input type="number" name="factor" step="0.000001" min="0.000001" required
                            class="input input-bordered input-sm w-32" placeholder="12">
                 </label>
@@ -58,7 +65,7 @@
     </div>
 
     <div th:if="${rules.isEmpty()}" class="card bg-base-100 shadow-sm">
-        <div class="card-body items-center text-center py-10">
+        <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">등록된 규칙이 없습니다.</p>
             <p class="text-sm text-base-content/60">
                 지금 연결된 원천들이 단위 컬럼을 쓰지 않는다면 규칙이 없어도 됩니다.
@@ -71,7 +78,7 @@
             <div class="overflow-x-auto">
                 <table class="table table-sm">
                     <thead>
-                    <tr>
+                    <tr class="text-xs">
                         <th>적용 범위</th>
                         <th>환산</th>
                         <th>배율</th>
@@ -89,11 +96,11 @@
                         <td>
                             <code class="text-xs" th:text="|${r.fromUnit} → ${r.toUnit}|">BOX → EA</code>
                         </td>
-                        <td th:text="${r.factor}">12</td>
+                        <td class="font-mono text-xs tabular-nums" th:text="${r.factor}">12</td>
                         <td class="text-right">
                             <form th:action="@{/connectors/units/{id}/delete(id=${r.id})}"
                                   method="post" class="inline">
-                                <button type="submit" class="btn btn-ghost btn-xs text-error">삭제</button>
+                                <button type="submit" class="btn btn-ghost btn-sm text-error">삭제</button>
                             </form>
                         </td>
                     </tr>
