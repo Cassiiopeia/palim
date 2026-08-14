@@ -244,6 +244,34 @@ public class ConnectorController {
     }
 
     /**
+     * 저장하고 곧바로 시험 실행.
+     *
+     * <p>고르는 화면과 실행 버튼이 <b>따로</b> 있으면, 고르기만 하고 실행해 저장된 옛 것으로
+     * 돌게 된다. 실제로 그렇게 전 줄이 「필수 칸이 비었다」로 떨어졌는데, 화면에는 고른 칸이
+     * 그대로 보이므로 사람은 자기가 무엇을 안 했는지 알 수 없다.
+     *
+     * <p>그래서 같은 폼에서 저장과 실행을 잇는다. 「지금 고른 그대로 돌려 본다」가 사람이
+     * 기대하는 동작이다.
+     */
+    @PostMapping("/connectors/{id}/mapping/run")
+    public String saveAndRun(@PathVariable UUID id,
+                             @RequestParam List<String> sourceFields,
+                             @RequestParam List<String> targetKeys,
+                             @RequestParam(required = false) List<String> transformTypes,
+                             @RequestParam(required = false) List<String> params,
+                             @RequestParam List<String> schemaFields,
+                             RedirectAttributes redirect) {
+        List<FieldMappingForm> forms = new ArrayList<>();
+        for (int i = 0; i < targetKeys.size(); i++) {
+            forms.add(new FieldMappingForm(
+                    at(sourceFields, i), at(targetKeys, i),
+                    at(transformTypes, i), at(params, i), i));
+        }
+        adminService.saveDraft(id, new SourceSchema(schemaFields, List.of(), 0), forms);
+        return run(id, null, 1, RunMode.TEST, redirect);
+    }
+
+    /**
      * 실행.
      *
      * <p>TEST 는 스테이징에만 쓰므로 운영 데이터에 닿지 않는다. LIVE 는 확정된 매핑에서만

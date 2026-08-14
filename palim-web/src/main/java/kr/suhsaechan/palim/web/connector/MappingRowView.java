@@ -30,9 +30,20 @@ public record MappingRowView(String targetKey, String label, boolean required, S
         return "AUTO".equals(mode);
     }
 
-    public boolean isConstant() {
-        return "CONSTANT".equals(mode);
-    }
+    /*
+     * isConstant() 를 두지 않는다.
+     *
+     * 이 record 에는 constant 라는 항목이 있다. 그런데 화면이 ${r.constant} 를 읽을 때
+     * 표현식 엔진은 «자바빈 규약» 을 먼저 본다 — boolean 은 isXxx() 가 읽기 메서드이므로
+     * isConstant() 가 있으면 그쪽이 잡히고, 사람이 적어 넣은 «값» 대신 true/false 가 나온다.
+     *
+     * 그러면 ${r.constant != null} 이 **언제나 참**이 된다. 불리언은 null 이 될 수 없기
+     * 때문이다. 실제로 그래서 모든 줄이 「고정값」으로 저장됐고, 화면에는 고른 칸이 그대로
+     * 보이는데 실행하면 전 줄이 「필수 칸이 비었다」로 떨어졌다. 화면과 저장된 것이 다른데
+     * 화면만 봐서는 알 방법이 없는 종류의 고장이다.
+     *
+     * 줄의 종류를 보려면 mode 를 직접 비교한다.
+     */
 
     /** 추천으로 채워진 줄인가. 사람이 직접 고른 것과 구분되어야 «내가 안 골랐는데» 가 없다. */
     public boolean isSuggested() {
