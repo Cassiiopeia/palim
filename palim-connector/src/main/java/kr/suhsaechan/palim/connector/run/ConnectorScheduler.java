@@ -47,6 +47,7 @@ public class ConnectorScheduler {
     public void runDue() {
         Instant now = Instant.now();
         List<Connector> candidates = connectors.findByEnabledTrueAndScheduleCronIsNotNull();
+        log.debug("자동 수집 확인 — 시각이 정해진 연동 {}건", candidates.size());
 
         for (Connector connector : candidates) {
             try {
@@ -68,17 +69,29 @@ public class ConnectorScheduler {
      * 채워진 자료가 쌓이고, 그것을 기준으로 대조가 돈다.
      */
     private boolean shouldRun(Connector connector, Instant now) {
+        // 건너뛴 이유를 남긴다. 이것이 없으면 「시각을 정해 뒀는데 왜 자료가 안 오지」 를
+        // 로그로 답할 수 없다 — 화면은 «매일» 이라고 하는데 스케줄러는 조용히 지나간다.
         if (connector.getSourceType() == SourceType.UPLOAD) {
+            log.debug("자동 수집 건너뜀 — connector={} 사유=파일로 올리는 방식", connector.getCode());
             return false;
         }
         if (!StringUtils.hasText(connector.getScheduleCron())) {
+            log.debug("자동 수집 건너뜀 — connector={} 사유=수집 시각이 정해지지 않음",
+                    connector.getCode());
             return false;
         }
         if (mappings.findByConnectorIdAndStatus(connector.getId(), MappingStatus.ACTIVE)
                 .isEmpty()) {
+            log.debug("자동 수집 건너뜀 — connector={} 사유=확정된 칸 맞추기가 없음",
+                    connector.getCode());
             return false;
         }
-        return due(connector, now);
+        boolean due = due(connector, now);
+        if (!due) {
+            log.debug("자동 수집 대기 — connector={} cron={} (아직 예정 시각이 지나지 않음)",
+                    connector.getCode(), connector.getScheduleCron());
+        }
+        return due;
     }
 
     /**
