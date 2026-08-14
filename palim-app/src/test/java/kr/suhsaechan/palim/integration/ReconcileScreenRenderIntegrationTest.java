@@ -12,6 +12,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.connector.define.Connector;
+import kr.suhsaechan.palim.connector.define.ConnectorRepository;
+import kr.suhsaechan.palim.connector.define.SourceType;
+import kr.suhsaechan.palim.connector.model.TargetModel;
+import kr.suhsaechan.palim.connector.model.TargetModelRepository;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
@@ -47,6 +52,8 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
     @Autowired private ReconcileUnitService unitService;
     @Autowired private ReconcileDefinitionRepository definitions;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private ConnectorRepository connectorRepository;
+    @Autowired private TargetModelRepository targetModelRepository;
 
     private Instant baseAt;
     private String erp;
@@ -134,7 +141,9 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
         mockMvc.perform(get("/reconcile"))
                 .andExpect(status().isOk())
                 .andExpect(RenderAssertions.fullyRendered())
-                .andExpect(content().string(containsString("재고 대조")));
+                // 사이드바 메뉴와 같은 이름이어야 «메뉴에서 본 그 화면» 이 이어진다
+                .andExpect(content().string(containsString("대조 결과")))
+                .andExpect(RenderAssertions.fullyRendered());
     }
 
     @Test
@@ -169,5 +178,33 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
                 .andExpect(content().string(containsString("정해 둔 품목")))
                 // 틀린 채로 두면 어떻게 되는지 말해 줘야 사람이 실제로 확인한다
                 .andExpect(content().string(containsString("엉뚱한 재고를 합쳐")));
+    }
+
+    /**
+     * 무엇과 무엇을 맞춰 볼지 <b>정할 수 있어야</b> 대조가 시작된다.
+     *
+     * <p>이 자리가 없어서 대조 정의가 운영에서 0행이었다. 시스템을 다 붙여도 화면은 늘 비어
+     * 있었고, 매일 아침 도는 스케줄러는 빈 목록을 훑고 끝났다. 아무 일도 일어나지 않는 이유가
+     * 이것이었다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("시스템이 둘이면 맞춰 볼 대상을 정할 수 있다")
+    void 대상을_정할_수_있다() throws Exception {
+        TargetModel model = targetModelRepository
+                .findByTenantIdAndCode(TENANT, "std_stock_snapshot").orElseThrow();
+        for (String name : new String[] {"전산 시스템", "물류 시스템"}) {
+            connectorRepository.save(Connector.of(
+                    TENANT, "def-" + UUID.randomUUID().toString().substring(0, 8),
+                    name, model.getId(), SourceType.HTTP_API, "EA"));
+        }
+
+        mockMvc.perform(get("/reconcile"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("맞춰 볼 대상 정하기")))
+                // 어느 쪽이 많은지가 곧 무엇을 할지라 좌·우를 나눠 묻는다
+                .andExpect(content().string(containsString("전산 쪽")))
+                .andExpect(content().string(containsString("실물 쪽")))
+                .andExpect(RenderAssertions.fullyRendered());
     }
 }

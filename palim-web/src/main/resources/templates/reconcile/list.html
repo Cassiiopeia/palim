@@ -10,13 +10,83 @@
         두 시스템의 재고를 같은 기준으로 맞춰 보고, 시간 탓으로 설명되지 않는 차이만 남깁니다.
     </p>
 
-    <div th:if="${#lists.isEmpty(definitions)}" class="card bg-base-100 shadow-sm">
+    <!--/* 자료가 들어오는 곳이 둘이 안 되면 맞춰 볼 수가 없다. 그때는 정하라고 하지 않고
+           무엇이 남았는지 말한다 — 할 수 없는 일을 시키면 사람은 화면을 오가다 포기한다. */-->
+    <div th:if="${#lists.isEmpty(definitions) and #lists.size(connectors) < 2}"
+         class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">아직 맞춰 볼 것이 없습니다.</p>
             <p class="text-sm text-base-content/60">
-                두 시스템을 연결하고 품목을 이어야 대조를 시작할 수 있습니다.
+                두 시스템에서 자료가 들어와야 서로 견줄 수 있습니다.
             </p>
             <a th:href="@{/connectors}" class="btn btn-primary btn-sm mt-2">시스템 연결하러 가기</a>
+        </div>
+    </div>
+
+    <!--/* 무엇과 무엇을 맞춰 볼지 정하는 자리.
+
+           이 경로가 없어서 대조가 영원히 돌지 않았다 — 시스템을 다 붙여도 아무 일이 일어나지
+           않았다. 좌·우로 나눠 묻는 이유는 «어느 쪽이 많은지» 가 곧 무엇을 해야 하는지이기
+           때문이다. 전산이 많으면 실물을 찾아봐야 하고, 실물이 많으면 전산에 안 잡힌 입고가 있다. */-->
+    <div th:if="${#lists.size(connectors) >= 2}" class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-base">맞춰 볼 대상 정하기</h2>
+            <p class="text-sm text-base-content/60">
+                두 시스템을 고르면 매일 아침 스스로 견줍니다. 품목을 이어 둔 것만 셈에 들어갑니다.
+            </p>
+
+            <form method="post" th:action="@{/reconcile/definitions}" class="grid gap-4 mt-2">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text font-medium">전산 쪽</span></div>
+                        <select name="leftSource" class="select select-bordered select-sm" required>
+                            <option th:each="c : ${connectors}" th:value="${c.code}"
+                                    th:text="${c.name}">시스템</option>
+                        </select>
+                        <div class="label">
+                            <span class="label-text-alt text-base-content/60">장부상 수량</span>
+                        </div>
+                    </label>
+
+                    <label class="form-control">
+                        <div class="label"><span class="label-text font-medium">실물 쪽</span></div>
+                        <select name="rightSource" class="select select-bordered select-sm" required>
+                            <option th:each="c : ${connectors}" th:value="${c.code}"
+                                    th:text="${c.name}">시스템</option>
+                        </select>
+                        <div class="label">
+                            <span class="label-text-alt text-base-content/60">실제로 있는 수량</span>
+                        </div>
+                    </label>
+                </div>
+
+                <label class="form-control max-w-md">
+                    <div class="label"><span class="label-text font-medium">이름</span></div>
+                    <input type="text" name="name" class="input input-bordered input-sm"
+                           placeholder="전산 대 물류">
+                    <div class="label">
+                        <span class="label-text-alt text-base-content/60">
+                            비우면 두 시스템 이름으로 자동으로 정합니다
+                        </span>
+                    </div>
+                </label>
+
+                <label class="form-control max-w-md">
+                    <div class="label"><span class="label-text font-medium">알릴 기준</span></div>
+                    <input type="text" name="alertThreshold" class="input input-bordered input-sm"
+                           placeholder="예: 10" inputmode="decimal">
+                    <div class="label">
+                        <span class="label-text-alt text-base-content/60">
+                            이 수를 넘는 차이만 알립니다. 비우면 알리지 않고 화면에만 남깁니다 —
+                            낱개 몇 개 차이까지 알리면 알림이 잡음이 됩니다
+                        </span>
+                    </div>
+                </label>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="btn btn-primary btn-sm">이대로 정하기</button>
+                </div>
+            </form>
         </div>
     </div>
 

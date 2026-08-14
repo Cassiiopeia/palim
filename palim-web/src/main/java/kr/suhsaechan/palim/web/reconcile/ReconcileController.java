@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.web.reconcile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
@@ -12,6 +13,9 @@ import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiffRepository;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRun;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRunRepository;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.web.connector.ConnectorAdminService;
+import kr.suhsaechan.palim.web.connector.ConnectorQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -38,12 +42,79 @@ public class ReconcileController {
     private final ReconcileRunRepository runs;
     private final ReconcileDiffRepository diffs;
     private final ErrorMessageResolver errorMessages;
+    private final ConnectorQueryService connectorQueryService;
 
     @GetMapping("/reconcile")
     public String list(Model model) {
-        model.addAttribute("title", "재고 대조");
+        model.addAttribute("title", "대조 결과");
         model.addAttribute("definitions", definitions.findByIsActiveTrueOrderByCode());
+        // 무엇과 무엇을 맞춰 볼지 고르려면 붙여 둔 시스템 목록이 필요하다.
+        model.addAttribute("connectors",
+                connectorQueryService.list(ConnectorAdminService.DEFAULT_TENANT));
         return "reconcile/list";
+    }
+
+    /**
+     * 무엇과 무엇을 맞춰 볼지 정한다.
+     *
+     * <p>이 경로가 없어서 대조가 <b>영원히 돌지 않았다.</b> 정의가 0행이면 화면은 늘 비어 있고,
+     * 매일 아침 도는 스케줄러도 빈 목록을 훑고 끝난다. 시스템을 다 붙여도 아무 일이 일어나지
+     * 않는 이유가 이것이었다.
+     *
+     * <p>기준을 «전산 쪽» 과 «실물 쪽» 으로 나눠 묻는 이유는, 차이가 났을 때 <b>어느 쪽이
+     * 많은지</b>가 곧 무엇을 해야 하는지이기 때문이다. 전산이 많으면 실물을 찾아봐야 하고,
+     * 실물이 많으면 전산에 안 잡힌 입고가 있다는 뜻이다.
+     */
+    @PostMapping("/reconcile/definitions")
+    public String createDefinition(@RequestParam String name,
+                                   @RequestParam String leftSource,
+                                   @RequestParam String rightSource,
+                                   @RequestParam(required = false) String alertThreshold,
+                                   RedirectAttributes redirectAttributes) {
+        if (leftSource.equals(rightSource)) {
+            redirectAttributes.addFlashAttribute("flashError",
+                    "같은 시스템끼리는 맞춰 볼 수 없습니다. 서로 다른 둘을 고르세요.");
+            return "redirect:/reconcile";
+        }
+
+        String code = "%s-%s".formatted(leftSource, rightSource);
+        if (definitions.findByCode(code).isPresent()) {
+            redirectAttributes.addFlashAttribute("flashError",
+                    "이미 이 둘을 맞춰 보고 있습니다.");
+            return "redirect:/reconcile";
+        }
+
+        ReconcileDefinition definition = definitions.save(ReconcileDefinition.of(
+                TenantContext.current(), code, name.isBlank() ? code : name.trim(),
+                leftSource, rightSource,
+                // 원천마다 세는 단위가 달라도 기준 단위 수량은 맞춰 놓은 값이다. 그래서 이것으로
+                // 견준다 — 원본 수량으로 비교하면 박스와 낱개를 빼는 일이 생긴다.
+                "base_quantity",
+                BigDecimal.ZERO,
+                threshold(alertThreshold)));
+
+        log.info("대조 대상 추가 — code={} 좌={} 우={}", code, leftSource, rightSource);
+        redirectAttributes.addFlashAttribute("flashSuccess",
+                "맞춰 볼 대상을 정했습니다. 품목을 이어 두면 매일 아침 스스로 맞춰 봅니다.");
+        return "redirect:/reconcile/" + definition.getId();
+    }
+
+    /**
+     * 알림 임계.
+     *
+     * <p>비워 두면 «알리지 않겠다» 는 뜻이다. 기본값을 임의로 정해 보내면 사람이 「왜 이게 오지」
+     * 하고 알림 자체를 꺼 버린다.
+     */
+    private static BigDecimal threshold(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(raw.trim());
+        } catch (NumberFormatException e) {
+            log.warn("알림 기준을 숫자로 읽지 못해 알리지 않기로 합니다 — 값='{}'", raw);
+            return null;
+        }
     }
 
     @GetMapping("/reconcile/{id}")
