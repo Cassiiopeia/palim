@@ -17,6 +17,7 @@ Java 25 / Spring Boot 4.x 모놀리스 + `scripts/` Python 서브프로세스.
 | AI·외부 API·알림 연동 | `docs/05-INTEGRATION.md` |
 | 설정 파일 전략·감시·AWS 이식 | `docs/06-OPERATIONS.md` |
 | **배포 파이프라인·GHCR·Secret·롤백** | `docs/10-DEPLOYMENT.md` |
+| **화면을 만들거나 고칠 때 (색·버튼·빈 상태)** | `docs/11-UI-RULES.md` |
 | **"왜 이렇게 되어 있나"** | `docs/07-DECISIONS.md` |
 | 다음에 할 일 | `docs/08-ROADMAP.md` |
 | 인증·암호화·감사·공급망 보안 | `docs/09-SECURITY.md` |
