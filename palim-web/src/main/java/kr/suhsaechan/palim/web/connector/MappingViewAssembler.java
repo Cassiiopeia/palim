@@ -34,7 +34,10 @@ public class MappingViewAssembler {
      * 리 없는 값이므로 고르게 하지 않는다. 물어볼 이유가 없는 것을 물으면 사람은 답을 찾느라
      * 화면을 떠난다.
      */
-    private static final List<String> SYSTEM_FILLED = List.of("source", "collected_at");
+    // 시스템이 채우는 값. 상대가 보내주는 것이 아니라 우리가 이미 아는 값이라 물어보지 않는다 —
+    // 물어보면 사장님은 넣을 칸이 없어 매핑을 끝낼 수 없다. 실제로 채우는 곳은 ConnectorRunner 다.
+    private static final List<String> SYSTEM_FILLED =
+            List.of("source", "base_at", "collected_at");
 
     private final FieldSuggester suggester;
 
@@ -181,6 +184,7 @@ public class MappingViewAssembler {
     private static String autoHint(String fieldKey) {
         return switch (fieldKey) {
             case "source" -> "이 연동 이름이 들어갑니다";
+            case "base_at" -> "재고를 물어본 날짜가 들어갑니다";
             case "collected_at" -> "받아온 시각이 들어갑니다";
             default -> "시스템이 채웁니다";
         };

@@ -40,15 +40,27 @@ public class TransformEngine {
 
     // 여기는 «행마다» 불린다. 요약 INFO 를 찍으면 행 수만큼 쌓이므로 이 클래스는 DEBUG 로만
     // 흐름을 남기고, 수집/적재 건수 요약은 실행 오케스트레이터가 남긴다.
+    /**
+     * 원천 한 행을 표준 칸으로 옮긴다.
+     *
+     * @param systemValues 사람이 고르지 않고 <b>시스템이 채우는 값</b>. 어느 연동에서 왔는지
+     *                     (출처), 언제 기준 자료인지(기준 시각), 언제 받아왔는지(수집 시각)는
+     *                     상대가 보내주는 것이 아니라 우리가 이미 아는 값이다. 화면에서 물어보면
+     *                     사장님은 넣을 칸이 없어 매핑을 끝낼 수 없다
+     */
     public MappedRow map(SourceRow row, List<FieldMapping> mappings,
-                         List<TargetFieldSpec> fields) {
-        log.debug("행 변환 시작 — 행={} 원천칸={}개 매핑={}개 목표필드={}개",
-                row.rowNumber(), row.values().size(), mappings.size(), fields.size());
+                         List<TargetFieldSpec> fields, Map<String, Object> systemValues) {
+        log.debug("행 변환 시작 — 행={} 원천칸={}개 매핑={}개 목표필드={}개 시스템값={}개",
+                row.rowNumber(), row.values().size(), mappings.size(), fields.size(),
+                systemValues.size());
 
         Map<String, TargetFieldSpec> specByKey = new HashMap<>();
         fields.forEach(field -> specByKey.put(field.fieldKey(), field));
 
         Map<String, Object> values = new LinkedHashMap<>();
+        // 시스템이 채우는 값을 먼저 깐다. 매핑이 같은 칸을 가리키면 사람이 정한 쪽이 이긴다 —
+        // 원천이 자기 기준 시각을 실어 보내는 경우가 있고, 그때는 그것이 더 정확하다.
+        values.putAll(systemValues);
         Set<String> consumed = new HashSet<>();
 
         for (FieldMapping mapping : mappings) {
