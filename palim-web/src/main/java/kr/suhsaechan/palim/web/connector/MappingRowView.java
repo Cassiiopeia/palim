@@ -20,7 +20,7 @@ import java.util.List;
  */
 public record MappingRowView(String targetKey, String label, boolean required, String mode,
                              String picked, String constant, String preview,
-                             List<String> reasons) {
+                             List<String> reasons, String meaning) {
 
     public MappingRowView {
         reasons = reasons == null ? List.of() : List.copyOf(reasons);
