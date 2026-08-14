@@ -118,6 +118,43 @@ class MappingFormRoundTripIntegrationTest extends IntegrationTest {
         assertSaved("다시 저장");
     }
 
+    /**
+     * 이미 「고정값(빈 값)」 으로 저장된 자료에서 <b>빠져나올 수 있는가</b>.
+     *
+     * <p>화면을 고쳐도 이미 저장된 줄은 스스로를 재생산했다 — 고정값으로 보이니 고정값으로
+     * 저장되고, 그래서 다음에도 고정값으로 보인다. 사장님이 「연결 저장」 을 몇 번을 눌러도
+     * 24건이 계속 실패한 이유가 이것이다.
+     *
+     * <p>그래서 <b>읽는 쪽에서</b> 끊는다. 넣을 값이 없는 고정값은 고정값이 아니므로, 고를
+     * 칸이 있으면 그것을 읽는다. 다시 저장하지 않아도 그날로 돌아간다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("값 없는 고정값으로 저장돼 있어도 고른 칸을 읽는다")
+    void 값없는_고정값에서_빠져나온다() throws Exception {
+        List<String> schemaFields = List.of("key", "product_name", "stock_normal");
+
+        // 고장 난 상태를 그대로 만든다 — 원천 칸은 골랐는데 규칙이 「고정값(빈 값)」 이다.
+        MultiValueMap<String, String> broken = new LinkedMultiValueMap<>();
+        broken.add("targetKeys", "item_ref");
+        broken.add("sourceFields", "key");
+        broken.add("transformTypes", "CONSTANT");
+        broken.add("params", "");
+        schemaFields.forEach(value -> broken.add("schemaFields", value));
+        mockMvc.perform(post("/connectors/{id}/mapping", connector.getId())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .params(broken))
+                .andExpect(status().is3xxRedirection());
+
+        // 화면이 더 이상 이 줄을 「고정값」 으로 보여주지 않아야 다시 저장할 때 정리된다.
+        String html = mockMvc.perform(get("/connectors/{id}/mapping", connector.getId()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(values(html, "transformTypes"))
+                .as("고정값으로 보이면 그대로 다시 저장돼 영영 빠져나올 수 없다")
+                .doesNotContain("CONSTANT");
+    }
+
     /** 저장된 것이 「고른 칸을 그대로 읽는」 규칙인지 확인한다. */
     private void assertSaved(String when) {
         var mapping = mappingRepository.findByConnectorIdAndStatus(connector.getId(),

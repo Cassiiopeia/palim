@@ -224,10 +224,12 @@ public class MappingViewAssembler {
             return null;
         }
         Object params = rule.get("params");
-        if (params instanceof Map<?, ?> values) {
-            return Objects.toString(values.get("value"), "");
-        }
-        return "";
+        String value = params instanceof Map<?, ?> values
+                ? Objects.toString(values.get("value"), "")
+                : "";
+        // 값 없는 고정값은 고정값이 아니다. 그렇게 보여 주면 화면이 그대로 다시 저장해
+        // 스스로를 재생산하고, 고른 원천 칸은 영영 쓰이지 않는다.
+        return value.isBlank() ? null : value;
     }
 
     /**
