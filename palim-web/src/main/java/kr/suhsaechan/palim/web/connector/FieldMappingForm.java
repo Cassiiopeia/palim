@@ -16,8 +16,24 @@ import org.springframework.util.StringUtils;
 public record FieldMappingForm(String sourceField, String targetFieldKey, String transformType,
                                String param1, int order) {
 
+    /**
+     * 저장할 줄인가.
+     *
+     * <p>목표 칸 이름만 보면 <b>모든 줄이 저장된다.</b> 화면은 고르지 않은 줄까지 목표 칸을
+     * 실어 보내기 때문이다. 그러면 원천 칸이 빈 매핑이 잔뜩 생기고, 그것들이 실행할 때
+     * <b>시스템이 채운 값을 빈 값으로 덮어쓴다</b> — 출처·기준 시각이 그렇게 지워졌다.
+     *
+     * <p>줄이 의미를 가지려면 <b>읽을 원천 칸</b>이 있거나 <b>넣을 고정값</b>이 있어야 한다.
+     * 둘 다 없으면 「연결 안 함」이고, 연결 안 한 것은 저장할 것이 없다.
+     */
     public boolean isConnected() {
-        return StringUtils.hasText(targetFieldKey);
+        return StringUtils.hasText(targetFieldKey)
+                && (StringUtils.hasText(sourceField) || hasConstantValue());
+    }
+
+    /** 「고정값」 인데 넣을 값이 없으면 아무것도 아니다. */
+    private boolean hasConstantValue() {
+        return "CONSTANT".equals(transformType) && StringUtils.hasText(param1);
     }
 
     /**

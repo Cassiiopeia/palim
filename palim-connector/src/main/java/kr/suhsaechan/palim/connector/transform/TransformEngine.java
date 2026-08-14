@@ -69,7 +69,8 @@ public class TransformEngine {
             // 고정값은 원천을 읽지 않는다. 칸 이름이 비어 있어 그냥 태우면 null 을 꺼내게 되고,
             // consumed 에 넣으면 «쓰지도 않은 칸» 이 보존 대상에서 빠져 사용자가 넣지 않은
             // 이유로 자료가 사라진다.
-            if (spec != null && mapping.rule().type() == TransformType.CONSTANT) {
+            if (spec != null && mapping.rule().type() == TransformType.CONSTANT
+                    && isRealConstant(mapping)) {
                 String constant = mapping.rule().param("value", "");
                 Object converted = coerce(constant, spec, mapping.rule());
                 values.put(mapping.targetFieldKey(), converted);
@@ -141,6 +142,29 @@ public class TransformEngine {
                 row.rowNumber(), values.size(), attributes.size(), values);
 
         return new MappedRow(row.rowNumber(), values, attributes);
+    }
+
+    /**
+     * 「고정값」 인데 넣을 값이 없는 줄.
+     *
+     * <p>값 없는 고정값은 <b>고정값이 아니다.</b> 그런데도 그렇게 취급하면 원천 칸을 골라 뒀어도
+     * 쳐다보지 않고 빈 값을 넣는다 — 화면에는 고른 칸이 그대로 보이므로 사람은 원인을 알 수 없다.
+     *
+     * <p>실제로 그 상태로 저장된 자료가 있었다. 화면을 고쳐도 이미 저장된 줄은 스스로를 계속
+     * 재생산해(고정값으로 보임 → 고정값으로 저장) 빠져나올 방법이 없었다. 그래서 <b>읽는 쪽에서</b>
+     * 끊는다. 고를 칸이 있으면 그것을 읽는 편이 언제나 낫다.
+     */
+    private boolean isRealConstant(FieldMapping mapping) {
+        if (!mapping.rule().param("value", "").isBlank()) {
+            return true;
+        }
+        if (mapping.sourceField() == null || mapping.sourceField().isBlank()) {
+            // 고를 칸도 없다. 빈 값을 넣는 것 말고 할 수 있는 것이 없다.
+            return true;
+        }
+        log.warn("값 없는 고정값이라 고른 칸을 읽는다 — 목표칸={} 원천칸={} (매핑을 다시 저장하면 정리된다)",
+                mapping.targetFieldKey(), mapping.sourceField());
+        return false;
     }
 
     /** 실패 로그용. 필수칸이 어느 원천칸에서 오기로 되어 있었는지 짚어준다. */
