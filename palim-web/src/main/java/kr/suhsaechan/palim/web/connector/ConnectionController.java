@@ -24,8 +24,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * 외부 시스템 연결 화면.
  *
  * <p>인증정보를 넣고 <b>한 번에 전 단계를 검증</b>한 뒤, 통과한 설정을 커넥터로 저장한다.
- * 단계를 나눠 여러 번 시도하게 만들지 않는 이유는 일부 시스템의 테스트용 인증키가
- * <b>한 번 성공하면 소진되기 때문</b>이다. 검증과 필드 확인이 한 번에 끝나야 한다.
+ * 단계를 나누지 않는 이유는 <b>어디서 막혔는지가 곧 원인</b>이기 때문이다 — 지역 조회·로그인·
+ * 조회를 따로 누르게 하면 사람이 세 번 기다리고도 세 결과를 스스로 이어 붙여야 한다.
  *
  * <p>입력한 비밀값은 화면으로 되돌리지 않는다. 저장 후에는 등록 여부만 보인다.
  */
@@ -49,7 +49,8 @@ public class ConnectionController {
      * 시스템별 안내 문구.
      *
      * <p>화면이 시스템을 바꿀 때 서버에 다녀오지 않고 문구만 갈아 끼우도록 미리 넘긴다.
-     * 폼을 다시 제출하면 연결 테스트가 실행되고 <b>1회용 인증키가 그 자리에서 소진</b>된다.
+     * 폼을 다시 제출하면 상대 시스템을 실제로 부르므로, 고르기만 하는 동작으로 그것을
+     * 일으키지 않는다.
      */
     private void addPresets(Model model) {
         model.addAttribute("presets", ApiAuthPreset.values());
@@ -95,11 +96,12 @@ public class ConnectionController {
             model.addAttribute("report", report);
             if (report.isSuccess()) {
                 fillSuggestions(form, report, model);
-                if (!form.isSandbox()) {
-                    return saveVerified(form, redirectAttributes);
-                }
-                // 테스트 키로 확인한 경우. 다음에 할 일은 저장이 아니라 정식 키 발급이다.
-                model.addAttribute("needsLiveKey", form.getPreset().hasKeyStages());
+                // 테스트 키로 확인한 것도 저장한다.
+                //
+                // 검증에 성공한 회사코드·사용자 ID·접속 주소를 버릴 이유가 없다. 저장해 두면
+                // 칸 맞추기까지 미리 해 놓고 정식 키만 나중에 갈아 끼우면 된다. 예전에는 정식
+                // 키가 있어야만 저장돼서, 그것을 받아 오기까지 진도가 한 발도 나가지 않았다.
+                return saveVerified(form, redirectAttributes);
             } else {
                 model.addAttribute("error", "연결에 실패했습니다. 아래 단계를 확인하세요.");
             }
@@ -159,17 +161,32 @@ public class ConnectionController {
     private String saveVerified(ConnectionForm form, RedirectAttributes redirectAttributes) {
         try {
             var connector = connectionService.saveConnection(form);
-            redirectAttributes.addFlashAttribute("message",
-                    "연결됐습니다. 이제 어떤 항목을 어디에 담을지만 정하면 끝입니다.");
+            // flash 이름은 layout 이 읽는 것과 같아야 한다. message/error 로 담으면 화면에
+            // 아무것도 뜨지 않는다 — 다음 단계로 넘기는 가장 중요한 안내가 통째로 사라진다.
+            redirectAttributes.addFlashAttribute("flashSuccess", nextStepMessage(form));
             return "redirect:/connectors/" + connector.getId() + "/mapping";
         } catch (BusinessException e) {
             // 저장 경로도 같다 — 로그용 문자열을 화면에 내보내지 않는다.
-            redirectAttributes.addFlashAttribute("error",
+            redirectAttributes.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/connect";
         } catch (IllegalArgumentException e) {
-            redirectAttributes.addFlashAttribute("error", e.getMessage());
+            redirectAttributes.addFlashAttribute("flashError", e.getMessage());
             return "redirect:/connectors/connect";
         }
+    }
+
+    /**
+     * 저장한 뒤 무엇이 남았는지.
+     *
+     * <p>테스트 키로 저장한 경우와 정식 키로 저장한 경우는 <b>남은 일이 다르다.</b> 테스트 키는
+     * 유효기간이 짧아 매일 도는 수집에 쓸 수 없으므로, 칸을 맞춘 뒤 키를 바꿔야 한다는 것을
+     * 여기서 알려 주지 않으면 며칠 뒤 조용히 멈춘 뒤에야 알게 된다.
+     */
+    private String nextStepMessage(ConnectionForm form) {
+        if (form.isSandbox() && form.getPreset().hasKeyStages()) {
+            return "연결됐습니다. 칸을 맞춘 뒤 정식 인증키로 바꾸면 매일 자동으로 가져옵니다.";
+        }
+        return "연결됐습니다. 이제 어떤 항목을 어디에 담을지만 정하면 끝입니다.";
     }
 }

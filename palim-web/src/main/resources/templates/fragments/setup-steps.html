@@ -6,28 +6,40 @@
 <body>
 
 <div th:fragment="steps(steps)" class="flex flex-col gap-3">
-    <div th:each="step : ${steps}"
-         th:classappend="${step.state.name() == 'ATTENTION'} ? 'border-warning' :
-                         (${step.done} ? 'border-success/40' : 'border-base-300')"
-         class="card bg-base-100 border shadow-sm">
+    <!--/* 상태는 뱃지 하나로만 말한다.
+
+           예전에는 한 장의 «확인 필요» 카드가 테두리·이모지·문구·버튼 네 곳에서 경고색을 썼다.
+           같은 말을 네 번 하면 카드 전체가 노랗게 물들어 정작 무엇을 하라는 문장이 묻힌다.
+           게다가 ✅⚠️ 는 컬러 글리프라 text-success/text-warning 이 아예 먹지 않았다 —
+           화면에는 아무 영향이 없으면서 읽는 사람만 «색이 걸려 있다» 고 오해하는 클래스였다. */-->
+    <div th:each="step : ${steps}" class="card bg-base-100 shadow-sm">
         <div class="card-body flex-row items-center gap-4 py-4">
 
-            <div class="text-2xl w-8 text-center">
-                <span th:if="${step.done}" class="text-success">✅</span>
-                <span th:if="${step.state.name() == 'ATTENTION'}" class="text-warning">⚠️</span>
-                <span th:if="${step.state.name() == 'WAITING'}" class="opacity-30">⬜</span>
-            </div>
-
             <div class="grow">
-                <div class="font-semibold" th:text="${step.order} + '. ' + ${step.title}">단계</div>
-                <div class="text-sm text-base-content/70" th:text="${step.detail}">상황</div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="card-title text-base"
+                        th:text="${step.order} + '. ' + ${step.title}">단계</h2>
+                    <!--/* 끝난 단계에는 뱃지를 달지 않는다. 네 칸이 모두 «완료» 로 채워지면
+                           그 표시가 배경이 되어, 한 칸이 «확인 필요» 로 바뀌어도 눈에 안 든다.
+                           끝났다는 사실은 아래 상황 문장과 «확인» 버튼이 이미 말한다. */-->
+                    <th:block th:switch="${step.state.name()}">
+                        <span th:case="'ATTENTION'" class="badge badge-warning badge-sm">확인 필요</span>
+                        <span th:case="'WAITING'" class="badge badge-ghost badge-sm">대기</span>
+                        <span th:case="'NOT_READY'" class="badge badge-ghost badge-sm">준비 중</span>
+                    </th:block>
+                </div>
+                <div class="text-sm text-base-content/60" th:text="${step.detail}">상황</div>
                 <div th:if="${step.action != null and step.state.name() == 'ATTENTION'}"
-                     class="text-sm text-warning mt-1" th:text="'→ ' + ${step.action}">할 일</div>
+                     class="text-sm mt-1" th:text="'→ ' + ${step.action}">할 일</div>
             </div>
 
-            <div>
+            <div class="flex-none">
+                <!--/* 다음 한 걸음 하나만 파랗게 둔다. 손볼 곳이 둘일 때 둘 다 강조하면
+                       무엇부터 할지 다시 고민하게 된다. 색은 목록 화면의 같은 성격 버튼
+                       (connector/list 의 «+ 시스템 붙이기») 과 맞춘다. */-->
                 <a th:if="${step.actionable}" th:href="@{${step.link}}"
-                   class="btn btn-warning btn-sm">하러 가기</a>
+                   th:classappend="${step.order == steps.?[actionable][0].order} ? 'btn-primary' : ''"
+                   class="btn btn-sm">하러 가기</a>
                 <a th:if="${step.done and step.link != null}" th:href="@{${step.link}}"
                    class="btn btn-ghost btn-sm">확인</a>
             </div>

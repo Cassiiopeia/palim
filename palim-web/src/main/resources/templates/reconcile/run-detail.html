@@ -13,47 +13,44 @@
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <div th:if="${flashSuccess}" class="alert alert-success mb-6">
-        <span class="text-sm" th:text="${flashSuccess}">완료</span>
-    </div>
-    <div th:if="${flashError}" class="alert alert-error mb-6">
-        <span class="text-sm" th:text="${flashError}">오류</span>
-    </div>
-
-    <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight" th:text="${definition.name}">대조</h1>
-            <p class="text-sm text-base-content/70 mt-0.5">
-                기준 시각 <span class="font-mono" th:text="${run.baseAt}">시각</span>
-            </p>
-        </div>
-        <a th:href="@{/reconcile/{id}(id=${definition.id})}" class="btn btn-ghost btn-sm">
-            맞춰 본 기록
+    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). */-->
+    <div class="flex flex-wrap items-center justify-between gap-3 -mt-4 mb-6">
+        <!--/* 못 맞춘 회차는 기준 시각을 정하지 못한 것이라 시각을 말하지 않는다. */-->
+        <p class="text-sm text-base-content/60" th:if="${run.success}">
+            기준 시각
+            <span class="font-mono"
+                  th:text="${#temporals.format(run.baseAt, 'yyyy-MM-dd HH:mm:ss')}">시각</span>
+        </p>
+        <a th:href="@{/reconcile/{id}(id=${definition.id})}" class="btn btn-ghost btn-sm ml-auto">
+            ← 맞춰 본 기록
         </a>
     </div>
 
-    <div th:unless="${run.success}" class="alert alert-warning mb-6">
+    <!--/* 실패는 error 하나로 말한다 — 목록의 뱃지·flash 와 같은 색이어야 같은 사실로 읽힌다
+           (11-UI-RULES C6). */-->
+    <div th:unless="${run.success}" class="alert alert-error mb-6" role="alert">
         <div class="text-sm">
             <b>맞춰 보지 못했습니다.</b>
             <span th:text="${run.message}">사유</span>
         </div>
     </div>
 
-    <div class="flex flex-wrap gap-6 mb-8" th:if="${run.success}">
+    <div class="flex flex-wrap gap-8 mb-8" th:if="${run.success}">
         <div>
-            <div class="text-xs text-base-content/60 uppercase tracking-wider">지금 볼 것</div>
-            <div class="text-2xl font-bold tabular-nums"
+            <div class="text-xs text-base-content/60">지금 볼 것</div>
+            <!--/* 0 이면 켜지 않는다. 문제가 있을 때만 색이 붙어야 색이 신호로 남는다. */-->
+            <div class="text-xl font-semibold tabular-nums"
                  th:classappend="${#lists.size(confirmed) > 0} ? 'text-warning' : 'text-base-content/40'"
                  th:text="${#lists.size(confirmed)}">0</div>
         </div>
         <div>
-            <div class="text-xs text-base-content/60 uppercase tracking-wider">지켜볼 것</div>
-            <div class="text-2xl font-bold tabular-nums text-base-content/60"
+            <div class="text-xs text-base-content/60">지켜볼 것</div>
+            <div class="text-xl font-semibold tabular-nums text-base-content/60"
                  th:text="${#lists.size(observing)}">0</div>
         </div>
         <div>
-            <div class="text-xs text-base-content/60 uppercase tracking-wider">안 이어진 품목</div>
-            <div class="text-2xl font-bold tabular-nums text-base-content/60"
+            <div class="text-xs text-base-content/60">안 이어진 품목</div>
+            <div class="text-xl font-semibold tabular-nums text-base-content/60"
                  th:text="${#lists.size(unmatched)}">0</div>
         </div>
     </div>
@@ -67,30 +64,34 @@
             </span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                <tr class="text-xs">
-                    <th class="w-1/5">품목</th>
-                    <th class="text-right" th:text="${definition.leftSource}">좌</th>
-                    <th class="text-right" th:text="${definition.rightSource}">우</th>
-                    <th class="text-right">차이</th>
-                    <th>무슨 일인가</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="d : ${confirmed}">
-                    <td class="font-medium" th:text="${d.unitCode}">품목</td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${d.leftText}">0</td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${d.rightText}">0</td>
-                    <td class="text-right font-mono text-xs tabular-nums font-semibold"
-                        th:text="${d.deltaText}">0</td>
-                    <td class="text-sm" th:text="${d.summary}">설명</td>
-                </tr>
-                </tbody>
-            </table>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th class="w-1/5">품목</th>
+                            <th class="text-right" th:text="${definition.leftSource}">좌</th>
+                            <th class="text-right" th:text="${definition.rightSource}">우</th>
+                            <th class="text-right">차이</th>
+                            <th>무슨 일인가</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="d : ${confirmed}">
+                            <td class="font-medium" th:text="${d.unitCode}">품목</td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${d.leftText}">0</td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${d.rightText}">0</td>
+                            <td class="text-right font-mono text-xs tabular-nums font-semibold"
+                                th:text="${d.deltaText}">0</td>
+                            <td class="text-sm" th:text="${d.summary}">설명</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -103,17 +104,21 @@
             </span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <tbody>
-                <tr th:each="d : ${observing}">
-                    <td class="w-1/5 text-base-content/70" th:text="${d.unitCode}">품목</td>
-                    <td class="text-right font-mono text-xs tabular-nums text-base-content/70"
-                        th:text="${d.deltaText}">0</td>
-                    <td class="text-sm text-base-content/70" th:text="${d.summary}">설명</td>
-                </tr>
-                </tbody>
-            </table>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                        <tr th:each="d : ${observing}">
+                            <td class="w-1/5 text-base-content/60" th:text="${d.unitCode}">품목</td>
+                            <td class="text-right font-mono text-xs tabular-nums text-base-content/60"
+                                th:text="${d.deltaText}">0</td>
+                            <td class="text-sm text-base-content/60" th:text="${d.summary}">설명</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -126,27 +131,31 @@
             </span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <tbody>
-                <tr th:each="d : ${unmatched}">
-                    <td class="w-2/5" th:text="${d.unitCode}">품명</td>
-                    <td class="text-right font-mono text-xs tabular-nums"
-                        th:text="${d.deltaText}">0</td>
-                    <td class="text-sm text-base-content/70" th:text="${d.summary}">설명</td>
-                </tr>
-                </tbody>
-            </table>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                        <tr th:each="d : ${unmatched}">
+                            <td class="w-2/5" th:text="${d.unitCode}">품명</td>
+                            <td class="text-right font-mono text-xs tabular-nums"
+                                th:text="${d.deltaText}">0</td>
+                            <td class="text-sm text-base-content/60" th:text="${d.summary}">설명</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         <a th:href="@{/reconcile/units}" class="btn btn-outline btn-sm mt-3">품목 이으러 가기</a>
     </section>
 
     <div th:if="${run.success and #lists.isEmpty(confirmed) and #lists.isEmpty(observing)
                  and #lists.isEmpty(unmatched)}"
-         class="card bg-base-100 border border-base-300">
+         class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">어긋난 것이 없습니다.</p>
-            <p class="text-sm text-base-content/50">두 곳의 재고가 맞습니다.</p>
+            <p class="text-sm text-base-content/60">두 곳의 재고가 맞습니다.</p>
         </div>
     </div>
 

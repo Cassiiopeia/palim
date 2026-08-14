@@ -33,20 +33,20 @@ public class ConnectionAdminService {
         String name = require(form.getName(), "이름");
         require(form.getSecret(), "인증정보");
 
-        connectorRepository.findByTenantIdAndCode(ConnectorAdminService.DEFAULT_TENANT, code)
-                .ifPresent(existing -> {
-                    throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 쓰는 코드입니다: " + code);
-                });
-
         TargetModel model = targetModelRepository
                 .findByTenantIdAndCode(ConnectorAdminService.DEFAULT_TENANT,
                         form.getTargetModelCode())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT,
                         "목표 모델을 찾을 수 없습니다: " + form.getTargetModelCode()));
 
-        Connector connector = connectorRepository.save(Connector.of(
-                ConnectorAdminService.DEFAULT_TENANT, code, name, model.getId(),
-                SourceType.HTTP_API, form.getDefaultUnit()));
+        // 같은 코드가 이미 있으면 «교체» 한다. 코드는 프리셋과 목표 모델로 결정되므로 같은
+        // 시스템을 다시 붙이면 반드시 같은 코드가 나온다 — 그때마다 거부하면 인증키가 만료돼도
+        // 다시 넣을 방법이 없고, 테스트 키로 확인해 둔 것을 정식 키로 바꿀 수도 없다.
+        Connector connector = connectorRepository
+                .findByTenantIdAndCode(ConnectorAdminService.DEFAULT_TENANT, code)
+                .orElseGet(() -> connectorRepository.save(Connector.of(
+                        ConnectorAdminService.DEFAULT_TENANT, code, name, model.getId(),
+                        SourceType.HTTP_API, form.getDefaultUnit())));
 
         String ref = ConnectorSecretService.refOf(code);
         // sourceConfig 에는 비밀값이 없다. credentialRef 는 "어디에 있는지"만 가리킨다.

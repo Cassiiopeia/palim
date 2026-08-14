@@ -2,7 +2,11 @@
 <!--/*
   연동 커넥터 목록.
 
-  목록을 훑을 때 문제가 먼저 보여야 한다 — 실패한 실행과 확정되지 않은 매핑을 뱃지로 구분한다.
+  목록을 훑을 때 문제가 먼저 보여야 한다. 그래서 색은 «지금 손봐야 할 한 곳» 에만 켠다 —
+  정상(연결됨·맞춤)은 평문이고, 색이 보이는 행이 곧 할 일이 있는 행이다. 모든 행에 뱃지가
+  채워지면 색이 배경이 되어 고장난 행과 멀쩡한 행의 소음이 같아진다.
+
+  상세 화면과 링크로 이어져 나란히 비교되므로, 같은 사실은 같은 부품으로 그린다.
 */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${title}, ~{::content})}">
@@ -19,54 +23,65 @@
         </div>
     </div>
 
+    <!--/* 빈 상태에 버튼을 다시 두지 않는다. 바로 위 「+ 시스템 붙이기」 와 목적지가 같아
+           화면에 주 동작이 두 개가 된다 — 어느 쪽이 «그» 동작인지 색으로 구분되지 않는다. */-->
     <div th:if="${connectors.isEmpty()}" class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
-            <h2 class="card-title">아직 연결한 시스템이 없습니다</h2>
+            <h2 class="card-title text-base">아직 연결한 시스템이 없습니다</h2>
             <p class="text-base-content/70">
                 전산 시스템과 물류 시스템을 붙이면 매일 재고를 가져와 맞춰 봅니다.
             </p>
-            <a th:href="@{/connectors/connect}" class="btn btn-primary mt-2">첫 시스템 붙이기</a>
+            <p class="text-sm text-base-content/60">위 「+ 시스템 붙이기」 로 시작합니다.</p>
         </div>
     </div>
 
     <div th:unless="${connectors.isEmpty()}" class="card bg-base-100 shadow-sm">
         <div class="card-body p-0">
             <div class="overflow-x-auto">
-                <table class="table">
+                <table class="table table-sm">
                     <thead>
-                    <tr>
+                    <tr class="text-xs">
                         <th>시스템</th>
                         <th>연결</th>
                         <th>칸 맞추기</th>
                         <th>자동 수집</th>
-                        <th>마지막</th>
-                        <th></th>
+                        <!--/* 상세의 행 이름과 같아야 «목록에서 본 그 칸» 이 상세의 어디인지 이어진다. */-->
+                        <th>실행 이력</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr th:each="c : ${connectors}">
+                        <!--/* 이름이 상세로 가는 링크다. 오른쪽에 「보기」 버튼을 따로 두면 한 행에
+                               같은 목적지가 두 번 있고 열 하나를 통째로 낭비한다. */-->
                         <td>
                             <a th:href="@{/connectors/{id}(id=${c.id})}"
                                class="link link-hover font-medium" th:text="${c.name}">이름</a>
                             <div class="text-xs text-base-content/60" th:text="${c.sourceType}">원천</div>
                         </td>
-                        <td>
-                            <span th:if="${c.connected}" class="badge badge-success badge-sm">연결됨</span>
+                        <!--/* 끝난 일에는 색을 쓰지 않는다 — 색은 «여기를 보라» 일 때만 켠다. */-->
+                        <td class="text-sm">
+                            <span th:if="${c.connected}" class="text-base-content/60">연결됨</span>
                             <span th:unless="${c.connected}" class="badge badge-warning badge-sm"
                                   th:text="${c.connectionLabel}">설정 필요</span>
                         </td>
-                        <td>
-                            <span th:if="${c.readyForLive}" class="badge badge-success badge-sm">맞춤</span>
-                            <span th:unless="${c.readyForLive}" class="badge badge-warning badge-sm">안 함</span>
+                        <!--/* 「안 함」 은 실패가 아니라 아직 안 한 일이다. 연결이 끝나 지금 당장
+                               할 수 있게 된 뒤에만 색으로 부른다 — 갓 붙인 연동이 노랑 두 개로
+                               시작하면 무엇부터 해야 하는지가 사라진다. */-->
+                        <td class="text-sm">
+                            <span th:if="${c.readyForLive}" class="text-base-content/60">맞춤</span>
+                            <span th:if="${c.connected and !c.readyForLive}"
+                                  class="badge badge-warning badge-sm">안 함</span>
+                            <span th:if="${!c.connected and !c.readyForLive}"
+                                  class="text-base-content/60">안 함</span>
                         </td>
                         <td class="text-sm">
                             <span th:if="${c.scheduled}">매일</span>
-                            <span th:unless="${c.scheduled}" class="text-base-content/50">—</span>
+                            <span th:unless="${c.scheduled}" class="text-base-content/40">—</span>
                         </td>
                         <!--/* 실패를 목록에서 보여준다. 상세로 들어가야만 보이면, 매일 도는 수집이
                                조용히 죽어 있어도 아무도 모른 채 며칠이 지난다. */-->
                         <td class="text-sm">
-                            <span th:if="${c.lastRunAt == null}" class="text-base-content/50">실행 없음</span>
+                            <span th:if="${c.lastRunAt == null}" class="text-base-content/60">아직 실행한 적 없습니다</span>
                             <span th:if="${c.lastRunAt != null}"
                                   th:text="${#temporals.format(c.lastRunAt, 'MM-dd HH:mm')}">—</span>
                             <span th:if="${c.hasFailure}" class="badge badge-error badge-sm ml-1"
@@ -74,9 +89,6 @@
                             <span th:if="${c.lastRunAt != null and !c.hasFailure}"
                                   class="text-base-content/60 ml-1"
                                   th:text="${c.lastSuccess} + '건'">0건</span>
-                        </td>
-                        <td class="text-right">
-                            <a th:href="@{/connectors/{id}(id=${c.id})}" class="btn btn-ghost btn-xs">보기</a>
                         </td>
                     </tr>
                     </tbody>
