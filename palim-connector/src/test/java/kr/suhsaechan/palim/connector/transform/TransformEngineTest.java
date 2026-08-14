@@ -34,7 +34,7 @@ class TransformEngineTest {
                 List.of(FieldMapping.of("품목코드", "item_ref"),
                         FieldMapping.of("재고수량", "quantity")),
                 List.of(spec("item_ref", FieldDataType.STRING, true),
-                        spec("quantity", FieldDataType.DECIMAL, true)));
+                        spec("quantity", FieldDataType.DECIMAL, true)), java.util.Map.of());
 
         assertThat(mapped.values().get("item_ref")).isEqualTo("A-001");
         assertThat((BigDecimal) mapped.values().get("quantity")).isEqualByComparingTo("120");
@@ -46,7 +46,7 @@ class TransformEngineTest {
         MappedRow mapped = engine.map(
                 row(Map.of("품목코드", "A-001", "비고", "메모")),
                 List.of(FieldMapping.of("품목코드", "item_ref")),
-                List.of(spec("item_ref", FieldDataType.STRING, true)));
+                List.of(spec("item_ref", FieldDataType.STRING, true)), java.util.Map.of());
 
         assertThat(mapped.attributes())
                 .as("버리면 과거 시점 데이터를 다시 받을 수 없다")
@@ -59,7 +59,7 @@ class TransformEngineTest {
         assertThatThrownBy(() -> engine.map(
                 row(Map.of("품목코드", "")),
                 List.of(FieldMapping.of("품목코드", "item_ref")),
-                List.of(spec("item_ref", FieldDataType.STRING, true))))
+                List.of(spec("item_ref", FieldDataType.STRING, true)), java.util.Map.of()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.REQUIRED_FIELD_MISSING);
     }
@@ -71,7 +71,7 @@ class TransformEngineTest {
                 row(Map.of("코드", "A-001", "메모", "")),
                 List.of(FieldMapping.of("코드", "item_ref"), FieldMapping.of("메모", "note")),
                 List.of(spec("item_ref", FieldDataType.STRING, true),
-                        spec("note", FieldDataType.STRING, false)));
+                        spec("note", FieldDataType.STRING, false)), java.util.Map.of());
 
         assertThat(mapped.values().get("item_ref")).isEqualTo("A-001");
     }
@@ -82,7 +82,7 @@ class TransformEngineTest {
         assertThatThrownBy(() -> engine.map(
                 row(Map.of("재고수량", "없음")),
                 List.of(FieldMapping.of("재고수량", "quantity")),
-                List.of(spec("quantity", FieldDataType.DECIMAL, true))))
+                List.of(spec("quantity", FieldDataType.DECIMAL, true)), java.util.Map.of()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FIELD_TYPE_MISMATCH);
     }
@@ -98,7 +98,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("유통기한", "2027-01-01T00:00:00")),
                     List.of(FieldMapping.of("유통기한", "expiry_date")),
-                    List.of(spec("expiry_date", FieldDataType.DATE, false)));
+                    List.of(spec("expiry_date", FieldDataType.DATE, false)), java.util.Map.of());
 
             assertThat(mapped.values().get("expiry_date"))
                     .as("날짜만 받는다고 가정하면 유통기한 필드가 통째로 실패한다")
@@ -111,7 +111,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("유통기한", "2027-01-01")),
                     List.of(FieldMapping.of("유통기한", "expiry_date")),
-                    List.of(spec("expiry_date", FieldDataType.DATE, false)));
+                    List.of(spec("expiry_date", FieldDataType.DATE, false)), java.util.Map.of());
 
             assertThat(mapped.values().get("expiry_date")).isEqualTo(LocalDate.of(2027, 1, 1));
         }
@@ -122,7 +122,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("기준시각", "2026-08-12T00:00:00Z")),
                     List.of(FieldMapping.of("기준시각", "base_at")),
-                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)));
+                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)), java.util.Map.of());
 
             assertThat(mapped.values().get("base_at"))
                     .isEqualTo(Instant.parse("2026-08-12T00:00:00Z"));
@@ -137,7 +137,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("기준시각", "2026-08-12T09:00:00")),
                     List.of(mapping),
-                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)));
+                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)), java.util.Map.of());
 
             assertThat(mapped.values().get("base_at"))
                     .as("KST 09:00 은 UTC 00:00 이다")
@@ -150,7 +150,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("기준일", "2026-08-12")),
                     List.of(FieldMapping.of("기준일", "base_at")),
-                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)));
+                    List.of(spec("base_at", FieldDataType.TIMESTAMP, true)), java.util.Map.of());
 
             assertThat(mapped.values().get("base_at"))
                     .isEqualTo(Instant.parse("2026-08-12T00:00:00Z"));
@@ -165,7 +165,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("유통기한", "20270101")),
                     List.of(mapping),
-                    List.of(spec("expiry_date", FieldDataType.DATE, false)));
+                    List.of(spec("expiry_date", FieldDataType.DATE, false)), java.util.Map.of());
 
             assertThat(mapped.values().get("expiry_date")).isEqualTo(LocalDate.of(2027, 1, 1));
         }
@@ -184,7 +184,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("수량", "1,200 개")),
                     List.of(mapping),
-                    List.of(spec("quantity", FieldDataType.DECIMAL, true)));
+                    List.of(spec("quantity", FieldDataType.DECIMAL, true)), java.util.Map.of());
 
             assertThat((BigDecimal) mapped.values().get("quantity")).isEqualByComparingTo("1200");
         }
@@ -199,7 +199,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("구분", "기본출고")),
                     List.of(mapping),
-                    List.of(spec("movement_type", FieldDataType.STRING, true)));
+                    List.of(spec("movement_type", FieldDataType.STRING, true)), java.util.Map.of());
 
             assertThat(mapped.values().get("movement_type")).isEqualTo("OUTBOUND");
         }
@@ -213,7 +213,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("구분", "기타조정")),
                     List.of(mapping),
-                    List.of(spec("movement_type", FieldDataType.STRING, true)));
+                    List.of(spec("movement_type", FieldDataType.STRING, true)), java.util.Map.of());
 
             assertThat(mapped.values().get("movement_type")).isEqualTo("기타조정");
         }
@@ -227,7 +227,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("창고", "")),
                     List.of(mapping),
-                    List.of(spec("warehouse_code", FieldDataType.STRING, false)));
+                    List.of(spec("warehouse_code", FieldDataType.STRING, false)), java.util.Map.of());
 
             assertThat(mapped.values().get("warehouse_code")).isEqualTo("MAIN");
         }
@@ -238,7 +238,7 @@ class TransformEngineTest {
             MappedRow mapped = engine.map(
                     row(Map.of("사용", "예")),
                     List.of(FieldMapping.of("사용", "is_active")),
-                    List.of(spec("is_active", FieldDataType.BOOLEAN, false)));
+                    List.of(spec("is_active", FieldDataType.BOOLEAN, false)), java.util.Map.of());
 
             assertThat(mapped.values().get("is_active")).isEqualTo(true);
         }
@@ -250,5 +250,47 @@ class TransformEngineTest {
 
     private TargetFieldSpec spec(String key, FieldDataType type, boolean required) {
         return TargetFieldSpec.of(key, type, required);
+    }
+
+    /**
+     * 사람이 고르지 않고 <b>시스템이 채우는 값</b>이 실제로 들어가는가.
+     *
+     * <p>출처·기준 시각은 상대가 보내주는 것이 아니라 우리가 이미 아는 값이다. 이것을 화면에서
+     * 물어보면 사장님은 넣을 칸이 없어 매핑을 끝낼 수 없고, 그렇다고 채우는 코드가 없으면
+     * <b>필수 검사에 걸려 전 행이 실패한다.</b> 실제로 그 상태였다.
+     */
+    @Test
+    @DisplayName("시스템이 채우는 값이 그대로 들어간다")
+    void 시스템값이_들어간다() {
+        Instant baseAt = Instant.parse("2026-08-14T00:00:00Z");
+
+        MappedRow mapped = engine.map(
+                row(Map.of("재고수량", "10")),
+                List.of(FieldMapping.of("재고수량", "quantity")),
+                List.of(spec("quantity", FieldDataType.DECIMAL, true),
+                        spec("source", FieldDataType.STRING, true),
+                        spec("base_at", FieldDataType.TIMESTAMP, true)),
+                Map.of("source", "ecount-stock", "base_at", baseAt));
+
+        assertThat(mapped.values())
+                .as("채우지 않으면 필수 검사에 걸려 전 행이 실패한다")
+                .containsEntry("source", "ecount-stock")
+                .containsEntry("base_at", baseAt);
+    }
+
+    /**
+     * 원천이 자기 기준 시각을 실어 보내는 경우가 있다. 그때는 <b>사람이 정한 매핑이 이긴다</b> —
+     * 상대가 직접 알려 준 값이 우리가 추측한 것보다 정확하기 때문이다.
+     */
+    @Test
+    @DisplayName("같은 칸을 매핑하면 사람이 정한 쪽이 이긴다")
+    void 매핑이_시스템값을_덮는다() {
+        MappedRow mapped = engine.map(
+                row(Map.of("보낸이름", "상대가 보낸 이름")),
+                List.of(FieldMapping.of("보낸이름", "source")),
+                List.of(spec("source", FieldDataType.STRING, true)),
+                Map.of("source", "우리가 정한 이름"));
+
+        assertThat(mapped.values()).containsEntry("source", "상대가 보낸 이름");
     }
 }

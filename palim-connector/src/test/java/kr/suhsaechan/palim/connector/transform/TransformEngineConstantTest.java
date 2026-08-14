@@ -33,7 +33,7 @@ class TransformEngineConstantTest {
                 new FieldMapping("", "unit",
                         TransformRule.of(TransformType.CONSTANT, Map.of("value", "EA"))));
 
-        MappedRow row = engine.map(new SourceRow(1, Map.of("PROD_CD", "A0001")), mappings, specs);
+        MappedRow row = engine.map(new SourceRow(1, Map.of("PROD_CD", "A0001")), mappings, specs, java.util.Map.of());
 
         assertThat(row.values().get("unit"))
                 .as("원천에 없는 값을 사람이 적었으면 그대로 들어가야 한다")
@@ -57,7 +57,7 @@ class TransformEngineConstantTest {
                         TransformRule.of(TransformType.CONSTANT, Map.of("value", "EA"))));
 
         MappedRow row = engine.map(
-                new SourceRow(1, Map.of("PROD_CD", "A0001", "REMARK", "비고")), mappings, specs);
+                new SourceRow(1, Map.of("PROD_CD", "A0001", "REMARK", "비고")), mappings, specs, java.util.Map.of());
 
         assertThat(row.attributes())
                 .as("연결하지 않은 칸은 보존된다. 고정값이 그 자리를 차지하면 안 된다")
@@ -79,7 +79,7 @@ class TransformEngineConstantTest {
                 new FieldMapping("", "source",
                         TransformRule.of(TransformType.CONSTANT, Map.of("value", "erp-stock"))));
 
-        MappedRow row = engine.map(new SourceRow(1, Map.of("PROD_CD", "A0001")), mappings, specs);
+        MappedRow row = engine.map(new SourceRow(1, Map.of("PROD_CD", "A0001")), mappings, specs, java.util.Map.of());
 
         assertThat(row.values().get("source")).isEqualTo("erp-stock");
     }
