@@ -30,7 +30,7 @@ jobs:
           java-version: "25"
 
       - name: CodeQL 초기화
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java
           build-mode: manual
@@ -43,4 +43,4 @@ jobs:
         run: ./gradlew classes -x test
 
       - name: 분석 실행
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
