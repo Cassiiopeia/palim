@@ -23,6 +23,13 @@ COPY palim-app/build/libs/*.jar app.jar
 # 실행하기 때문이다 — classpath 리소스는 경로가 없다.
 COPY scripts/ /app/scripts/
 
+# 로그 디렉터리를 미리 만들어 실행 사용자에게 넘긴다.
+#
+# 호스트 디렉터리를 여기 연결하는 것이 운영 구성이지만, 연결이 없거나 권한이 맞지 않아도
+# 앱은 떠야 한다 — 로그는 부가 기능이지 서비스의 생명이 아니다. 실제로 이 디렉터리에 쓸 수
+# 없어 기동 자체가 막히고 서비스가 내려간 적이 있다.
+RUN mkdir -p /mnt/palim/logs && chown -R palim:palim /mnt/palim
+
 USER palim
 
 EXPOSE 8080
