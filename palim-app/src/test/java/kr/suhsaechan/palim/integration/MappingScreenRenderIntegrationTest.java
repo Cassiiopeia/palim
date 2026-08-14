@@ -125,4 +125,27 @@ class MappingScreenRenderIntegrationTest extends IntegrationTest {
                         org.hamcrest.Matchers.not(
                                 org.hamcrest.Matchers.containsString("원천 파일 올리기"))));
     }
+
+    /**
+     * <b>원천이 응답하지 않아도 화면은 열려야 한다.</b>
+     *
+     * <p>원격 호출은 언제든 실패한다 — 상대 점검, 호출 제한, 네트워크. 그때 화면이 죽으면
+     * 사장님은 무엇이 잘못됐는지조차 볼 수 없고, <b>이미 해 둔 칸 연결도 못 본다.</b>
+     * 실제로 상대가 412 를 한 번 돌려주자 매핑 화면이 통째로 500 이 났다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("원천이 응답하지 않아도 화면은 열린다")
+    void 원천이_죽어도_화면은_열린다() throws Exception {
+        // 흉내 낸 원천을 내려 버린다 — 상대가 사라진 상황이다.
+        server.stop(0);
+        server = null;
+
+        mockMvc.perform(get("/connectors/{id}/mapping", connector.getId()))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                // 왜 비어 있는지 말해야 사람이 다음 행동을 정한다
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.containsString("다시 받아오기")));
+    }
 }

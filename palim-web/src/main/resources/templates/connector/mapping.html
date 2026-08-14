@@ -62,11 +62,19 @@
         </div>
     </div>
 
-    <div th:if="${fetchesItself} and ${schema != null}" class="alert mb-6">
-        <div class="text-sm">
-            화면을 열 때마다 <b>최신 값을 다시 받아옵니다.</b>
-            상대가 칸을 바꾸면 여기서 바로 드러납니다.
-        </div>
+    <!--/* 「다시 받아오기」 는 누를 때만 상대를 부른다.
+
+           예전에는 화면을 열 때마다 불렀는데, 새로고침 한 번이 원격 호출 한 번이 되고 상대가
+           잠깐 삐끗하면 화면 자체가 안 열렸다 — 이미 해 둔 칸 연결조차 못 봤다. */-->
+    <div th:if="${fetchesItself}" class="flex items-center justify-between gap-3 mb-6">
+        <p class="text-sm text-base-content/60">
+            <span th:if="${schema != null}">지난번에 받아온 칸으로 보여 주고 있습니다.</span>
+            <span th:if="${schema == null}">아직 칸을 받아오지 못했습니다.</span>
+            상대가 칸을 바꿨다면 다시 받아오세요.
+        </p>
+        <form method="post" th:action="@{/connectors/{id}/schema/refresh(id=${connector.id})}">
+            <button type="submit" class="btn btn-sm">다시 받아오기</button>
+        </form>
     </div>
 
     <!--/* 받아온 자료를 먼저 보여준다.
