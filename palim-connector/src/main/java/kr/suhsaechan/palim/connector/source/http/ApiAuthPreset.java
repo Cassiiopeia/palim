@@ -37,19 +37,36 @@ public enum ApiAuthPreset {
      * <p>공개 API 가 유료라 화면이 쓰는 경로를 그대로 쓴다. 로그인 폼을 전송해 세션 쿠키를 받고,
      * 화면이 호출하는 조회 요청을 같은 형식으로 보낸다.
      *
+     * <p><b>로그인이 평범하지 않다.</b> 입력값을 그대로 보내는 것이 아니라, 로그인 화면에 실려
+     * 오는 공개키로 폼 전체를 암호화해 한 칸({@code encpar})에 담아 별도 주소로 보낸다. 평범한
+     * 폼 전송으로는 상대가 200 과 함께 「연결에 실패하였습니다」 를 돌려주고 세션을 주지 않는다 —
+     * 그 화면만 봐서는 계정을 의심하게 되므로 여기 적어 둔다.
+     *
      * <p><b>상대 화면이 바뀌면 깨진다.</b> 수집 실패를 반드시 알려야 한다 — 조용히 멈추면 옛
      * 데이터로 대사가 계속 돌고, 그 결과를 믿고 판단하게 된다.
      */
     ONEWMS("ONEWMS (3자물류)", AuthFlow.FORM_SESSION,
             "회사코드(계정정보)·아이디·비밀번호가 필요합니다. 조회 전용으로만 씁니다.",
-            Map.of("loginUrl", "https://svc.onewms.co.kr/login.html",
-                    "fetchUrl", "https://svc.onewms.co.kr/function.html",
-                    "useridField", "userid",
-                    "passwordField", "passwd",
-                    "tokenField", "token",
-                    "rowsPath", "rows",
-                    "fetchBody", "template=I100&action=search&page_code=I100&rows=500&page=1"
-                            + "&sidx=&sord=asc&_search=false")),
+            Map.ofEntries(
+                    Map.entry("loginUrl", "https://svc.onewms.co.kr/login.html"),
+                    // 암호화한 로그인 값을 받는 주소. 로그인 화면과 다르다.
+                    Map.entry("loginProcessUrl", "https://svc.onewms.co.kr/login_process.php"),
+                    Map.entry("fetchUrl", "https://svc.onewms.co.kr/function.html"),
+                    Map.entry("useridField", "userid"),
+                    Map.entry("passwordField", "passwd"),
+                    Map.entry("tokenField", "token"),
+                    Map.entry("encryptField", "encpar"),
+                    // 화면이 매번 새로 만들어 보내는 창 식별자. 없으면 거부당한다.
+                    Map.entry("sessionIdField", "tab_id"),
+                    Map.entry("rowsPath", "rows"),
+                    // 상대가 알려주는 전체 건수. 받은 행이 이보다 적으면 잘린 것이다.
+                    Map.entry("recordsPath", "records"),
+                    // par 는 검색조건 묶음이고 nd 는 캐시 무력화용 현재 시각이다.
+                    // 둘 다 없으면 화면이 보내는 요청과 달라져 응답 모양이 바뀐다.
+                    Map.entry("fetchBody", "template=I100&action=search&page_code=I100"
+                            + "&rows=500&page=1&sidx=&sord=asc&_search=false&nd={nd}"
+                            + "&par=stock_warehouse%3D1%26stock_stock_type%3D0"
+                            + "%26select_field%3DI100%26products_sort%3D1"))),
 
     /** 위에 없는 시스템. 주소와 필드 이름을 직접 입력한다. */
     CUSTOM_FORM("직접 설정 (웹 로그인 방식)", AuthFlow.FORM_SESSION,

@@ -143,13 +143,13 @@ public class HttpApiSourceReader implements SourceReader {
                 merged.get("rowsPath"));
 
         Map<String, String> cookies = new LinkedHashMap<>();
-        String token = form.openLoginPage(required(merged, "loginUrl"),
+        FormSessionClient.LoginPage page = form.openLoginPage(required(merged, "loginUrl"),
                 merged.getOrDefault("tokenField", "token"), cookies);
-        // 토큰 값 자체는 남기지 않는다 — 확보 여부만 알면 원인은 갈린다.
-        log.debug("로그인 화면 통과 — 프리셋={}, 토큰확보={}, 받은쿠키={}",
-                preset, token != null && !token.isEmpty(), cookies.keySet());
+        // 토큰·공개키 값 자체는 남기지 않는다 — 확보 여부만 알면 원인은 갈린다.
+        log.debug("로그인 화면 통과 — 프리셋={}, 토큰확보={}, 공개키확보={}, 받은쿠키={}",
+                preset, !page.token().isEmpty(), page.hasPublicKey(), cookies.keySet());
 
-        FormSessionClient.Session session = form.login(merged, userId, secret, cookies, token);
+        FormSessionClient.Session session = form.login(merged, userId, secret, cookies, page);
         List<Map<String, String>> rows = form.fetch(merged, session);
         log.debug("폼 조회 응답 — 프리셋={}, 조회주소={}, {}행", preset, merged.get("fetchUrl"), rows.size());
         return rows;
