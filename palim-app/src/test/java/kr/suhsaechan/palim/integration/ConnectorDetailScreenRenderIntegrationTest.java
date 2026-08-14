@@ -99,4 +99,25 @@ class ConnectorDetailScreenRenderIntegrationTest extends IntegrationTest {
         assertThat(connectorRepository.findById(connector.getId()).orElseThrow()
                 .getScheduleCron()).isNull();
     }
+
+    /**
+     * 범위 밖 시각이 그대로 cron 으로 저장되면 {@code CronExpression.parse} 가 매분 터진다.
+     * {@code ConnectorScheduler} 가 커넥터별로 예외를 잡아 스케줄러 전체는 죽지 않지만, 그
+     * 커넥터만 영구히 건너뛰어지고 로그에 매분 ERROR 가 쌓인다 — 저장 전에 막아야 한다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("범위를 벗어난 시각은 저장되지 않는다")
+    void 범위_밖_시각은_저장되지_않는다() throws Exception {
+        mockMvc.perform(post("/connectors/{id}/schedule", connector.getId())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .param("hour", "25")
+                        .param("minute", "0"))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(connectorRepository.findById(connector.getId()).orElseThrow()
+                .getScheduleCron())
+                .as("리다이렉트만 봐서는 조용히 저장돼도 통과한다 — cron 이 비어 있어야 한다")
+                .isNull();
+    }
 }

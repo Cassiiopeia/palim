@@ -3,6 +3,8 @@ package kr.suhsaechan.palim.web.connector;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.error.ErrorCode;
+import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorMapping;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
@@ -32,8 +34,11 @@ public class ConnectorDetailController {
     private final ConnectorAdminService adminService;
     private final ConnectorQueryService queryService;
     private final ConnectorMappingRepository mappingRepository;
+    private final ErrorMessageResolver errorMessages;
 
     private static final int RECENT_RUN_LIMIT = 1;
+    private static final int MAX_HOUR = 23;
+    private static final int MAX_MINUTE = 59;
 
     @GetMapping("/connectors/{id}")
     public String detail(@PathVariable UUID id, Model model) {
@@ -71,13 +76,36 @@ public class ConnectorDetailController {
             return "redirect:/connectors/" + id;
         }
 
-        int h = Integer.parseInt(hour.trim());
-        int m = (minute == null || minute.isBlank()) ? 0 : Integer.parseInt(minute.trim());
+        // 형식·범위를 저장 전에 막는다. 여기서 안 거르면 "0 61 25 * * *" 같은 파싱 불가능한
+        // cron 이 그대로 저장되고, ConnectorScheduler.due() 가 매분 CronExpression.parse() 에서
+        // 터진다. 커넥터별로 예외를 잡으므로 스케줄러 전체가 죽지는 않지만, 그 커넥터는
+        // 영구히 건너뛰어지고 로그에 매분 ERROR 가 쌓인다 — 사장님은 "왜 자료가 안 오지"로만 안다.
+        Integer h = parseInRange(hour, MAX_HOUR);
+        Integer m = (minute == null || minute.isBlank()) ? Integer.valueOf(0)
+                : parseInRange(minute, MAX_MINUTE);
+        if (h == null || m == null) {
+            // 폼 흐름이라 예외를 던지지 않는다 — 던지면 전역 핸들러가 JSON 오류를 돌려주는데,
+            // 여기는 브라우저 폼 제출이라 화면 대신 JSON 이 뜨면 안 된다.
+            redirectAttributes.addFlashAttribute("flashError",
+                    errorMessages.resolve(ErrorCode.INVALID_INPUT, "수집 시각"));
+            return "redirect:/connectors/" + id;
+        }
+
         connector.schedule("0 %d %d * * *".formatted(m, h));
         connectorRepository.save(connector);
 
         redirectAttributes.addFlashAttribute("flashSuccess",
                 "매일 %02d:%02d 에 가져옵니다.".formatted(h, m));
         return "redirect:/connectors/" + id;
+    }
+
+    /** {@code 0 ~ max} 범위의 숫자만 통과시킨다. 형식이 틀렸거나 범위 밖이면 {@code null}. */
+    private Integer parseInRange(String value, int max) {
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            return (parsed >= 0 && parsed <= max) ? parsed : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
