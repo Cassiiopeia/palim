@@ -111,8 +111,18 @@ public class SetupService {
                     "확인을 기다리는 품목 %d 건".formatted(pending),
                     "같은 물건인지 보고 확인해 주세요", "/reconcile/units");
         }
+        // 「확인을 기다리는 것이 없다」와 「아무것도 안 이었다」는 다르다. 하나도 잇지 않았는데
+        // 완료라고 하면, 바로 아래 「아직 안 이어진 품목 N건」과 같은 화면에서 서로 반대되는
+        // 말을 하게 된다.
+        if (unitService.activeUnits().isEmpty()) {
+            return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
+                    "아직 이어 둔 품목이 없습니다",
+                    "같은 물건끼리 이어 주세요", "/reconcile/units");
+        }
         return new SetupStep(2, "품목 맞추기", SetupStep.State.DONE,
-                "확인을 기다리는 품목이 없습니다", null, "/reconcile/units");
+                "이어 둔 품목 %d 건 — 확인을 기다리는 것은 없습니다"
+                        .formatted(unitService.activeUnits().size()),
+                null, "/reconcile/units");
     }
 
     private SetupStep reconcileStep(List<Connector> collecting) {
