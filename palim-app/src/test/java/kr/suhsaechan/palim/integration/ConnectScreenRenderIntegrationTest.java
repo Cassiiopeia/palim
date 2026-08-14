@@ -1,6 +1,7 @@
 package kr.suhsaechan.palim.integration;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -70,5 +71,63 @@ class ConnectScreenRenderIntegrationTest extends IntegrationTest {
                 // 실패한 뒤에도 다시 실행할 수 있어야 한다 — 버튼이 잘리면 여기서 막힌다
                 .andExpect(content().string(containsString("연결 확인하기")))
                 .andExpect(RenderAssertions.fullyRendered());
+    }
+
+    /**
+     * 고른 시스템에 맞는 것을 묻는가.
+     *
+     * <p>물류 시스템은 <b>인증키가 없다.</b> 평소 로그인에 쓰는 아이디·비밀번호로 붙는다.
+     * 그런데 화면은 시스템을 바꿔도 「API 인증키」·「테스트 인증키/정식 인증키」·「이카운트에서
+     * IP 등록」을 그대로 보여줬다. 문구를 갈아 끼우는 코드가 화면 안에 박혀 있었고, 그것은
+     * 보안 정책에 막혀 <b>한 줄도 실행되지 않았기</b> 때문이다.
+     *
+     * <p>화면은 200 으로 멀쩡히 열렸다. 그래서 기존 렌더 테스트는 전부 통과했다. 사장님이
+     * 「아이디 비번을 입력해야 되는 거 아니야?」 라고 물어서야 드러났다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("물류 시스템을 고르면 인증키가 아니라 비밀번호를 묻는다")
+    void 물류시스템은_비밀번호를_묻는다() throws Exception {
+        mockMvc.perform(get("/connectors/connect").param("preset", "ONEWMS"))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(content().string(containsString("비밀번호")))
+                // 이 시스템에는 테스트 키라는 개념 자체가 없다. 물으면 있지도 않은 선택이 된다.
+                .andExpect(content().string(not(containsString("지금 넣는 키"))))
+                // IP 등록은 이카운트 사정이다. 남겨 두면 하지 않아도 될 일을 찾아 헤맨다.
+                .andExpect(content().string(not(containsString("넣기 전에 두 가지를 확인하세요"))))
+                // 인증키 발급 절차는 인증키를 쓰는 시스템에만 띄운다.
+                .andExpect(content().string(not(containsString("API인증키발급"))));
+    }
+
+    /** 이카운트를 고르면 반대로 인증키와 키 단계를 물어야 한다. 한쪽만 맞으면 고친 것이 아니다. */
+    @Test
+    @WithMockUser
+    @DisplayName("이카운트를 고르면 인증키와 키 종류를 묻는다")
+    void 이카운트는_인증키를_묻는다() throws Exception {
+        mockMvc.perform(get("/connectors/connect").param("preset", "ECOUNT"))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(content().string(containsString("API 인증키")))
+                .andExpect(content().string(containsString("지금 넣는 키")))
+                .andExpect(content().string(containsString("API인증키발급")));
+    }
+
+    /**
+     * 시스템을 고른 뒤 제출하면 그 시스템으로 가는가.
+     *
+     * <p>고르는 폼과 입력 폼이 나뉘어 있다(폼 안에 폼을 넣을 수 없다). 그래서 고른 값을 입력
+     * 폼이 <b>함께 실어 보내야</b> 한다. 빠뜨리면 물류 계정을 넣고 실행했는데 이카운트로
+     * 가서, 「계정이 틀렸나」 부터 의심하게 된다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("고른 시스템이 입력 폼에 실려 나간다")
+    void 고른_시스템이_폼에_실린다() throws Exception {
+        mockMvc.perform(get("/connectors/connect").param("preset", "ONEWMS"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("name=\"preset\" value=\"ONEWMS\"")));
     }
 }

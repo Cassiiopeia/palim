@@ -17,6 +17,8 @@
       이 스크립트가 안내 후 로그인 화면으로 보낸다. 인라인 스크립트는 CSP 가 막으므로 파일이다.
     */-->
     <script th:src="@{/js/session-watch.js}" defer></script>
+    <!--/* 화면 안에 박힌 스크립트는 보안 정책에 막혀 실행되지 않는다. 파일로만 둔다. */-->
+    <script th:src="@{/js/auto-submit.js}" defer></script>
 </head>
 <body class="min-h-screen bg-base-200">
 

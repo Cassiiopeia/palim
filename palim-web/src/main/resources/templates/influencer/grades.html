@@ -25,13 +25,17 @@
                       class="flex flex-wrap items-end gap-3">
                     <label class="form-control">
                         <span class="label-text text-xs">캠페인</span>
-                        <select name="campaignId" class="select select-sm select-bordered"
-                                onchange="this.form.submit()">
+                        <!--/* 태그 안에 직접 적은 스크립트는 보안 정책에 막혀 돌지 않는다.
+                               표시만 되고 아무 일도 일어나지 않던 자리다. */-->
+                        <select name="campaignId" data-auto-submit
+                                class="select select-sm select-bordered">
                             <option th:each="c : ${campaigns}" th:value="${c.id}"
                                     th:text="${c.name}"
                                     th:selected="${c.id == selectedCampaignId}">캠페인</option>
                         </select>
                     </label>
+                    <button type="submit" data-auto-submit-fallback
+                            class="btn btn-sm btn-outline">적용</button>
 
                     <div role="tablist" class="tabs tabs-box tabs-sm">
                         <a th:each="s : ${sorts}" role="tab" class="tab"

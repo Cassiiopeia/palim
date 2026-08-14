@@ -18,11 +18,14 @@
         <a th:href="@{/connectors}" class="btn btn-ghost btn-sm">← 재고 가져오는 곳</a>
     </div>
 
-    <!--/* 지금 무엇을 하는 중이고 다음에 무엇이 오는지. 이 두 줄이 없으면 «왜 테스트 키부터
-           넣으라는 거지»에서 멈춘다. */-->
+    <!--/* 지금 무엇을 하는 중이고 다음에 무엇이 오는지. 이 줄이 없으면 «왜 테스트 키부터
+           넣으라는 거지»에서 멈춘다.
+
+           시스템마다 절차가 다르므로 고른 것에 맞춰 적는다. 인증키를 두 번 받는 곳이 있고
+           평소 계정을 그대로 쓰는 곳이 있는데, 한쪽 문구를 고정해 두면 나머지를 고른 사람은
+           있지도 않은 인증키를 찾으러 간다. */-->
     <div class="text-sm text-base-content/60 mb-4">
-        <p>테스트 인증키로 먼저 확인합니다.</p>
-        <p>확인이 끝나면 저장되고, 칸 맞추기를 마친 뒤 정식 인증키로 바꾸면 매일 자동으로 가져옵니다.</p>
+        <p th:text="${form.preset.intro}">안내</p>
     </div>
 
     <!--/* 실패를 알릴 때는 무엇을 하면 되는지까지 같이 말한다.
@@ -46,14 +49,19 @@
 
            접힌 채로 시작한다. 키를 이미 받아 온 사람이 대부분인데 펼쳐 두면 정작 입력칸이
            첫 화면에서 밀려난다 — 지금 필요한 것만 펼치고 막혔을 때 필요한 것은 접는다. */-->
-    <details class="collapse collapse-arrow bg-base-200 mb-4">
-        <summary class="collapse-title font-medium">
-            인증키가 없으신가요? — 발급 방법 보기
-        </summary>
-        <div class="collapse-content text-sm space-y-4">
+    <!--/* ① 무엇을 넣어야 하는지. 화면 밖으로 내보내지 않는다.
 
-            <div>
-                <div class="font-semibold mb-1">이카운트 ERP</div>
+           고른 시스템 것만 보여준다. 둘을 같이 띄우면, 인증키가 아예 없는 시스템을 고른
+           사람도 「인증키 발급 방법」을 읽게 되어 받을 필요 없는 것을 받으러 간다.
+
+           접힌 채로 시작한다. 이미 값을 갖고 온 사람이 대부분인데 펼쳐 두면 정작 입력칸이
+           첫 화면에서 밀려난다 — 지금 필요한 것만 펼치고 막혔을 때 필요한 것은 접는다. */-->
+    <details class="collapse collapse-arrow bg-base-200 mb-4">
+        <summary class="collapse-title font-medium"
+                 th:text="${form.preset.credentialGuideTitle}">무엇을 넣어야 하나요?</summary>
+        <div class="collapse-content text-sm space-y-3">
+
+            <div th:if="${form.preset.name() == 'ECOUNT'}">
                 <p class="text-base-content/60 mb-2">
                     이카운트는 키를 두 번 받습니다. 먼저 <b>테스트 인증키</b>로 연결이 되는지
                     확인하고, 그게 확인돼야 정식 인증키를 발급받을 수 있습니다.
@@ -68,32 +76,51 @@
                 </ol>
             </div>
 
-            <div>
-                <div class="font-semibold mb-1">ONEWMS (3자물류)</div>
-                <p class="text-base-content/60">
-                    별도 발급이 없습니다. 평소 화면에 로그인할 때 쓰는
-                    <b>계정정보(회사코드)·아이디·비밀번호</b> 를 그대로 넣습니다.
-                </p>
-            </div>
+            <p th:unless="${form.preset.name() == 'ECOUNT'}" class="text-base-content/60"
+               th:text="${form.preset.issueGuide}">안내</p>
         </div>
     </details>
+
+    <!--/* ② 시스템 선택 — 이 폼만 따로 둔다.
+
+           고르면 서버가 화면을 다시 그린다. 시스템마다 묻는 것이 다르기 때문이다(인증키냐
+           비밀번호냐, 테스트 키 구분이 있느냐, 접속 주소를 직접 넣느냐). 예전에는 화면 안의
+           스크립트가 문구만 갈아 끼웠는데 그 스크립트가 보안 정책에 막혀 돌지 않았고, 물류
+           시스템을 골라도 「API 인증키」를 넣으라고 했다.
+
+           아래 입력 폼 안에 두지 않는 이유는 폼 안에 폼을 넣을 수 없기 때문이다. 고르는
+           동작으로 상대 시스템을 부르지도 않는다 — 이 요청은 화면만 다시 그린다. */-->
+    <form th:action="@{/connectors/connect}" method="get"
+          class="card bg-base-100 shadow-sm mb-4">
+        <div class="card-body py-4">
+            <label class="form-control max-w-md">
+                <div class="label"><span class="label-text font-medium">연동할 시스템</span></div>
+                <div class="flex gap-2">
+                    <select name="preset" data-auto-submit
+                            class="select select-bordered select-sm grow">
+                        <option th:each="p : ${presets}" th:value="${p}" th:text="${p.label}"
+                                th:selected="${p == form.preset}">시스템</option>
+                    </select>
+                    <!--/* 스크립트가 살아 있으면 이 버튼은 숨는다. 막히면 남아서 길이 된다 —
+                           고를 수는 있는데 반영할 방법이 없는 상태를 만들지 않는다. */-->
+                    <button type="submit" data-auto-submit-fallback
+                            class="btn btn-sm btn-outline">바꾸기</button>
+                </div>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/60"
+                          th:text="${form.preset.hint}">안내</span>
+                </div>
+            </label>
+        </div>
+    </form>
 
     <form th:action="@{/connectors/connect/test}" method="post" th:object="${form}"
           class="card bg-base-100 shadow-sm">
         <div class="card-body gap-5">
 
-            <!--/* ② 시스템 선택 */-->
-            <label class="form-control max-w-md">
-                <div class="label"><span class="label-text font-medium">연동할 시스템</span></div>
-                <select th:field="*{preset}" id="presetSelect" class="select select-bordered select-sm">
-                    <option th:each="p : ${presets}" th:value="${p}"
-                            th:text="${p.label}">시스템</option>
-                </select>
-                <div class="label">
-                    <span class="label-text-alt text-base-content/60" id="presetHint"
-                          th:text="${form.preset != null} ? ${form.preset.hint} : '—'">안내</span>
-                </div>
-            </label>
+            <!--/* 고른 시스템을 그대로 실어 보낸다. 위 폼과 나뉘어 있으므로 이 값이 없으면
+                   제출할 때 기본값으로 되돌아간다. */-->
+            <input type="hidden" th:field="*{preset}">
 
             <!--/* ③ 키를 받아도 여기서 막힌다 — 그래서 입력하기 «전에» 말한다.
 
@@ -104,9 +131,7 @@
 
                    경고색을 쓰지 않는다. 아직 아무 일도 일어나지 않았고, 이 화면에서 색은 실제
                    실패에만 쓴다. */-->
-            <div id="ipNoticeBlock"
-                 th:style="${form.preset != null and form.preset.needsIpAllowlist()}
-                           ? '' : 'display:none'">
+            <div th:if="${form.preset.needsIpAllowlist()}">
                 <div class="text-sm font-medium mb-1">넣기 전에 두 가지를 확인하세요</div>
                 <ol class="list-decimal ml-5 space-y-1 text-sm text-base-content/60 leading-relaxed">
                     <li>
@@ -130,18 +155,17 @@
                    같은 폼이 두 덩어리로 보인다. */-->
             <label class="form-control max-w-md">
                 <div class="label">
-                    <span class="label-text font-medium" id="accountLabel"
-                          th:text="${form.preset != null} ? ${form.preset.accountLabel} : '회사코드'">회사코드</span>
+                    <span class="label-text font-medium"
+                          th:text="${form.preset.accountLabel}">회사코드</span>
                 </div>
                 <input type="text" th:field="*{companyCode}" class="input input-bordered input-sm"
                        th:classappend="${missingField != null and form.preset != null
                                          and missingField == form.preset.accountLabel}
                                        ? 'input-error'"
-                       placeholder="숫자 6자리">
+                       th:placeholder="${form.preset.accountPlaceholder}">
                 <div class="label">
-                    <span class="label-text-alt text-base-content/60" id="accountHelp">
-                        로그인 화면에서 아이디 위에 넣는 값입니다.
-                    </span>
+                    <span class="label-text-alt text-base-content/60"
+                          th:text="${form.preset.accountHelp}">어디서 가져오는 값인지</span>
                 </div>
             </label>
 
@@ -160,11 +184,12 @@
 
             <label class="form-control max-w-md">
                 <div class="label">
-                    <span class="label-text font-medium" id="secretLabel">API 인증키</span>
+                    <span class="label-text font-medium"
+                          th:text="${form.preset.secretLabel}">API 인증키</span>
                 </div>
                 <input type="password" th:field="*{secret}" class="input input-bordered input-sm"
                        th:classappend="${missingSecret} ? 'input-error'"
-                       autocomplete="off" placeholder="발급받은 인증키를 붙여 넣으세요">
+                       autocomplete="off" th:placeholder="${form.preset.secretPlaceholder}">
 
                 <!--/* 이 칸은 구조적으로 매번 비어 있다. 비밀값을 화면에 되돌리지 않기 때문이다.
                        한 번 테스트한 뒤 값을 고쳐 다시 실행하려 하면 여기서 막히는데, 원인이
@@ -187,8 +212,7 @@
 
                    처음 오는 사람은 대개 테스트 키뿐이라 그것을 기본으로 둔다. 카드 두 장으로
                    크게 묻지 않고 한 줄로 둔 이유는, 대부분 손대지 않고 지나가는 값이기 때문이다. */-->
-            <div th:if="${form.preset != null and form.preset.hasKeyStages()}"
-                 class="form-control max-w-md">
+            <div th:if="${form.preset.hasKeyStages()}" class="form-control max-w-md">
                 <div class="label">
                     <span class="label-text font-medium">지금 넣는 키</span>
                 </div>
@@ -214,11 +238,11 @@
 
             <!--/* 키 단계가 없는 시스템(테스트 키 개념 자체가 없다)은 묻지 않고 정식으로 보낸다.
                    물어보면 있지도 않은 선택을 강요하게 된다. */-->
-            <input th:unless="${form.preset != null and form.preset.hasKeyStages()}"
+            <input th:unless="${form.preset.hasKeyStages()}"
                    type="hidden" th:field="*{sandbox}" th:value="false">
 
-            <details id="manualEndpoint" class="collapse collapse-arrow bg-base-200"
-                     th:open="${form.preset != null and form.preset.needsManualEndpoint()}">
+            <details class="collapse collapse-arrow bg-base-200"
+                     th:open="${form.preset.needsManualEndpoint()}">
                 <summary class="collapse-title text-sm font-medium">
                     접속 주소 직접 지정 — 기본값으로 안 될 때만 펼치세요
                 </summary>
@@ -385,39 +409,6 @@
         </div>
     </div>
 
-    <!--/* 시스템을 바꾸면 안내 문구만 갈아 끼운다.
-
-           폼을 제출하면 상대 시스템을 실제로 호출한다. 고르기만 하는 동작으로 그것을 일으키지
-           않으려고 서버에 다녀오지 않고 화면만 고친다. */-->
-    <script th:inline="javascript">
-      (function () {
-        var meta = /*[[${presetMeta}]]*/ {};
-        var select = document.getElementById('presetSelect');
-        if (!select) { return; }
-        function apply() {
-          var info = meta[select.value];
-          if (!info) { return; }
-          var label = document.getElementById('accountLabel');
-          var hint = document.getElementById('presetHint');
-          var help = document.getElementById('accountHelp');
-          var secret = document.getElementById('secretLabel');
-          var manual = document.getElementById('manualEndpoint');
-          if (label) { label.textContent = info.label; }
-          if (hint) { hint.textContent = info.hint; }
-          if (help) { help.textContent = info.accountHelp; }
-          if (secret) { secret.textContent = info.secretLabel; }
-          if (manual) { manual.open = info.manual; }
-          // IP 등록을 요구하지 않는 시스템에 이 안내를 남겨 두면, 하지 않아도 될 일을
-          // 찾아 헤매게 된다.
-          var ipNotice = document.getElementById('ipNoticeBlock');
-          var ipGuide = document.getElementById('ipGuideText');
-          if (ipNotice) { ipNotice.style.display = info.needsIp ? '' : 'none'; }
-          if (ipGuide) { ipGuide.textContent = info.ipGuide; }
-        }
-        select.addEventListener('change', apply);
-        apply();
-      })();
-    </script>
 
 </div>
 </body>

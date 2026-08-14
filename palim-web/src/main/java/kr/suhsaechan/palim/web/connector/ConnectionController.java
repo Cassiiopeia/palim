@@ -1,8 +1,6 @@
 package kr.suhsaechan.palim.web.connector;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
@@ -18,6 +16,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
@@ -38,36 +37,39 @@ public class ConnectionController {
     private final ConnectionAdminService connectionService;
     private final ErrorMessageResolver errorMessages;
 
+    /**
+     * 연결 화면.
+     *
+     * <p>고른 시스템을 <b>주소로 받아 서버가 화면을 다시 그린다.</b> 예전에는 화면 안의
+     * 스크립트가 문구만 갈아 끼웠는데, 이 서비스의 보안 정책은 화면에 박힌 스크립트를 실행하지
+     * 않는다. 그래서 시스템을 바꿔도 <b>한 글자도 바뀌지 않았다</b> — 물류 시스템을 골라도
+     * 「API 인증키」를 넣으라고 했다. 화면 절반은 서버가 그리고 절반은 스크립트가 고치는 구조는
+     * 스크립트가 막히는 순간 이렇게 어긋난다. 서버가 전부 그리게 두면 어긋날 곳이 없다.
+     *
+     * <p>고르는 동작으로 상대 시스템을 부르지 않는다. 이 요청은 화면만 다시 그린다.
+     */
     @GetMapping("/connectors/connect")
-    public String form(Model model) {
-        model.addAttribute("form", new ConnectionForm());
+    public String form(@RequestParam(required = false) ApiAuthPreset preset, Model model) {
+        ConnectionForm form = new ConnectionForm();
+        if (preset != null) {
+            form.setPreset(preset);
+            // 키 단계가 없는 시스템에 테스트/정식 구분을 남겨 두면 있지도 않은 선택이 된다.
+            form.setSandbox(preset.hasKeyStages());
+        }
+        model.addAttribute("form", form);
         addPresets(model);
         return "connector/connect";
     }
 
     /**
-     * 시스템별 안내 문구.
+     * 고를 수 있는 시스템 목록.
      *
-     * <p>화면이 시스템을 바꿀 때 서버에 다녀오지 않고 문구만 갈아 끼우도록 미리 넘긴다.
-     * 폼을 다시 제출하면 상대 시스템을 실제로 부르므로, 고르기만 하는 동작으로 그것을
-     * 일으키지 않는다.
+     * <p>안내 문구를 따로 넘기지 않는다. 예전에는 시스템별 문구를 통째로 화면에 실어 보내고
+     * 스크립트가 골라 쓰게 했는데, 그 스크립트가 보안 정책에 막혀 돌지 않았다. 문구는 각
+     * 프리셋이 갖고 있고 화면이 <b>고른 것 하나만</b> 서버에서 읽는다.
      */
     private void addPresets(Model model) {
         model.addAttribute("presets", ApiAuthPreset.values());
-        Map<String, Map<String, Object>> meta = new LinkedHashMap<>();
-        for (ApiAuthPreset preset : ApiAuthPreset.values()) {
-            meta.put(preset.name(), Map.of(
-                    "label", preset.getAccountLabel(),
-                    "hint", preset.getHint(),
-                    "accountHelp", preset.getAccountHelp(),
-                    "secretLabel", preset.getSecretLabel(),
-                    "issueGuide", preset.getIssueGuide(),
-                    "keyStages", preset.hasKeyStages(),
-                    "ipGuide", preset.getIpAllowlistGuide(),
-                    "needsIp", preset.needsIpAllowlist(),
-                    "manual", preset.needsManualEndpoint()));
-        }
-        model.addAttribute("presetMeta", meta);
     }
 
     /**

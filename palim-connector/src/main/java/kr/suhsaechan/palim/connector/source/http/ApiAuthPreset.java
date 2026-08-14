@@ -121,6 +121,59 @@ public enum ApiAuthPreset {
         };
     }
 
+    /**
+     * 칸에 흐리게 적어 두는 예시.
+     *
+     * <p>이카운트 회사코드는 숫자 여섯 자리지만 다른 시스템은 그렇지 않다. 예시를 한 시스템에
+     * 맞춰 고정해 두면, 다른 시스템을 고른 사람은 <b>자기 값이 틀린 줄 안다.</b>
+     */
+    public String getAccountPlaceholder() {
+        return switch (this) {
+            case ECOUNT -> "숫자 6자리";
+            case ONEWMS -> "로그인 화면 맨 위에 넣는 값";
+            case CUSTOM_FORM -> "없으면 비워 둡니다";
+        };
+    }
+
+    public String getSecretPlaceholder() {
+        return switch (this) {
+            case ECOUNT -> "발급받은 인증키를 붙여 넣으세요";
+            case ONEWMS, CUSTOM_FORM -> "로그인에 쓰는 비밀번호";
+        };
+    }
+
+    /**
+     * 접어 둔 안내의 제목.
+     *
+     * <p>「인증키가 없으신가요?」 는 인증키를 쓰는 시스템에만 맞는 말이다. 평소 계정으로 붙는
+     * 시스템에 그 제목을 띄우면, 받을 필요가 없는 것을 받으러 간다.
+     */
+    public String getCredentialGuideTitle() {
+        return switch (this) {
+            case ECOUNT -> "인증키가 없으신가요? — 발급 방법 보기";
+            case ONEWMS, CUSTOM_FORM -> "무엇을 넣어야 하나요?";
+        };
+    }
+
+    /**
+     * 이 화면에서 지금 무엇을 하는 중인지.
+     *
+     * <p>시스템마다 절차가 다르다. 인증키를 두 번 받는 곳이 있고, 평소 계정을 그대로 쓰는 곳이
+     * 있다. 한쪽 문구를 고정해 두면 나머지 시스템을 고른 사람은 <b>있지도 않은 인증키를
+     * 찾으러 간다.</b>
+     */
+    public String getIntro() {
+        return switch (this) {
+            case ECOUNT -> "테스트 인증키로 먼저 확인합니다. "
+                    + "확인이 끝나면 저장되고, 칸 맞추기를 마친 뒤 정식 인증키로 바꾸면 "
+                    + "매일 자동으로 가져옵니다.";
+            case ONEWMS -> "평소 로그인에 쓰는 계정으로 확인합니다. "
+                    + "확인이 끝나면 저장되고, 칸 맞추기를 마치면 매일 자동으로 가져옵니다.";
+            case CUSTOM_FORM -> "로그인에 쓰는 계정과 접속 주소로 확인합니다. "
+                    + "확인이 끝나면 저장되고, 칸 맞추기를 마치면 매일 자동으로 가져옵니다.";
+        };
+    }
+
     /** 인증키를 어디서 어떻게 받는지. 모르면 여기서 막힌다. */
     public String getIssueGuide() {
         return switch (this) {

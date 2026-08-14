@@ -66,7 +66,11 @@ class AllScreensRenderIntegrationTest extends IntegrationTest {
     void 화면이_끝까지_그려진다(String path) throws Exception {
         mockMvc.perform(get(path))
                 .andExpect(status().isOk())
-                .andExpect(RenderAssertions.fullyRendered());
+                .andExpect(RenderAssertions.fullyRendered())
+                // 「열린다」 와 「동작한다」 는 다르다. 태그에 박은 코드는 정책에 막혀 실행되지
+                // 않는데도 화면은 멀쩡히 열려, 눌러도 아무 일이 없는 상태를 사람 눈으로만
+                // 찾아야 했다. 실제로 두 화면이 그 상태로 배포됐다.
+                .andExpect(RenderAssertions.noInlineCode());
     }
 
     /**
