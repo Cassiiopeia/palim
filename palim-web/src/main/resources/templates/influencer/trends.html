@@ -25,13 +25,17 @@
                 <form th:action="@{/influencer/trends}" method="get" class="flex items-end gap-2">
                     <label class="form-control">
                         <span class="label-text text-xs">카테고리</span>
-                        <select name="category" class="select select-sm select-bordered"
-                                onchange="this.form.submit()">
+                        <!--/* 태그 안에 직접 적은 스크립트는 보안 정책에 막혀 돌지 않는다.
+                               표시만 되고 아무 일도 일어나지 않던 자리다. */-->
+                        <select name="category" data-auto-submit
+                                class="select select-sm select-bordered">
                             <option th:each="entry : ${categories}" th:value="${entry.key}"
                                     th:text="${entry.value}"
                                     th:selected="${entry.key == selectedCategory}">전체</option>
                         </select>
                     </label>
+                    <button type="submit" data-auto-submit-fallback
+                            class="btn btn-sm btn-outline">적용</button>
                 </form>
 
                 <div class="text-sm">

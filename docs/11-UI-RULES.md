@@ -399,3 +399,25 @@
 | 10 | layout 에 부제 자리·max-width 추가 | T2·F6 — 이후 화면이 각자 발명하지 않게 하는 예방책 |
 
 **참고**: 날짜 형식은 `home.html:17`·`connector/list.html:71`·`connector/detail.html:98` 세 화면이 이미 `MM-dd HH:mm` 으로 일치한다 — 이 셋은 손대지 않는다. `settings/account.html`·`connector/new.html` 도 그대로 둔다.
+---
+
+## 화면에 코드를 박지 않는다
+
+스크립트·스타일은 **자기 도메인 파일로만** 제한되어 있다(07-DECISIONS 009·031). 태그 안에 직접
+적은 것은 브라우저가 실행하지 않는다.
+
+| 쓰면 안 되는 것 | 대신 |
+|---|---|
+| `<script> … </script>` (본문에 직접) | `/js` 아래 파일 + `layout.html` 에서 불러오기 |
+| `onchange="this.form.submit()"` | `data-auto-submit` 표시 + `auto-submit.js` |
+| `style="display:none"` · `th:style` | `th:if` 로 서버가 그리거나, 클래스(`hidden`) |
+
+**골라서 화면이 바뀌어야 하면 서버가 다시 그린다.** 값을 주소로 받아(`?preset=…`) 서버가 전부
+그린다. 절반은 서버가, 절반은 스크립트가 고치는 구조는 스크립트가 막히는 순간 어긋난 채
+**멀쩡해 보인다.**
+
+**스크립트에 기대는 동작에는 대체 길을 함께 둔다.** 스크립트가 살아 있으면 숨고
+(`data-auto-submit-fallback`), 막히면 남아서 길이 된다. 고를 수는 있는데 반영할 방법이 없는
+상태를 만들지 않는다.
+
+렌더 테스트(`RenderAssertions.noInlineCode()`)가 모든 화면에서 이것을 검사한다.
