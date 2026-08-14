@@ -433,6 +433,7 @@ git commit -m "연동 준비 상태판 — 처음 쓰는 사람이 따라가면 
 - Create: `palim-web/src/main/java/kr/suhsaechan/palim/web/home/HomeSummaryService.java`
 - Modify: `palim-web/src/main/java/kr/suhsaechan/palim/web/HomeController.java`
 - Modify: `palim-web/src/main/java/kr/suhsaechan/palim/web/setup/SetupController.java`
+- Create: `palim-web/src/main/resources/templates/fragments/setup-steps.html`
 - Modify: `palim-web/src/main/resources/templates/home.html`
 - Modify: `palim-app/src/test/java/kr/suhsaechan/palim/integration/AllScreensRenderIntegrationTest.java`
 - Test: `palim-app/src/test/java/kr/suhsaechan/palim/integration/HomeScreenRenderIntegrationTest.java`
@@ -690,10 +691,59 @@ public class SetupController {
 }
 ```
 
-`palim-web/src/main/resources/templates/setup/index.html` 은 지우지 않는다. 다음 단계에서 홈이
-그 카드 렌더링을 그대로 쓰기 때문에, 옮긴 뒤 마지막 Task 에서 정리한다.
+`palim-web/src/main/resources/templates/setup/index.html` 은 **지우지 않는다.** `/setup` 이
+홈으로 넘어가므로 더 이상 그려지지 않지만, 파일 삭제는 별도 판단이라 이 계획에서는 손대지 않는다.
 
-- [ ] **Step 6: 홈 화면을 다시 그린다**
+- [ ] **Step 6: 단계 카드를 조각으로 뽑는다**
+
+홈과 옛 상태판이 같은 카드를 각자 그리면 문구를 한쪽만 고치는 일이 생긴다. **한 곳에 두고
+불러 쓴다.**
+
+`palim-web/src/main/resources/templates/fragments/setup-steps.html` (신규)
+
+```html
+<!DOCTYPE html>
+<!--/* 준비 단계 카드.
+
+       홈이 이것을 불러 쓴다. 카드를 화면마다 따로 그리면 문구를 한쪽만 고치는 일이 생긴다. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="steps(steps)" class="flex flex-col gap-3">
+    <div th:each="step : ${steps}"
+         th:classappend="${step.state.name() == 'ATTENTION'} ? 'border-warning' :
+                         (${step.done} ? 'border-success/40' : 'border-base-300')"
+         class="card bg-base-100 border shadow-sm">
+        <div class="card-body flex-row items-center gap-4 py-4">
+
+            <div class="text-2xl w-8 text-center">
+                <span th:if="${step.done}" class="text-success">✅</span>
+                <span th:if="${step.state.name() == 'ATTENTION'}" class="text-warning">⚠️</span>
+                <span th:if="${step.state.name() == 'WAITING'}" class="opacity-30">⬜</span>
+            </div>
+
+            <div class="grow">
+                <div class="font-semibold" th:text="${step.order} + '. ' + ${step.title}">단계</div>
+                <div class="text-sm text-base-content/70" th:text="${step.detail}">상황</div>
+                <div th:if="${step.action != null and step.state.name() == 'ATTENTION'}"
+                     class="text-sm text-warning mt-1" th:text="'→ ' + ${step.action}">할 일</div>
+            </div>
+
+            <div>
+                <a th:if="${step.actionable}" th:href="@{${step.link}}"
+                   class="btn btn-warning btn-sm">하러 가기</a>
+                <a th:if="${step.done and step.link != null}" th:href="@{${step.link}}"
+                   class="btn btn-ghost btn-sm">확인</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+```
+
+- [ ] **Step 7: 홈 화면을 다시 그린다**
 
 `palim-web/src/main/resources/templates/home.html` 전체를 바꾼다.
 
@@ -750,49 +800,20 @@ public class SetupController {
         </p>
     </div>
 
-    <div class="flex flex-col gap-3">
-        <div th:each="step : ${steps}"
-             th:classappend="${step.state.name() == 'ATTENTION'} ? 'border-warning' :
-                             (${step.done} ? 'border-success/40' : 'border-base-300')"
-             class="card bg-base-100 border shadow-sm">
-            <div class="card-body flex-row items-center gap-4 py-4">
-
-                <div class="text-2xl w-8 text-center">
-                    <span th:if="${step.done}" class="text-success">✅</span>
-                    <span th:if="${step.state.name() == 'ATTENTION'}" class="text-warning">⚠️</span>
-                    <span th:if="${step.state.name() == 'WAITING'}" class="opacity-30">⬜</span>
-                </div>
-
-                <div class="grow">
-                    <div class="font-semibold"
-                         th:text="${step.order} + '. ' + ${step.title}">단계</div>
-                    <div class="text-sm text-base-content/70" th:text="${step.detail}">상황</div>
-                    <div th:if="${step.action != null and step.state.name() == 'ATTENTION'}"
-                         class="text-sm text-warning mt-1" th:text="'→ ' + ${step.action}">할 일</div>
-                </div>
-
-                <div>
-                    <a th:if="${step.actionable}" th:href="@{${step.link}}"
-                       class="btn btn-warning btn-sm">하러 가기</a>
-                    <a th:if="${step.done and step.link != null}" th:href="@{${step.link}}"
-                       class="btn btn-ghost btn-sm">확인</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div th:replace="~{fragments/setup-steps :: steps(${steps})}"></div>
 
 </div>
 </body>
 </html>
 ```
 
-- [ ] **Step 7: 전 화면 테스트에서 옛 주소를 뺀다**
+- [ ] **Step 8: 전 화면 테스트에서 옛 주소를 뺀다**
 
 `palim-app/src/test/java/kr/suhsaechan/palim/integration/AllScreensRenderIntegrationTest.java`
 의 `@ValueSource` 에서 `"/setup"` 한 줄을 지운다. 이제 그 주소는 200 이 아니라 302 이므로 이
 목록에 있으면 실패한다. 홈(`"/"`)은 이미 목록에 있다.
 
-- [ ] **Step 8: 테스트가 통과하는 것을 확인한다**
+- [ ] **Step 9: 테스트가 통과하는 것을 확인한다**
 
 ```bash
 JAVA_HOME=/Users/suhsaechan/Library/Java/JavaVirtualMachines/corretto-21.0.9/Contents/Home \
@@ -802,11 +823,12 @@ JAVA_HOME=/Users/suhsaechan/Library/Java/JavaVirtualMachines/corretto-21.0.9/Con
 
 기대: BUILD SUCCESSFUL.
 
-- [ ] **Step 9: 커밋**
+- [ ] **Step 10: 커밋**
 
 ```bash
 git status --short
 git add palim-web/src/main/java/kr/suhsaechan/palim/web/home/ \
+        palim-web/src/main/resources/templates/fragments/setup-steps.html \
         palim-web/src/main/java/kr/suhsaechan/palim/web/HomeController.java \
         palim-web/src/main/java/kr/suhsaechan/palim/web/setup/SetupController.java \
         palim-web/src/main/resources/templates/home.html \
