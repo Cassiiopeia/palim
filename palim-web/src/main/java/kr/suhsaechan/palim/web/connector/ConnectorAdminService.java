@@ -163,6 +163,13 @@ public class ConnectorAdminService {
                 total instanceof Number n ? n.intValue() : -1);
     }
 
+    /** 확정해 둔 것이 있는가. 「확정할 것이 없다」와 「이미 확정했다」를 가르는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public boolean hasActiveMapping(UUID connectorId) {
+        return mappingRepository
+                .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE).isPresent();
+    }
+
     /**
      * 새로 온 것에 값이 없으면 갖고 있던 값을 지킨다.
      *
