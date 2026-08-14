@@ -127,6 +127,80 @@ public class ConnectorAdminService {
      * <p>기존 초안이 있으면 그것을 갱신하고, 없으면 다음 버전으로 만든다. 화면에서 매핑을
      * 고칠 때마다 버전이 늘면 이력이 의미 없는 숫자로 가득 찬다 — 버전은 <b>확정 단위</b>다.
      */
+    /**
+     * 받아온 칸과 값을 <b>그대로 담아 둔다.</b>
+     *
+     * <p>칸 이름만 담으면 화면이 「실제로 들어올 값」을 보여줄 수 없어, 매번 상대를 다시 불러야
+     * 한다. 그러면 화면을 열 때마다 원격 호출이 나가고, 상대가 한 번 삐끗하면 화면이 안 열린다.
+     * 실제로 그렇게 500 이 났다.
+     */
+    static Map<String, Object> snapshotOf(SourceSchema schema) {
+        return Map.of(
+                "fields", schema.fields(),
+                "sampleRows", schema.sampleRows(),
+                "totalCount", schema.totalCount());
+    }
+
+    /**
+     * 담아 둔 것을 되살린다. 담긴 것이 없으면 {@code null} — 아직 한 번도 받아오지 않았다는 뜻이다.
+     */
+    @SuppressWarnings("unchecked")
+    static SourceSchema restore(Map<String, Object> snapshot) {
+        if (snapshot == null || snapshot.isEmpty()) {
+            return null;
+        }
+        Object fields = snapshot.get("fields");
+        if (!(fields instanceof List<?> list) || list.isEmpty()) {
+            return null;
+        }
+        Object rows = snapshot.get("sampleRows");
+        Object total = snapshot.get("totalCount");
+        return new SourceSchema(
+                list.stream().map(String::valueOf).toList(),
+                rows instanceof List<?> sample
+                        ? sample.stream().map(row -> (Map<String, Object>) row).toList()
+                        : List.of(),
+                total instanceof Number n ? n.intValue() : -1);
+    }
+
+    /**
+     * 지난번에 받아 담아 둔 칸과 값.
+     *
+     * <p>확정한 것이 있으면 그것을, 없으면 작성 중인 것을 쓴다. 둘 다 없으면 {@code null} —
+     * 한 번도 받아오지 않았다는 뜻이다.
+     */
+    @Transactional(readOnly = true)
+    public SourceSchema storedSchema(UUID connectorId) {
+        SourceSchema active = mappingRepository
+                .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
+                .map(mapping -> restore(mapping.getSourceSchema()))
+                .orElse(null);
+        if (active != null) {
+            return active;
+        }
+        return mappingRepository
+                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
+                .map(mapping -> restore(mapping.getSourceSchema()))
+                .orElse(null);
+    }
+
+    /**
+     * 받아온 것을 담아 둔다. 「다시 받아오기」가 이것을 부른다.
+     *
+     * <p>매핑을 아직 저장하지 않았어도 담아 둔다 — 그래야 다음에 화면을 열 때 상대를 부르지
+     * 않는다.
+     */
+    @Transactional
+    public void rememberSchema(UUID connectorId, SourceSchema schema) {
+        Connector connector = connector(connectorId);
+        ConnectorMapping draft = mappingRepository
+                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
+                .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(), connectorId,
+                        nextVersion(connectorId), Map.of()));
+        draft.replaceSchema(snapshotOf(schema));
+        mappingRepository.save(draft);
+    }
+
     @Transactional
     public ConnectorMapping saveDraft(UUID connectorId, SourceSchema schema,
                                       List<FieldMappingForm> forms) {
@@ -137,7 +211,7 @@ public class ConnectorAdminService {
                 .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(), connectorId,
                         nextVersion(connectorId), Map.of()));
 
-        draft.replaceSchema(Map.of("fields", schema.fields()));
+        draft.replaceSchema(snapshotOf(schema));
         ConnectorMapping saved = mappingRepository.save(draft);
 
         // 삭제를 먼저 DB 에 반영한다. JPA 는 flush 시점을 스스로 정하므로 그대로 두면

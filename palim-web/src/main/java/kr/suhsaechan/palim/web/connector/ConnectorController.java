@@ -105,21 +105,46 @@ public class ConnectorController {
         model.addAttribute("existing", existingByTarget(id));
         model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
 
-        // 스스로 가져오는 원천은 칸 목록을 이미 알 수 있다. 파일을 올리라고 할 이유가 없다.
-        SourceSchema schema = null;
-        if (adminService.fetchesItself(connector)) {
-            try {
-                schema = adminService.readSchema(connector);
-                model.addAttribute("schema", schema);
-            } catch (BusinessException e) {
-                // 원천에 닿지 못해도 화면은 열려야 한다. 무엇이 막혔는지 보여주고, 사용자가
-                // 연결 설정을 고치러 갈 수 있어야 한다.
-                model.addAttribute("flashError", errorMessages.resolve(e.getErrorCode(),
-                        e.messageArgs()));
-            }
+        // 담아 둔 것을 먼저 쓴다.
+        //
+        // 화면을 열 때마다 상대를 부르면 새로고침 한 번이 원격 호출 한 번이 되고, 상대가 잠깐
+        // 삐끗하면 화면 자체가 안 열린다 — 이미 저장해 둔 칸 연결조차 못 보게 된다. 실제로
+        // 그렇게 500 이 났다. 칸 구조는 자주 바뀌는 것이 아니므로, 갱신은 「다시 받아오기」를
+        // 누를 때만 한다.
+        SourceSchema schema = adminService.storedSchema(id);
+        if (schema == null && adminService.fetchesItself(connector)) {
+            // 한 번도 받아온 적이 없다면 이번엔 받아 온다. 그래야 첫 화면부터 고를 것이 보인다.
+            schema = fetchSchemaQuietly(connector, model);
+        }
+        if (schema != null) {
+            model.addAttribute("schema", schema);
         }
         addMappingView(model, id, connector, schema);
         return "connector/mapping";
+    }
+
+    /**
+     * 원천에서 칸을 받아 온다. <b>실패해도 화면은 연다.</b>
+     *
+     * <p>원격 호출은 언제든 실패한다 — 상대 점검, 호출 제한, 네트워크. 그때마다 화면이 죽으면
+     * 사장님은 무엇이 잘못됐는지조차 볼 수 없고, 이미 해 둔 칸 연결도 못 본다.
+     */
+    private SourceSchema fetchSchemaQuietly(Connector connector, Model model) {
+        try {
+            return adminService.readSchema(connector);
+        } catch (BusinessException e) {
+            model.addAttribute("flashError", errorMessages.resolve(e.getErrorCode(),
+                    e.messageArgs()));
+            return null;
+        } catch (RuntimeException e) {
+            // 상대가 우리가 아는 형태로 답하지 않은 경우다(HTTP 오류·응답 파싱 실패 등).
+            // 사유는 로그에만 남긴다 — 화면에 스택이나 상대 서버의 오류 HTML 을 그대로
+            // 내보내면 읽을 수도 없고 안전하지도 않다.
+            log.warn("칸을 받아오지 못했습니다 — connector={}", connector.getCode(), e);
+            model.addAttribute("flashError",
+                    "지금 원천에서 칸을 받아오지 못했습니다. 「다시 받아오기」로 한 번 더 시도해 보세요.");
+            return null;
+        }
     }
 
     /**
@@ -134,6 +159,31 @@ public class ConnectorController {
         model.addAttribute("groups", assembler.assemble(
                 adminService.targetFields(id), existing, schema, modelCode));
         model.addAttribute("leftovers", assembler.leftovers(schema, existing));
+    }
+
+    /**
+     * 원천에서 칸을 다시 받아 온다.
+     *
+     * <p>화면을 열 때마다 부르지 않고 <b>누를 때만</b> 부른다. 칸 구조는 자주 바뀌지 않는데
+     * 새로고침마다 상대를 부르면 하루 허용량을 갉아먹고, 상대가 삐끗하면 화면이 안 열린다.
+     */
+    @PostMapping("/connectors/{id}/schema/refresh")
+    public String refreshSchema(@PathVariable UUID id, RedirectAttributes redirect) {
+        Connector connector = adminService.connector(id);
+        try {
+            SourceSchema schema = adminService.readSchema(connector);
+            adminService.rememberSchema(id, schema);
+            redirect.addFlashAttribute("flashSuccess",
+                    "칸 %d 개를 다시 받아왔습니다.".formatted(schema.fields().size()));
+        } catch (BusinessException e) {
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+        } catch (RuntimeException e) {
+            log.warn("칸을 다시 받아오지 못했습니다 — connector={}", connector.getCode(), e);
+            redirect.addFlashAttribute("flashError",
+                    "지금 원천에서 칸을 받아오지 못했습니다. 잠시 뒤 다시 시도해 보세요.");
+        }
+        return "redirect:/connectors/" + id + "/mapping";
     }
 
     /** 파일 업로드 → 원천 필드 추출. 매핑 화면을 채워 다시 보여준다. */
