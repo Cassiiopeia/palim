@@ -7,8 +7,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -28,10 +30,16 @@ import tools.jackson.databind.ObjectMapper;
  * 수집은 실패한다"</b> 는 모양으로 나타나 원인을 찾기 어렵다. 그래서 절차는 여기 한 곳에 두고,
  * 검증 화면과 수집 어댑터가 함께 쓴다.
  */
+@Slf4j
 @Component
 public class EcountSessionClient {
 
     private static final DateTimeFormatter COMPACT_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    /** 로그에 값 그대로 남기면 안 되는 요청 항목. 로그 파일은 영구히 남는다. */
+    private static final Set<String> SECRET_KEYS = Set.of("API_CERT_KEY");
+
+    private static final String SESSION_PARAM = "SESSION_ID=";
 
     private final RestClient restClient;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -83,11 +91,18 @@ public class EcountSessionClient {
      * <p>지역이 비었는데 다음 단계로 넘어가면 원인이 상대 서버 메시지로 흐려진다. 여기서 막는다.
      */
     public String resolveZone(EcountEndpoint endpoint, String companyCode) {
-        JsonNode response = post(endpoint.zoneUrl(), Map.of("COM_CODE", companyCode));
+        String url = endpoint.zoneUrl();
+        log.debug("[Ecount] 1단계 지역 조회 시작 — 회사코드={}, 테스트환경={}, 주소={}",
+                companyCode, endpoint.sandbox(), url);
+
+        JsonNode response = post("지역조회", url, Map.of("COM_CODE", companyCode));
         String zone = text(response.path("Data").path("ZONE"));
         if (zone.isEmpty()) {
-            throw failure(response, "지역을 찾지 못했습니다. 회사코드를 확인하세요.");
+            BusinessException ex = failure(response, "지역을 찾지 못했습니다. 회사코드를 확인하세요.");
+            log.error("[Ecount] 1단계 지역 조회 실패 — 회사코드={}, 응답={}", companyCode, response, ex);
+            throw ex;
         }
+        log.info("[Ecount] 1단계 지역 조회 완료 — 회사코드={}, 지역={}", companyCode, zone);
         return zone;
     }
 
@@ -101,11 +116,21 @@ public class EcountSessionClient {
         body.put("LAN_TYPE", "ko-KR");
         body.put("ZONE", zone);
 
-        JsonNode response = post(endpoint.apiBase(zone) + "/OAPILogin", body);
+        String url = endpoint.apiBase(zone) + "/OAPILogin";
+        log.debug("[Ecount] 2단계 로그인 시작 — 회사코드={}, 사용자={}, 지역={}, 주소={}",
+                companyCode, userId, zone, url);
+
+        JsonNode response = post("로그인", url, body);
         String sessionId = text(response.path("Data").path("Datas").path("SESSION_ID"));
         if (sessionId.isEmpty()) {
-            throw failure(response, "세션을 받지 못했습니다.");
+            BusinessException ex = failure(response, "세션을 받지 못했습니다.");
+            log.error("[Ecount] 2단계 로그인 실패 — 회사코드={}, 사용자={}, 지역={}, 응답={}",
+                    companyCode, userId, zone, response, ex);
+            throw ex;
         }
+        // 세션 값 자체는 남기지 않는다 — 발급 여부만 알면 원인 추적에 충분하다.
+        log.info("[Ecount] 2단계 로그인 완료 — 회사코드={}, 사용자={}, 지역={}, 세션 길이={}",
+                companyCode, userId, zone, sessionId.length());
         return sessionId;
     }
 
@@ -117,19 +142,29 @@ public class EcountSessionClient {
         body.put("WH_CD", "");
         body.put("BASE_DATE", baseDate.format(COMPACT_DATE));
 
-        JsonNode response = post(
-                endpoint.apiBase(zone)
-                        + "/InventoryBalance/GetListInventoryBalanceStatusByLocation?SESSION_ID="
-                        + sessionId, body);
+        String url = endpoint.apiBase(zone)
+                + "/InventoryBalance/GetListInventoryBalanceStatusByLocation?SESSION_ID="
+                + sessionId;
+        log.debug("[Ecount] 3단계 재고 조회 시작 — 지역={}, 기준일={}, 주소={}",
+                zone, baseDate, maskUrl(url));
+
+        JsonNode response = post("재고조회", url, body);
 
         List<Map<String, String>> rows = extractRows(response);
         if (rows.isEmpty()) {
             // 행이 없는 이유는 둘이다 — 정말 없거나, 거부당했거나. 상대가 사유를 보냈다면 후자다.
             String message = text(response.path("Data").path("Message"));
             if (!message.isBlank()) {
-                throw failure(response, message);
+                BusinessException ex = failure(response, message);
+                log.error("[Ecount] 3단계 재고 조회 거부 — 지역={}, 기준일={}, 사유={}, 응답={}",
+                        zone, baseDate, message, response, ex);
+                throw ex;
             }
+            log.warn("[Ecount] 3단계 재고 0건 — 지역={}, 기준일={}. 상대가 사유를 보내지 않아 빈 결과로 본다",
+                    zone, baseDate);
         }
+        log.info("[Ecount] 3단계 재고 조회 완료 — 지역={}, 기준일={}, 수집 {}건",
+                zone, baseDate, rows.size());
         return rows;
     }
 
@@ -159,16 +194,49 @@ public class EcountSessionClient {
      * 응답(200)을 돌려주므로 예외가 나지 않고, 코드는 성공한 줄 안다. 실제로 그렇게 한 번 겪었고,
      * 요청을 직접 받아 보기 전까지는 아무도 알아채지 못했다.
      */
-    private JsonNode post(String url, Map<String, String> body) {
+    private JsonNode post(String stage, String url, Map<String, String> body) {
         String payload = mapper.writeValueAsString(body);
-        String response = restClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(payload)
-                .retrieve()
-                .body(String.class);
-        return mapper.readTree(response == null ? "{}" : response);
+        log.debug("[Ecount] {} 요청 — 주소={}, 본문={}", stage, maskUrl(url), maskBody(body));
+
+        String response;
+        try {
+            response = restClient.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RuntimeException e) {
+            log.error("[Ecount] {} 호출 실패 — 주소={}", stage, maskUrl(url), e);
+            throw e;
+        }
+
+        if (response == null) {
+            log.warn("[Ecount] {} 응답 본문이 비어 있다 — 주소={}", stage, maskUrl(url));
+        } else {
+            log.debug("[Ecount] {} 응답 원문 — 주소={}, 응답={}", stage, maskUrl(url), response);
+        }
+
+        try {
+            return mapper.readTree(response == null ? "{}" : response);
+        } catch (RuntimeException e) {
+            log.error("[Ecount] {} 응답 해석 실패 — 주소={}, 원문={}", stage, maskUrl(url), response, e);
+            throw e;
+        }
+    }
+
+    /** 업무 API 주소에는 세션 값이 쿼리로 붙는다 — 주소를 로그에 남길 때는 그 값을 가린다. */
+    private static String maskUrl(String url) {
+        int index = url.indexOf(SESSION_PARAM);
+        return index < 0 ? url : url.substring(0, index + SESSION_PARAM.length()) + "***";
+    }
+
+    /** 요청 본문에는 인증키가 섞여 있다. 어떤 항목을 보냈는지만 남기고 값은 가린다. */
+    private static String maskBody(Map<String, String> body) {
+        Map<String, String> masked = new LinkedHashMap<>(body);
+        masked.replaceAll((key, value) -> SECRET_KEYS.contains(key) ? "***" : value);
+        return masked.toString();
     }
 
     /** 실패 사유는 상대가 보낸 말을 먼저 쓴다. 우리 짐작이 상대의 답을 가리면 안 된다. */
@@ -191,11 +259,19 @@ public class EcountSessionClient {
                 node = node.path(part);
             }
             if (node.isArray() && !node.isEmpty()) {
+                log.debug("[Ecount] 행 목록을 알려진 경로에서 찾았다 — 경로={}, 항목 {}개",
+                        path, node.size());
                 return toRows(node);
             }
         }
         JsonNode found = firstArray(response, 0);
-        return found == null ? List.of() : toRows(found);
+        if (found == null) {
+            log.warn("[Ecount] 응답에서 행 목록을 찾지 못했다. 응답 구조가 문서와 다를 수 있다 — 응답={}",
+                    response);
+            return List.of();
+        }
+        log.debug("[Ecount] 알려진 경로에 없어 배열 탐색으로 찾았다 — 항목 {}개", found.size());
+        return toRows(found);
     }
 
     private JsonNode firstArray(JsonNode node, int depth) {
@@ -216,16 +292,22 @@ public class EcountSessionClient {
 
     private List<Map<String, String>> toRows(JsonNode array) {
         List<Map<String, String>> rows = new ArrayList<>();
+        int rowNumber = 0;
         for (JsonNode item : array) {
+            rowNumber++;
             if (!item.isObject()) {
+                log.warn("[Ecount] 객체가 아닌 항목을 건너뛴다 — 행번호={}, 값={}", rowNumber, item);
                 continue;
             }
             Map<String, String> row = new LinkedHashMap<>();
             item.properties().forEach(entry -> row.put(entry.getKey(), text(entry.getValue())));
             if (!row.isEmpty()) {
                 rows.add(row);
+            } else {
+                log.warn("[Ecount] 값이 하나도 없는 행을 건너뛴다 — 행번호={}", rowNumber);
             }
         }
+        log.debug("[Ecount] 행 변환 완료 — 입력 {}개, 변환 {}건", array.size(), rows.size());
         return rows;
     }
 

@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@link ZoneSessionProbe} 의 관계와 같다 — 절차는 여기 한 곳에 두고, 검증 화면과 수집
  * 어댑터가 함께 쓴다.
  */
+@Slf4j
 @Component
 public class FormSessionClient {
 
@@ -60,10 +62,25 @@ public class FormSessionClient {
      * <p>토큰이 없는 화면도 있다. 없다고 실패로 보면 그런 시스템은 아예 붙일 수 없다.
      */
     public String openLoginPage(String loginUrl, String tokenField, Map<String, String> cookies) {
+        log.debug("로그인 화면 열기 — 주소={}, 토큰필드={}", loginUrl, tokenField);
         ResponseEntity<String> response =
                 restClient.get().uri(loginUrl).retrieve().toEntity(String.class);
         collectCookies(response.getHeaders(), cookies);
-        return findHidden(response.getBody(), tokenField);
+        // 상대 화면이 바뀌면 조용히 깨지는 경로라 본문을 통째로 남겨 둔다.
+        log.debug("로그인 화면 응답 — 주소={}, 상태={}, 본문길이={}, 쿠키={}, 본문={}",
+                loginUrl, response.getStatusCode(), bodyLength(response.getBody()),
+                cookies.keySet(), response.getBody());
+
+        String token = findHidden(response.getBody(), tokenField);
+        if (token.isEmpty()) {
+            log.warn("로그인 폼에서 토큰을 찾지 못했습니다 — 주소={}, 토큰필드={} (토큰 없는 화면일 수 있어 그대로 진행)",
+                    loginUrl, tokenField);
+        } else {
+            // 토큰 값 자체는 남기지 않는다 — 확보 여부만 알면 된다.
+            log.debug("로그인 폼 토큰 확보 — 주소={}, 토큰필드={}, 토큰길이={}",
+                    loginUrl, tokenField, token.length());
+        }
+        return token;
     }
 
     /**
@@ -93,19 +110,34 @@ public class FormSessionClient {
             form.set(tokenField, token);
         }
 
+        // 폼 값에는 비밀번호가 들어 있어 필드 이름만 남긴다.
+        log.debug("로그인 폼 전송 — 주소={}, 프리셋={}, 계정={}, 토큰필드={}, 토큰있음={}, 폼필드={}, 보낼쿠키={}",
+                loginUrl, config.getOrDefault("preset", "-"), userId, tokenField,
+                !token.isEmpty(), form.keySet(), cookies.keySet());
+
         ResponseEntity<String> response = restClient.post().uri(loginUrl)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .header(HttpHeaders.COOKIE, cookieHeader(cookies))
                 .body(form)
                 .retrieve().toEntity(String.class);
         collectCookies(response.getHeaders(), cookies);
+        log.debug("로그인 응답 — 주소={}, 상태={}, 본문길이={}, 본문={}",
+                loginUrl, response.getStatusCode(), bodyLength(response.getBody()),
+                response.getBody());
 
         if (!hasSession(cookies)) {
+            // 실패해도 200 을 돌려주는 화면이 많아, 판단 근거인 쿠키 목록과 본문을 함께 남긴다.
+            log.error("로그인 실패: 세션 쿠키를 받지 못했습니다 — 주소={}, 계정={}, 상태={}, 받은쿠키={}, 본문={}",
+                    loginUrl, userId, response.getStatusCode(), cookies.keySet(),
+                    response.getBody());
             throw new BusinessException(ErrorCode.API_PROBE_FAILED,
                     "세션을 받지 못했습니다. 계정 정보를 확인하세요.")
                     .withDetails(Map.of(EcountSessionClient.RAW_RESPONSE,
                             String.valueOf(response.getBody())));
         }
+        // 쿠키 값에는 세션 식별자가 들어 있어 이름만 남긴다.
+        log.info("로그인 성공 — 주소={}, 계정={}, 쿠키 {}건={}",
+                loginUrl, userId, cookies.size(), cookies.keySet());
         return new Session(cookies);
     }
 
@@ -113,21 +145,33 @@ public class FormSessionClient {
     public List<Map<String, String>> fetch(Map<String, String> config, Session session) {
         String fetchUrl = required(config, "fetchUrl");
         String body = config.getOrDefault("fetchBody", "");
+        log.debug("조회 요청 — 주소={}, 프리셋={}, 행경로={}, 요청본문={}, 보낼쿠키={}",
+                fetchUrl, config.getOrDefault("preset", "-"),
+                config.getOrDefault("rowsPath", "rows"), body, session.cookies().keySet());
 
         ResponseEntity<String> response = restClient.post().uri(fetchUrl)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .header(HttpHeaders.COOKIE, cookieHeader(session.cookies()))
                 .body(body)
                 .retrieve().toEntity(String.class);
+        // 상대 화면이 바뀌면 응답 모양만 바뀌고 상태 코드는 200 이라 본문을 통째로 남긴다.
+        log.debug("조회 응답 — 주소={}, 상태={}, 본문길이={}, 본문={}",
+                fetchUrl, response.getStatusCode(), bodyLength(response.getBody()),
+                response.getBody());
 
         List<Map<String, String>> rows =
                 parseRows(response.getBody(), config.getOrDefault("rowsPath", "rows"));
         if (rows.isEmpty()) {
+            log.error("조회 실패: 응답에서 행을 찾지 못했습니다 — 주소={}, 행경로={}, 상태={}, 본문={}",
+                    fetchUrl, config.getOrDefault("rowsPath", "rows"),
+                    response.getStatusCode(), response.getBody());
             throw new BusinessException(ErrorCode.API_PROBE_FAILED,
                     "응답에서 행을 찾지 못했습니다. 상대 화면이 바뀌었을 수 있습니다.")
                     .withDetails(Map.of(EcountSessionClient.RAW_RESPONSE,
                             String.valueOf(response.getBody())));
         }
+        log.info("조회 완료 — 주소={}, 행 {}건, 컬럼={}",
+                fetchUrl, rows.size(), rows.get(0).keySet());
         return rows;
     }
 
@@ -140,6 +184,7 @@ public class FormSessionClient {
     public void collectCookies(HttpHeaders headers, Map<String, String> cookies) {
         List<String> values = headers.get(HttpHeaders.SET_COOKIE);
         if (values == null) {
+            log.debug("응답에 Set-Cookie 헤더가 없습니다 — 지금까지 모은 쿠키={}", cookies.keySet());
             return;
         }
         for (String raw : values) {
@@ -175,18 +220,25 @@ public class FormSessionClient {
      */
     public List<Map<String, String>> parseRows(String body, String rowsPath) {
         if (body == null || body.isBlank()) {
+            log.warn("응답 본문이 비어 있어 행을 읽지 않습니다 — 행경로={}", rowsPath);
             return List.of();
         }
         try {
             JsonNode root = mapper.readTree(body);
             JsonNode node = root.path(rowsPath);
             if (!node.isArray()) {
+                log.debug("지정한 행경로에 배열이 없어 응답을 훑어 배열을 찾습니다 — 행경로={}", rowsPath);
                 node = firstArray(root, 0);
             }
             if (node == null || !node.isArray()) {
+                log.warn("응답에서 행 배열을 찾지 못했습니다 — 행경로={}, 본문길이={}",
+                        rowsPath, body.length());
                 return List.of();
             }
+            log.debug("행 배열 확보 — 행경로={}, 항목={}건", rowsPath, node.size());
+
             List<Map<String, String>> rows = new ArrayList<>();
+            int index = 0;
             for (JsonNode item : node) {
                 Map<String, String> row = new LinkedHashMap<>();
                 if (item.isObject()) {
@@ -195,11 +247,22 @@ public class FormSessionClient {
                 }
                 if (!row.isEmpty()) {
                     rows.add(row);
+                } else {
+                    // 어느 행이 빠졌는지 알아야 원본과 대조할 수 있다.
+                    log.debug("행 건너뜀(객체가 아니거나 값이 없음) — 번호={}, 값={}", index, item);
                 }
+                index++;
             }
+            if (rows.size() < index) {
+                log.warn("항목 {}건 중 {}건을 건너뛰었습니다 — 행경로={}",
+                        index, index - rows.size(), rowsPath);
+            }
+            log.debug("행 파싱 완료 — 행경로={}, 행 {}건", rowsPath, rows.size());
             return rows;
         } catch (RuntimeException e) {
             // JSON 이 아닌 응답(로그인 화면으로 되돌려보내는 경우)이면 행이 없는 것으로 본다.
+            log.warn("응답을 JSON 으로 읽지 못했습니다 — 행경로={}, 본문길이={}, 본문={}",
+                    rowsPath, body.length(), body, e);
             return List.of();
         }
     }
@@ -225,6 +288,11 @@ public class FormSessionClient {
             return "";
         }
         return node.isValueNode() ? node.asString() : node.toString();
+    }
+
+    /** 로그용 본문 길이. 본문이 없을 때와 빈 문자열일 때를 구분하려고 -1 을 쓴다. */
+    private static int bodyLength(String body) {
+        return body == null ? -1 : body.length();
     }
 
     private static String required(Map<String, String> config, String key) {

@@ -15,6 +15,7 @@ import kr.suhsaechan.palim.connector.model.TargetModel;
 import kr.suhsaechan.palim.connector.run.RunMode;
 import kr.suhsaechan.palim.connector.transform.MappedRow;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 하나</b>만 허용한다 — 그 이전까지 거슬러 오르면 이후 실행들과 뒤엉켜 어떤 상태로 돌아가는지
  * 아무도 설명할 수 없다.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class StandardModelWriter implements RecordWriter {
@@ -50,14 +52,48 @@ public class StandardModelWriter implements RecordWriter {
         List<String> keyFields = model.getNaturalKeyFields();
         Map<String, FieldDataType> types = fieldTypes(model);
         int written = 0;
+        int snapshotted = 0;
+        String lastSql = null;
+
+        log.debug("표준 표 적재 시작 — 실행={} 테넌트={} 모델={} 표={} 행 {}건 자연키={} 필드정의 {}건",
+                runId, tenantId, model.getId(), table, chunk.size(), keyFields, types.size());
+
+        // 타입을 모르는 자연키는 빈 값 대체가 문자열로 고정된다 — 숫자·시각 컬럼이면 적재에서 죽는다
+        List<String> undefinedKeys = keyFields.stream()
+                .filter(field -> !types.containsKey(field))
+                .toList();
+        if (!undefinedKeys.isEmpty()) {
+            log.warn("모델 필드 정의에 없는 자연키 컬럼 — 실행={} 표={} 컬럼={}",
+                    runId, table, undefinedKeys);
+        }
+        if (chunk.isEmpty()) {
+            log.warn("적재할 행이 없다 — 실행={} 표={}", runId, table);
+        }
 
         for (MappedRow row : chunk) {
-            Map<String, Object> keyParams = naturalKeyParams(row, keyFields, types);
-            String naturalKey = keyBuilder.build(row.values(), keyFields);
-            saveUndoSnapshot(tenantId, runId, table, keyFields, keyParams, naturalKey);
-            upsert(tenantId, runId, table, keyFields, keyParams, row);
-            written++;
+            String naturalKey = null;
+            try {
+                Map<String, Object> keyParams = naturalKeyParams(row, keyFields, types, runId);
+                naturalKey = keyBuilder.build(row.values(), keyFields);
+                int snapshot = saveUndoSnapshot(tenantId, runId, table, keyFields, keyParams,
+                        naturalKey, written == 0);
+                lastSql = upsert(tenantId, runId, table, keyFields, keyParams, row, lastSql);
+                snapshotted += snapshot;
+                written++;
+                log.debug("행 적재 — 실행={} 표={} 행={} 자연키={} 값 {}개 부가 {}개 이전값스냅샷 {}건",
+                        runId, table, row.rowNumber(), naturalKey, row.values().size(),
+                        row.attributes().size(), snapshot);
+            } catch (RuntimeException e) {
+                log.error("행 적재 실패 — 실행={} 표={} 행={} 자연키={} 값={}",
+                        runId, table, row.rowNumber(), naturalKey, row.values(), e);
+                throw e;
+            }
         }
+
+        // 기존 행이 있어야 undo 스냅샷이 남으므로 스냅샷 건수 = 충돌로 갱신된 건수다.
+        // 같은 청크에 자연키가 중복되면 두 번째부터는 DO NOTHING 이라 갱신 건수의 하한이 된다.
+        log.info("표준 표 적재 완료 — 실행={} 표={} 적재 {}건, 기존행 갱신 {}건, 신규 {}건",
+                runId, table, written, snapshotted, written - snapshotted);
         return WriteResult.of(written);
     }
 
@@ -81,12 +117,20 @@ public class StandardModelWriter implements RecordWriter {
      * 그 사실은 되돌리기를 눌러본 뒤에야 드러난다.
      */
     private Map<String, Object> naturalKeyParams(MappedRow row, List<String> keyFields,
-                                                 Map<String, FieldDataType> types) {
+                                                 Map<String, FieldDataType> types, UUID runId) {
         Map<String, Object> params = new LinkedHashMap<>();
         for (String field : keyFields) {
             Object converted = SqlValues.toParameter(row.values().get(field));
-            params.put(field, converted != null ? converted : emptyValue(types.get(field)));
+            if (converted == null) {
+                Object empty = emptyValue(types.get(field));
+                log.warn("자연키 값이 비어 빈 값으로 대체 — 실행={} 행={} 필드={} 타입={} 대체값={}",
+                        runId, row.rowNumber(), field, types.get(field), empty);
+                params.put(field, empty);
+            } else {
+                params.put(field, converted);
+            }
         }
+        log.debug("자연키 바인딩 — 실행={} 행={} 값={}", runId, row.rowNumber(), params);
         return params;
     }
 
@@ -118,9 +162,12 @@ public class StandardModelWriter implements RecordWriter {
      * <p>{@code ON CONFLICT DO NOTHING} 이 중요하다. 원천 파일에 같은 자연키가 두 번 나오는 것은
      * 흔한 일인데, 그대로 두면 두 번째 undo 행의 이전 값이 <b>이번 실행이 방금 쓴 값</b>이 되어
      * 복원이 최초 상태가 아니라 중간 상태로 간다.
+     *
+     * @param logSql 조립된 SQL 을 DEBUG 로 남길지 여부. 청크의 첫 행에서만 켠다
+     * @return undo 로그에 실제로 삽입된 행수(1 이면 대상 행이 이미 있었다는 뜻)
      */
-    private void saveUndoSnapshot(UUID tenantId, UUID runId, String table, List<String> keyFields,
-                                  Map<String, Object> keyParams, String naturalKey) {
+    private int saveUndoSnapshot(UUID tenantId, UUID runId, String table, List<String> keyFields,
+                                 Map<String, Object> keyParams, String naturalKey, boolean logSql) {
         // 자연키 컬럼이 NOT NULL 이므로 NULL 안전 비교가 필요 없다. 등호를 써야 인덱스를 탄다.
         String keyCondition = keyFields.stream()
                 .map(field -> "t." + field + " = :" + field)
@@ -146,18 +193,35 @@ public class StandardModelWriter implements RecordWriter {
         for (Map.Entry<String, Object> entry : keyParams.entrySet()) {
             spec = spec.param(entry.getKey(), entry.getValue());
         }
-        spec.update();
+        if (logSql) {
+            log.debug("undo 스냅샷 조건 조립 — 실행={} 표={} 조건={}", runId, table, keyCondition);
+        }
+
+        int inserted = spec.update();
+        if (inserted == 0) {
+            log.debug("undo 스냅샷 없음 — 실행={} 표={} 자연키={} (신규 행이거나 같은 실행에서 이미 남김)",
+                    runId, table, naturalKey);
+        }
+        return inserted;
     }
 
-    private void upsert(UUID tenantId, UUID runId, String table, List<String> keyFields,
-                        Map<String, Object> keyParams, MappedRow row) {
+    private String upsert(UUID tenantId, UUID runId, String table, List<String> keyFields,
+                          Map<String, Object> keyParams, MappedRow row, String previousSql) {
         // 자연키는 정규화된 값으로 덮어쓴다. 매핑되지 않은 자연키 컬럼도 여기서 채워지므로
         // INSERT 에 빠져 DB 기본값에 맡기는 경로가 없어진다 — undo 조회 값과 어긋나지 않는다.
         Map<String, Object> values = new LinkedHashMap<>(row.values());
         values.putAll(keyParams);
         List<String> valueColumns = List.copyOf(values.keySet());
 
-        var spec = jdbcClient.sql(upsertSql(table, valueColumns, keyFields))
+        String sql = upsertSql(table, valueColumns, keyFields);
+        // 컬럼이 어긋나면 조립된 SQL 을 봐야 원인이 보인다. 청크 안에서 SQL 이 바뀔 때만 남긴다 —
+        // 행마다 SQL 이 달라지면 그것 자체가 행별 컬럼 구성이 흔들린다는 신호다.
+        if (!sql.equals(previousSql)) {
+            log.debug("UPSERT SQL 조립 — 실행={} 표={} 행={} 값 컬럼 {}건\n{}",
+                    runId, table, row.rowNumber(), valueColumns.size(), sql);
+        }
+
+        var spec = jdbcClient.sql(sql)
                 .param("id", UuidV7.generate())
                 .param("tenantId", tenantId)
                 .param("runId", runId)
@@ -166,7 +230,13 @@ public class StandardModelWriter implements RecordWriter {
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             spec = spec.param(entry.getKey(), SqlValues.toParameter(entry.getValue()));
         }
-        spec.update();
+
+        int affected = spec.update();
+        if (affected != 1) {
+            log.warn("UPSERT 적용 행수가 1이 아니다 — 실행={} 표={} 행={} 적용={}건",
+                    runId, table, row.rowNumber(), affected);
+        }
+        return sql;
     }
 
     /**

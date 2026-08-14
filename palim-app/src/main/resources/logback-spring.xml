@@ -1,16 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  로그 설정. Spring Boot 기본 구성에 비밀값 마스킹(%msg 대신 %maskedMsg)만 얹는다 (09-SECURITY).
+  로그 설정.
 
-  base.xml 을 include 하면 appender 가 %msg 로 고정되어 마스킹을 끼울 수 없으므로,
-  defaults 만 가져와 콘솔 appender 를 직접 정의한다. 파일 로그는 컨테이너 런타임(docker logs)이
-  담당하므로 콘솔만 있으면 된다(06-OPERATIONS).
+  콘솔은 비밀값을 가린다(%maskedMsg, 09-SECURITY). 파일은 가리지 않는다 — 파일은 운영 서버의
+  마운트된 디렉터리에만 남고, 문제가 났을 때 «무엇이 오갔는지» 를 그대로 봐야 원인을 찾을 수
+  있기 때문이다. 가려 놓으면 정작 필요한 순간에 «***» 만 보인다(07-DECISIONS 028).
+
+  파일 로그를 두는 이유는 **배포할 때마다 컨테이너를 지우기 때문**이다. 콘솔만 있으면
+  docker logs 로만 볼 수 있고, 그 로그는 다음 배포에서 통째로 사라진다. 정작 «어제 그 오류»
+  를 봐야 할 때 아무것도 남아 있지 않다.
 -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
     <conversionRule conversionWord="maskedMsg"
                     class="kr.suhsaechan.palim.logging.SecretMaskingConverter"/>
+
+    <!--
+      컨테이너 안의 경로다. 호스트의 어느 디렉터리에 연결할지는 배포가 정한다 — 저장소가
+      공개이므로 서버 경로를 파일에 두지 않는다.
+    -->
+    <property name="LOG_DIR" value="${PALIM_LOG_DIR:-/mnt/palim/logs}"/>
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%t] %logger{40} : %msg%n%wEx"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -19,7 +31,61 @@
         </encoder>
     </appender>
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-    </root>
+    <springProfile name="prod">
+        <!--
+          날짜로 나누고 하루치가 커지면 번호를 붙여 또 나눈다. 지난 파일은 gz 로 압축한다 —
+          DEBUG 로 남기므로 압축하지 않으면 금세 디스크를 먹는다.
+
+          totalSizeCap 을 두는 이유: NAS 를 다른 프로젝트 20여 개와 함께 쓴다. 로그가 디스크를
+          채우면 우리만 죽는 것이 아니라 같은 볼륨을 쓰는 모두가 죽는다.
+        -->
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/palim.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/palim.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>3GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${LOG_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!--
+          오류만 따로 한 벌 더 남긴다. 전체 로그에서 ERROR 를 찾으려면 DEBUG 수만 줄을 헤쳐야
+          하는데, 정작 급할 때 그 시간이 없다.
+        -->
+        <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/palim-error.log</file>
+            <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+                <level>WARN</level>
+            </filter>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/palim-error.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>20MB</maxFileSize>
+                <maxHistory>90</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${LOG_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
 </configuration>

@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.reconcile.engine;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,11 +62,22 @@ public class ReconcileEngine {
                         "없는 대조 정의입니다."));
         UUID tenantId = TenantContext.current();
 
+        log.debug("대조 시작 — 정의={}({}) 테넌트={} 좌원천={} 우원천={} 비교칸={} 허용오차={}",
+                definitionId, definition.getCode(), tenantId,
+                definition.getLeftSource(), definition.getRightSource(),
+                definition.getCompareField(), definition.getTolerance());
+
         Instant baseAt;
         try {
             baseAt = baseAtResolver.resolve(tenantId,
                     definition.getLeftSource(), definition.getRightSource());
         } catch (BusinessException e) {
+            // 거부 사유는 «양쪽 시각» 이 함께 있어야 읽힌다. 한쪽만 남기면 왜 어긋났는지 모른다.
+            log.error("기준 시각 확인 실패 — 대조를 거부한다. 정의={}({}) 좌원천={} 우원천={} "
+                            + "사유={} 값={}",
+                    definitionId, definition.getCode(),
+                    definition.getLeftSource(), definition.getRightSource(),
+                    e.getErrorCode(), Arrays.toString(e.messageArgs()), e);
             // 실패도 기록이다. 「어제는 왜 안 돌았나」 에 답할 수 있어야 사람이 고친다.
             ReconcileRun failed = runs.save(
                     ReconcileRun.start(tenantId, definitionId, Instant.EPOCH));
@@ -74,11 +86,23 @@ public class ReconcileEngine {
         }
 
         ReconcileRun run = runs.save(ReconcileRun.start(tenantId, definitionId, baseAt));
+        log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
+                run.getId(), definitionId, definition.getCode(), baseAt);
 
         Map<UUID, BigDecimal> left = aggregator.sumByUnit(
                 tenantId, definition.getLeftSource(), baseAt, definition.getCompareField());
         Map<UUID, BigDecimal> right = aggregator.sumByUnit(
                 tenantId, definition.getRightSource(), baseAt, definition.getCompareField());
+        log.debug("단위 합산 — 실행={} 기준시각={} 좌원천={} {}단위 우원천={} {}단위",
+                run.getId(), baseAt,
+                definition.getLeftSource(), left.size(),
+                definition.getRightSource(), right.size());
+
+        if (left.isEmpty() && right.isEmpty()) {
+            log.warn("양쪽 합산 결과가 비어 있다 — 확정된 정합 단위가 없거나 해당 기준 시각의 "
+                            + "스냅샷이 없다. 실행={} 정의={}({}) 기준시각={}",
+                    run.getId(), definitionId, definition.getCode(), baseAt);
+        }
 
         List<ReconcileDiff> found = new ArrayList<>();
         found.addAll(compareUnits(definition, run, left, right));
@@ -86,7 +110,22 @@ public class ReconcileEngine {
 
         diffs.saveAll(found);
         run.succeed(left.size(), right.size(), found.size() - unmatched, unmatched);
+        log.info("대조 완료 — 실행={} 정의={}({}) 기준시각={} 좌단위={}건 우단위={}건 "
+                        + "차이={}건(확정={} 관찰중={} 무시={}) 미매칭={}건",
+                run.getId(), definitionId, definition.getCode(), baseAt,
+                left.size(), right.size(), found.size() - unmatched,
+                countState(found, DiffState.CONFIRMED),
+                countState(found, DiffState.OBSERVING),
+                countState(found, DiffState.IGNORED),
+                unmatched);
         return runs.save(run);
+    }
+
+    /** 상태별 차이 건수. 미매칭(단위 없음)은 따로 세므로 단위가 붙은 차이만 센다. */
+    private static long countState(List<ReconcileDiff> found, DiffState state) {
+        return found.stream()
+                .filter(diff -> diff.getUnitId() != null && diff.getState() == state)
+                .count();
     }
 
     /** 양쪽에 있는 단위를 견준다. 한쪽에만 있으면 그쪽 수량과 0 을 비교한 것이 된다. */
@@ -97,7 +136,12 @@ public class ReconcileEngine {
         allUnits.addAll(left.keySet());
         allUnits.addAll(right.keySet());
 
+        log.debug("단위 비교 시작 — 실행={} 비교대상={}단위(좌={} 우={}) 허용오차={}",
+                run.getId(), allUnits.size(), left.size(), right.size(),
+                definition.getTolerance());
+
         List<ReconcileDiff> found = new ArrayList<>();
+        int withinTolerance = 0;
         for (UUID unitId : allUnits) {
             BigDecimal leftQty = left.getOrDefault(unitId, BigDecimal.ZERO);
             BigDecimal rightQty = right.getOrDefault(unitId, BigDecimal.ZERO);
@@ -105,16 +149,26 @@ public class ReconcileEngine {
 
             // 허용 오차 이내는 차이로 보지 않는다. 잡음이 쌓이면 진짜 문제가 묻힌다.
             if (delta.abs().compareTo(definition.getTolerance()) <= 0) {
+                withinTolerance++;
+                log.debug("허용 오차 이내라 기록하지 않는다 — 실행={} 단위={} 좌={} 우={} 델타={}",
+                        run.getId(), unitId, leftQty, rightQty, delta);
                 continue;
             }
 
             DiffType type = delta.signum() > 0 ? DiffType.LEFT_MORE : DiffType.RIGHT_MORE;
             var promotion = promoter.decide(definition.getId(), run.getId(), unitId, type);
 
+            log.debug("차이 기록 — 실행={} 단위={} 좌={} 우={} 델타={} 유형={} 상태={} 최초관찰실행={}",
+                    run.getId(), unitId, leftQty, rightQty, delta, type,
+                    promotion.state(), promotion.firstSeenRunId());
+
             found.add(ReconcileDiff.of(run.getTenantId(), run.getId(), unitId,
                     unitCodeOf(unitId), leftQty, rightQty, delta, type,
                     promotion.state(), promotion.firstSeenRunId()));
         }
+
+        log.debug("단위 비교 완료 — 실행={} 비교대상={}단위 차이={}건 허용오차이내={}건",
+                run.getId(), allUnits.size(), found.size(), withinTolerance);
         return found;
     }
 
@@ -139,8 +193,16 @@ public class ReconcileEngine {
         var items = aggregator.unmatched(run.getTenantId(), source, baseAt,
                 definition.getCompareField());
 
+        if (!items.isEmpty()) {
+            // 실패는 아니지만 사람이 연결해 줘야 사라지는 잔여다. 쌓이면 대조 범위가 줄어든다.
+            log.warn("미매칭 품목 {}건 — 실행={} 원천={} 유형={} 기준시각={}. 정합 단위 연결이 필요하다",
+                    items.size(), run.getId(), source, type, baseAt);
+        }
+
         for (var item : items) {
             boolean isLeft = type == DiffType.UNMATCHED_LEFT;
+            log.debug("미매칭 기록 — 실행={} 원천={} 유형={} 품목={} 품명={} 수량={}",
+                    run.getId(), source, type, item.itemRef(), item.rawName(), item.quantity());
             found.add(ReconcileDiff.of(run.getTenantId(), run.getId(), null,
                     // 단위가 없으므로 사람이 알아볼 이름을 대신 남긴다.
                     item.rawName().isBlank() ? item.itemRef() : item.rawName(),
@@ -153,6 +215,9 @@ public class ReconcileEngine {
     }
 
     private String unitCodeOf(UUID unitId) {
-        return units.findById(unitId).map(ReconcileUnit::getCode).orElse("");
+        return units.findById(unitId).map(ReconcileUnit::getCode).orElseGet(() -> {
+            log.warn("정합 단위를 찾지 못해 단위 코드를 비워 둔다 — 단위={}", unitId);
+            return "";
+        });
     }
 }
