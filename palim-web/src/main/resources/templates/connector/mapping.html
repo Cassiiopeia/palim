@@ -164,13 +164,15 @@
                                             th:text="${f}"
                                             th:selected="${r.picked != null and r.picked == f}">칸</option>
                                 </select>
-                                <span th:if="${r.constant != null}" class="badge badge-ghost badge-sm">
+                                <span th:if="${r.mode == 'CONSTANT'}" class="badge badge-ghost badge-sm">
                                     직접 입력
                                 </span>
                             </div>
 
+                            <!--/* 줄의 종류는 mode 로 본다. constant 항목을 조건에 쓰면
+                                   같은 이름의 읽기 메서드가 먼저 잡혀 언제나 참이 된다. */-->
                             <input type="hidden" name="transformTypes"
-                                   th:value="${r.constant != null} ? 'CONSTANT' : 'NONE'">
+                                   th:value="${r.mode == 'CONSTANT'} ? 'CONSTANT' : 'NONE'">
                             <input type="hidden" name="params" th:value="${r.constant} ?: ''">
                         </td>
 
@@ -229,8 +231,18 @@
             </p>
         </section>
 
+        <!--/* 실행 버튼을 이 폼 «안에» 둔다.
+
+               예전에는 아래에 따로 있었다. 고르기만 하고 실행하면 저장된 옛 것으로 돌아가
+               전 줄이 「필수 칸이 비었다」로 떨어졌다 — 화면에는 고른 칸이 그대로 보이므로
+               사람은 자기가 뭘 안 했는지 알 수 없다. 고르라고 해 놓고 고른 것을 안 쓰는
+               버튼을 바로 밑에 두면 누구나 그것을 누른다. */-->
         <div class="flex justify-end gap-2">
             <button type="submit" class="btn btn-sm">연결 저장</button>
+            <button type="submit" class="btn btn-outline btn-sm"
+                    th:formaction="@{/connectors/{id}/mapping/run(id=${connector.id})}"
+                    th:text="${fetchesItself} ? '저장하고 시험 실행' : '저장하고 시험 실행'">
+                저장하고 시험 실행</button>
         </div>
     </form>
 
@@ -243,15 +255,17 @@
             <span class="text-xs text-base-content/60">진짜 자료에는 넣지 않습니다</span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
+        <p class="text-sm text-base-content/60 mb-3" th:if="${fetchesItself}">
+            위 「저장하고 시험 실행」 을 누르면 고른 그대로 한 번 돌려 봅니다.
+        </p>
         <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
-              enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
+              enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end"
+              th:unless="${fetchesItself}">
             <input type="hidden" name="mode" value="TEST">
             <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
-                   th:unless="${fetchesItself}"
                    class="file-input file-input-bordered file-input-sm">
             <input type="hidden" name="headerRow" th:value="${headerRow} ?: 1">
-            <button type="submit" class="btn btn-outline btn-sm"
-                    th:text="${fetchesItself} ? '지금 가져와서 시험 실행' : '시험 실행'">시험 실행</button>
+            <button type="submit" class="btn btn-outline btn-sm">시험 실행</button>
         </form>
     </section>
 

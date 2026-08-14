@@ -164,6 +164,24 @@ public class ConnectorAdminService {
     }
 
     /**
+     * 새로 온 것에 값이 없으면 갖고 있던 값을 지킨다.
+     *
+     * <p>매핑을 저장할 때 화면은 칸 <b>이름만</b> 돌려보낸다. 그것으로 담아 둔 것을 통째로
+     * 덮으면 「실제로 들어올 값」이 전부 사라진다. 사람은 저장 한 번에 미리보기가 없어진
+     * 이유를 알 수 없다.
+     */
+    private static SourceSchema keepSamples(SourceSchema incoming, SourceSchema stored) {
+        if (stored == null || !incoming.sampleRows().isEmpty()) {
+            return incoming;
+        }
+        // 칸 목록이 달라졌다면 옛 값은 맞지 않는다. 이름이 같을 때만 지킨다.
+        if (!stored.fields().equals(incoming.fields())) {
+            return incoming;
+        }
+        return new SourceSchema(incoming.fields(), stored.sampleRows(), stored.totalCount());
+    }
+
+    /**
      * 지난번에 받아 담아 둔 칸과 값.
      *
      * <p>확정한 것이 있으면 그것을, 없으면 작성 중인 것을 쓴다. 둘 다 없으면 {@code null} —
@@ -211,7 +229,10 @@ public class ConnectorAdminService {
                 .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(), connectorId,
                         nextVersion(connectorId), Map.of()));
 
-        draft.replaceSchema(snapshotOf(schema));
+        // 저장할 때 화면은 칸 «이름» 만 돌려보낸다. 그것으로 담아 둔 것을 통째로 덮으면
+        // 실제로 들어올 값이 사라져, 저장 한 번에 미리보기가 전부 «—» 가 된다. 사람은 그때
+        // 자기가 뭘 지웠는지 모른다. 이름만 왔으면 값은 갖고 있던 것을 지킨다.
+        draft.replaceSchema(snapshotOf(keepSamples(schema, restore(draft.getSourceSchema()))));
         ConnectorMapping saved = mappingRepository.save(draft);
 
         // 삭제를 먼저 DB 에 반영한다. JPA 는 flush 시점을 스스로 정하므로 그대로 두면
