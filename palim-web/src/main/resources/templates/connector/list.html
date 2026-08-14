@@ -74,8 +74,13 @@
                             <span th:if="${!c.connected and !c.readyForLive}"
                                   class="text-base-content/60">안 함</span>
                         </td>
+                        <!--/* 시각만 정해 두면 도는 것이 아니다 — 칸을 맞춰야 스케줄러가
+                               집어 간다. 「매일」 이라고 해 놓고 안 돌면 며칠 뒤 자료가 없는
+                               것을 보고서야 안다. */-->
                         <td class="text-sm">
-                            <span th:if="${c.scheduled}">매일</span>
+                            <span th:if="${c.collectsDaily}">매일</span>
+                            <span th:if="${c.scheduled and !c.collectsDaily}"
+                                  class="text-base-content/60">칸 맞추면 시작</span>
                             <span th:unless="${c.scheduled}" class="text-base-content/40">—</span>
                         </td>
                         <!--/* 실패를 목록에서 보여준다. 상세로 들어가야만 보이면, 매일 도는 수집이
