@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
@@ -309,6 +310,13 @@ public class ConnectorController {
         }
     }
 
+    /**
+     * 연결 확정.
+     *
+     * <p>확정할 초안이 없을 때 「매핑 버전을 찾을 수 없습니다」 라고만 하면 사람은 <b>무엇을
+     * 해야 하는지 알 수 없다.</b> 이 화면에서 그 상황은 둘 뿐이고 할 일도 서로 다르다 —
+     * 아직 저장하지 않았거나, 이미 확정해 둔 것이다. 둘을 갈라 말한다.
+     */
     @PostMapping("/connectors/{id}/activate")
     public String activate(@PathVariable UUID id, RedirectAttributes redirect) {
         try {
@@ -316,8 +324,14 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashSuccess",
                     "매핑을 확정했습니다. 이제 실제 적재가 가능합니다.");
         } catch (BusinessException e) {
-            redirect.addFlashAttribute("flashError",
-                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+            if (e.is(ErrorCode.MAPPING_NOT_FOUND)) {
+                redirect.addFlashAttribute("flashError", adminService.hasActiveMapping(id)
+                        ? "이미 확정되어 있습니다. 바꾸려면 칸을 고친 뒤 「연결 저장」 을 먼저 누르세요."
+                        : "확정할 것이 없습니다. 칸을 고른 뒤 「연결 저장」 을 먼저 누르세요.");
+            } else {
+                redirect.addFlashAttribute("flashError",
+                        errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+            }
         }
         return "redirect:/connectors/" + id + "/mapping";
     }
