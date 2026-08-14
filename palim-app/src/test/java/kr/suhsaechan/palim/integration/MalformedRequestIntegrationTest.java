@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
+import kr.suhsaechan.palim.web.error.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,27 @@ class MalformedRequestIntegrationTest extends IntegrationTest {
     void 형식이_틀리면_400() throws Exception {
         mockMvc.perform(get("/connectors/{id}/runs", "이건-식별자가-아니다"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * 오래 열어 두는 연결(SSE)이 시간을 다하는 것은 <b>정상</b>이다 — 브라우저가 알아서 다시
+     * 잇는다. 이것을 「처리하지 못한 오류」로 다루면 화면을 열어 둔 사람 수만큼 10분마다
+     * ERROR 가 쌓여 <b>진짜 장애가 그 사이에 묻힌다.</b>
+     *
+     * <p>여기서는 예외 핸들러가 붙어 있는지만 본다 — 실제 시간 초과는 몇 분을 기다려야 하므로
+     * 테스트로 재현하지 않는다.
+     */
+    @Test
+    @DisplayName("연결이 시간을 다한 것은 오류로 다루지 않는다")
+    void 연결_시간초과는_오류가_아니다() throws Exception {
+        var handler = GlobalExceptionHandler.class.getDeclaredMethod(
+                "handleAsyncTimeout",
+                org.springframework.web.context.request.async.AsyncRequestTimeoutException.class,
+                jakarta.servlet.http.HttpServletRequest.class);
+
+        assertThat(handler.getReturnType())
+                .as("SSE 는 응답이 이미 나간 뒤라 여기서 무언가를 쓰려 하면 그 시도가 실패한다")
+                .isEqualTo(void.class);
     }
 
     /**

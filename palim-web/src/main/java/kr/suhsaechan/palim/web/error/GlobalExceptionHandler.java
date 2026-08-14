@@ -15,6 +15,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -120,6 +121,25 @@ public class GlobalExceptionHandler {
                                                           HttpServletRequest request) {
         log.debug("없는 정적 자원 — {} {}", request.getMethod(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+
+    /**
+     * 오래 열어 둔 연결이 시간을 다한 경우.
+     *
+     * <p>세션 감시(SSE)는 몇 분간 열어 두는 연결이고, 시간이 다하면 브라우저가 알아서 다시
+     * 연결한다. <b>정상 동작이다.</b> 그런데 이것을 「처리하지 못한 오류」로 다루면 화면을
+     * 열어 둔 사람 수만큼 10분마다 ERROR 가 쌓이고, <b>그 사이에 진짜 장애가 묻힌다.</b>
+     * 없는 정적 파일을 조용히 404 로 돌리는 것과 같은 이유다.
+     *
+     * <p><b>응답을 쓰지 않는다.</b> SSE 는 이미 헤더와 일부 내용이 나간 뒤라 여기서 JSON 을
+     * 쓰려 하면 그 시도 자체가 실패한다 — 실제로 「Failure in @ExceptionHandler」가 함께
+     * 찍혔다. 반환형을 {@code void} 로 두어 응답을 건드리지 않는다.
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncTimeout(AsyncRequestTimeoutException exception,
+                                   HttpServletRequest request) {
+        log.debug("열어 둔 연결이 시간을 다했습니다 — {} {}",
+                request.getMethod(), request.getRequestURI());
     }
 
     /**
