@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!--/* 준비 단계 카드.
+
+       홈이 이것을 불러 쓴다. 카드를 화면마다 따로 그리면 문구를 한쪽만 고치는 일이 생긴다. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="steps(steps)" class="flex flex-col gap-3">
+    <div th:each="step : ${steps}"
+         th:classappend="${step.state.name() == 'ATTENTION'} ? 'border-warning' :
+                         (${step.done} ? 'border-success/40' : 'border-base-300')"
+         class="card bg-base-100 border shadow-sm">
+        <div class="card-body flex-row items-center gap-4 py-4">
+
+            <div class="text-2xl w-8 text-center">
+                <span th:if="${step.done}" class="text-success">✅</span>
+                <span th:if="${step.state.name() == 'ATTENTION'}" class="text-warning">⚠️</span>
+                <span th:if="${step.state.name() == 'WAITING'}" class="opacity-30">⬜</span>
+            </div>
+
+            <div class="grow">
+                <div class="font-semibold" th:text="${step.order} + '. ' + ${step.title}">단계</div>
+                <div class="text-sm text-base-content/70" th:text="${step.detail}">상황</div>
+                <div th:if="${step.action != null and step.state.name() == 'ATTENTION'}"
+                     class="text-sm text-warning mt-1" th:text="'→ ' + ${step.action}">할 일</div>
+            </div>
+
+            <div>
+                <a th:if="${step.actionable}" th:href="@{${step.link}}"
+                   class="btn btn-warning btn-sm">하러 가기</a>
+                <a th:if="${step.done and step.link != null}" th:href="@{${step.link}}"
+                   class="btn btn-ghost btn-sm">확인</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

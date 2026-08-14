@@ -1,5 +1,8 @@
 package kr.suhsaechan.palim.web;
 
+import kr.suhsaechan.palim.web.home.HomeSummaryService;
+import kr.suhsaechan.palim.web.setup.SetupService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -7,14 +10,22 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * 진입 화면과 로그인 화면.
  *
- * <p>대시보드 실제 구현은 후속 이슈다. 지금은 레이아웃과 인증이 동작하는지 확인하는 수준이다.
+ * <p>홈은 <b>같은 자리가 시간에 따라 다른 것을 보여준다.</b> 준비가 안 끝났으면 다음 한 걸음을,
+ * 끝났으면 오늘 맞춰 본 결과를 띄운다. 순서를 안내하는 화면을 메뉴의 한 항목으로 두면 여러 기능
+ * 중 하나로 보이기 때문에 여기가 그 일을 한다.
  */
 @Controller
+@RequiredArgsConstructor
 public class HomeController {
+
+    private final SetupService setupService;
+    private final HomeSummaryService homeSummaryService;
 
     @GetMapping("/")
     public String home(Model model) {
-        model.addAttribute("title", "대시보드");
+        model.addAttribute("title", "홈");
+        model.addAttribute("steps", setupService.steps());
+        model.addAttribute("today", homeSummaryService.today());
         return "home";
     }
 
