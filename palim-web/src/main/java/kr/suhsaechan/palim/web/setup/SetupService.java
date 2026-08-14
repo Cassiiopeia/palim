@@ -119,13 +119,15 @@ public class SetupService {
         List<ReconcileDefinition> definitions =
                 definitionRepository.findByIsActiveTrueOrderByCode();
         if (definitions.isEmpty()) {
-            // 맞춰 볼 대상을 «정하라» 고 시키지 않는다 — 그것을 정하는 화면이 아직 없다.
-            // 할 수 없는 일을 지시하면 사장님은 화면을 오가며 그 자리를 찾다가 포기한다.
-            return new SetupStep(3, "대조 결과", SetupStep.State.WAITING,
-                    collecting.size() < 2
-                            ? "자료가 들어오는 곳이 둘이 되면 맞춰 볼 수 있습니다"
-                            : "무엇과 무엇을 맞춰 볼지 정하는 화면은 준비 중입니다",
-                    null, null);
+            // 자료가 들어오는 곳이 둘이 안 되면 정할 수가 없다. 그때는 시키지 않고 무엇이
+            // 남았는지만 말한다 — 할 수 없는 일을 지시하면 화면을 오가다 포기한다.
+            if (collecting.size() < 2) {
+                return new SetupStep(3, "대조 결과", SetupStep.State.WAITING,
+                        "자료가 들어오는 곳이 둘이 되면 맞춰 볼 수 있습니다", null, null);
+            }
+            return new SetupStep(3, "대조 결과", SetupStep.State.ATTENTION,
+                    "무엇과 무엇을 맞춰 볼지 아직 정하지 않았습니다",
+                    "맞춰 볼 대상을 정하세요", "/reconcile");
         }
         boolean ranOnce = definitions.stream().anyMatch(d ->
                 runRepository.findFirstByDefinitionIdAndStatusOrderByStartedAtDesc(
