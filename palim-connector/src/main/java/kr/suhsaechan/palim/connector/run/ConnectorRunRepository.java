@@ -15,6 +15,9 @@ public interface ConnectorRunRepository extends JpaRepository<ConnectorRun, UUID
      */
     boolean existsByConnectorIdAndStatus(UUID connectorId, RunStatus status);
 
+    /** 기동할 때 「실행 중」인 채로 굳은 것을 찾는다. 그 실행을 하던 프로세스는 이미 없다. */
+    List<ConnectorRun> findByStatus(RunStatus status);
+
     /** 되돌리기 대상 판정용. 마지막 LIVE 실행이 아니면 되돌릴 수 없다. */
     Optional<ConnectorRun> findFirstByConnectorIdAndRunModeOrderByStartedAtDesc(UUID connectorId,
                                                                                RunMode runMode);
