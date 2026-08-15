@@ -1,6 +1,9 @@
 package kr.suhsaechan.palim.connector.write;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.connector.key.NaturalKeyBuilder;
 import kr.suhsaechan.palim.connector.model.TargetModel;
@@ -28,6 +31,24 @@ public class StagingWriter implements RecordWriter {
     private final ConnectorStagingRepository repository;
     private final NaturalKeyBuilder keyBuilder;
 
+    /**
+     * 시각을 <b>담을 때</b> 사람이 읽는 글자로 굳힌다.
+     *
+     * <p>JSON 은 시각이라는 것을 모른다. {@link Instant} 를 그냥 넣으면 «1970년부터 몇 초»
+     * 라는 숫자로 굳어 {@code 1786719600} 이 저장된다. 그러면 화면이 그것을 다시 시각으로
+     * 되돌려야 하고, <b>어느 칸이 시각인지 화면이 알아야</b> 한다. 판단이 두 군데로 갈리는
+     * 구조라 언젠가 어긋난다.
+     *
+     * <p>담을 때 굳혀 두면 화면은 <b>받은 값을 그대로</b> 보여주기만 하면 된다. 이 표는
+     * 「진짜로 넣기 전에 눈으로 보는」 자리라, 화면이 값을 손대는 순간 확인이 거짓이 된다.
+     */
+    private static Map<String, Object> readableMoments(Map<String, Object> values) {
+        Map<String, Object> readable = new LinkedHashMap<>();
+        values.forEach((key, value) -> readable.put(key,
+                value instanceof Instant moment ? moment.toString() : value));
+        return readable;
+    }
+
     @Override
     public RunMode mode() {
         return RunMode.TEST;
@@ -40,7 +61,7 @@ public class StagingWriter implements RecordWriter {
         List<ConnectorStaging> entities = chunk.stream()
                 .map(row -> ConnectorStaging.of(tenantId, runId, row.rowNumber(),
                         keyBuilder.build(row.values(), model.getNaturalKeyFields()),
-                        row.values()))
+                        readableMoments(row.values())))
                 .toList();
 
         repository.saveAll(entities);
