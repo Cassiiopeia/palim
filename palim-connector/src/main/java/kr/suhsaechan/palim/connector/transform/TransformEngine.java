@@ -118,19 +118,6 @@ public class TransformEngine {
             }
         }
 
-        // 필수 검사는 매핑을 다 돌린 뒤에 한다. 매핑 순서에 결과가 좌우되면 안 된다.
-        for (TargetFieldSpec spec : fields) {
-            if (spec.required() && !StringUtils.hasText(
-                    Objects.toString(values.get(spec.fieldKey()), ""))) {
-                // 이 행만 버리고 나머지는 계속 적재되므로 WARN. 원인은 대개 둘 중 하나라
-                // (매핑 자체가 없거나 / 원천 값이 비었거나) 어느 원천칸에서 오기로 했는지 같이 남긴다.
-                log.warn("필수 칸이 비어 이 행을 버린다 — 행={} 필수칸={} 원천칸={} 채운칸={} 원천값={}",
-                        row.rowNumber(), spec.fieldKey(),
-                        sourceFieldOf(mappings, spec.fieldKey()), values.keySet(), row.values());
-                throw new BusinessException(ErrorCode.REQUIRED_FIELD_MISSING, spec.fieldKey());
-            }
-        }
-
         Map<String, Object> attributes = new LinkedHashMap<>();
         row.values().forEach((key, value) -> {
             if (!consumed.contains(key)) {
@@ -165,6 +152,31 @@ public class TransformEngine {
         log.warn("값 없는 고정값이라 고른 칸을 읽는다 — 목표칸={} 원천칸={} (매핑을 다시 저장하면 정리된다)",
                 mapping.targetFieldKey(), mapping.sourceField());
         return false;
+    }
+
+    /**
+     * 필수 칸이 채워졌는가.
+     *
+     * <p><b>매핑에서 떼어내 따로 둔 이유</b> — 매핑과 담기 사이에 사장님이 쓴 후처리 스크립트가
+     * 돈다. 검사를 매핑 안에서 끝내면 스크립트가 그 뒤에 필수 칸을 지워도 통과한 채로 담겨,
+     * 빈 품목코드가 조용히 들어간다. 검사는 <b>담기 직전, 마지막에</b> 있어야 한다.
+     *
+     * <p>이 행만 버리고 나머지는 계속 담긴다. 한 줄 때문에 전체를 버리지 않는다.
+     */
+    public void verifyRequired(MappedRow row, List<TargetFieldSpec> fields,
+                               List<FieldMapping> mappings, Map<String, Object> sourceValues) {
+        for (TargetFieldSpec spec : fields) {
+            if (spec.required() && !StringUtils.hasText(
+                    Objects.toString(row.values().get(spec.fieldKey()), ""))) {
+                // 원인은 대개 둘 중 하나다 — 매핑 자체가 없거나, 원천 값이 비었거나.
+                // 어느 원천칸에서 오기로 했는지 같이 남겨야 어느 쪽인지 갈린다.
+                log.warn("필수 칸이 비어 이 행을 버린다 — 행={} 필수칸={} 원천칸={} 채운칸={} 원천값={}",
+                        row.rowNumber(), spec.fieldKey(),
+                        sourceFieldOf(mappings, spec.fieldKey()), row.values().keySet(),
+                        sourceValues);
+                throw new BusinessException(ErrorCode.REQUIRED_FIELD_MISSING, spec.fieldKey());
+            }
+        }
     }
 
     /** 실패 로그용. 필수칸이 어느 원천칸에서 오기로 되어 있었는지 짚어준다. */

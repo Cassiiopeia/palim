@@ -53,13 +53,46 @@ class TransformEngineTest {
                 .containsEntry("비고", "메모");
     }
 
+    /**
+     * 필수 검사는 <b>매핑이 아니라 담기 직전</b>에 한다.
+     *
+     * <p>둘 사이에 사장님이 쓴 후처리 스크립트가 돈다. 매핑에서 검사를 끝내면 스크립트가 그
+     * 뒤에 필수 칸을 지워도 통과한 채로 담겨, <b>빈 품목코드가 조용히 들어간다.</b>
+     */
     @Test
-    @DisplayName("필수 필드가 비면 실패시킨다")
+    @DisplayName("필수 필드가 비면 담기 직전 검사에서 걸린다")
     void 필수_필드가_비면_실패() {
-        assertThatThrownBy(() -> engine.map(
-                row(Map.of("품목코드", "")),
-                List.of(FieldMapping.of("품목코드", "item_ref")),
-                List.of(spec("item_ref", FieldDataType.STRING, true)), java.util.Map.of()))
+        List<TargetFieldSpec> specs = List.of(spec("item_ref", FieldDataType.STRING, true));
+        List<FieldMapping> mappings = List.of(FieldMapping.of("품목코드", "item_ref"));
+
+        MappedRow mapped = engine.map(row(Map.of("품목코드", "")), mappings, specs,
+                java.util.Map.of());
+
+        assertThatThrownBy(() -> engine.verifyRequired(mapped, specs, mappings, mapped.values()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.REQUIRED_FIELD_MISSING);
+    }
+
+    /**
+     * 스크립트가 필수 칸을 지운 경우.
+     *
+     * <p>모든 칸을 열어 두기로 했으므로 이런 일이 실제로 생긴다. 막지 않고 <b>담기 직전에
+     * 잡아</b> 그 줄만 떨어뜨린다 — 진짜 표는 멀쩡하고, 왜 떨어졌는지는 기록에 남는다.
+     */
+    @Test
+    @DisplayName("스크립트가 필수 칸을 지워도 담기 직전에 걸린다")
+    void 스크립트가_지워도_걸린다() {
+        List<TargetFieldSpec> specs = List.of(spec("item_ref", FieldDataType.STRING, true));
+        List<FieldMapping> mappings = List.of(FieldMapping.of("품목코드", "item_ref"));
+
+        MappedRow mapped = engine.map(row(Map.of("품목코드", "A-001")), mappings, specs,
+                java.util.Map.of());
+        // 스크립트가 돌고 난 뒤의 모습 — 품목코드가 지워졌다
+        MappedRow afterScript = new MappedRow(mapped.rowNumber(),
+                new java.util.LinkedHashMap<>(Map.of("item_ref", "")), mapped.attributes());
+
+        assertThatThrownBy(() ->
+                engine.verifyRequired(afterScript, specs, mappings, afterScript.values()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.REQUIRED_FIELD_MISSING);
     }
