@@ -22,6 +22,7 @@ import kr.suhsaechan.palim.connector.source.SourceReaderRegistry;
 import kr.suhsaechan.palim.connector.source.SourceRow;
 import kr.suhsaechan.palim.connector.source.SourceSchema;
 import kr.suhsaechan.palim.connector.transform.FieldMapping;
+import kr.suhsaechan.palim.connector.script.PostScriptStage;
 import kr.suhsaechan.palim.connector.transform.MappedRow;
 import kr.suhsaechan.palim.connector.transform.TargetFieldSpec;
 import kr.suhsaechan.palim.connector.transform.TransformEngine;
@@ -60,6 +61,7 @@ public class ConnectorRunner {
     private final QuantityNormalizer quantityNormalizer;
     private final WriterSelector writerSelector;
     private final ConnectorRunRepository runRepository;
+    private final PostScriptStage postScripts;
     private final ConnectorRunErrorRepository errorRepository;
 
     public ConnectorRun run(RunRequest request) {
@@ -157,13 +159,18 @@ public class ConnectorRunner {
                     continue;
                 }
                 if (buffer.size() >= CHUNK_SIZE) {
-                    success += flush(connector, run, model, writer, buffer);
+                    FlushResult flushed =
+                            flush(connector, run, model, writer, buffer, specs, mappings, request);
+                    success += flushed.written();
+                    failed += flushed.failed();
                 }
             }
         }
         log.debug("원천 읽기 종료 — 실행id={} 읽은행={}건 변환실패={}건 잔여버퍼={}건",
                 run.getId(), total, failed, buffer.size());
-        success += flush(connector, run, model, writer, buffer);
+        FlushResult last = flush(connector, run, model, writer, buffer, specs, mappings, request);
+        success += last.written();
+        failed += last.failed();
 
         run.finish(total, success, failed);
         if (failed > 0) {
@@ -176,23 +183,61 @@ public class ConnectorRunner {
         return runRepository.save(run);
     }
 
-    private int flush(Connector connector, ConnectorRun run, TargetModel model,
-                      RecordWriter writer, List<MappedRow> buffer) {
+    /**
+     * 청크 하나를 담은 결과.
+     *
+     * <p>실패 건수를 함께 돌려주는 이유는 <b>필수 검사가 담기 직전으로 옮겨졌기</b> 때문이다.
+     * 예전에는 매핑에서 걸러 호출부가 세면 됐는데, 이제 여기서도 떨어지는 줄이 생긴다.
+     */
+    private record FlushResult(int written, int failed) {
+    }
+
+    private FlushResult flush(Connector connector, ConnectorRun run, TargetModel model,
+                      RecordWriter writer, List<MappedRow> buffer,
+                      List<TargetFieldSpec> specs, List<FieldMapping> mappings,
+                      RunRequest request) {
         if (buffer.isEmpty()) {
-            return 0;
+            return new FlushResult(0, 0);
         }
-        int pending = buffer.size();
+        // 사장님이 쓴 스크립트가 여기서 돈다 — 담기 «직전» 이다.
+        //
+        // 담고 나서 고치면 「담긴 값」과 「보이는 값」이 한동안 달라지고, 그 어긋남은 오류로
+        // 남지 않아 찾기 어렵다. 시험 실행도 같은 자리를 지나므로 «시험에서는 되는데 실제로는
+        // 다른» 상태가 생기지 않는다.
+        List<MappedRow> rows = request.skipPostScripts()
+                ? List.copyOf(buffer)
+                : postScripts.apply(connector.getTenantId(), connector.getId(), run.getId(),
+                        List.copyOf(buffer));
+
+        // 필수 검사는 스크립트 «뒤» 다. 앞에서 하면 스크립트가 필수 칸을 지워도 통과한 채로
+        // 담겨, 빈 품목코드가 조용히 들어간다.
+        List<MappedRow> ready = new ArrayList<>(rows.size());
+        int dropped = 0;
+        for (MappedRow row : rows) {
+            try {
+                transformEngine.verifyRequired(row, specs, mappings, row.values());
+                ready.add(row);
+            } catch (BusinessException e) {
+                recordError(connector, run, new SourceRow(row.rowNumber(), row.values()), e);
+                dropped++;
+            }
+        }
+
+        int pending = ready.size();
+        buffer.clear();
+        if (pending == 0) {
+            return new FlushResult(0, dropped);
+        }
         log.debug("청크 적재 시작 — 실행id={} 대상모델={} 저장소={} {}건",
                 run.getId(), model.getCode(), model.getStorage(), pending);
         int written = writer.write(connector.getTenantId(), run.getId(), model,
-                List.copyOf(buffer)).written();
-        buffer.clear();
+                ready).written();
         log.debug("청크 적재 완료 — 실행id={} 요청={}건 반영={}건", run.getId(), pending, written);
         if (written != pending) {
             log.warn("청크 반영 수 불일치 — 실행id={} 커넥터={} 요청={}건 반영={}건",
                     run.getId(), connector.getCode(), pending, written);
         }
-        return written;
+        return new FlushResult(written, dropped);
     }
 
     /**
