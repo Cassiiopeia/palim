@@ -354,7 +354,15 @@ public class ConnectorController {
         model.addAttribute("run", queryService.runs(id, RUN_HISTORY_LIMIT).stream()
                 .filter(summary -> summary.id().equals(runId))
                 .findFirst().orElse(null));
-        model.addAttribute("errors", queryService.errors(runId, ERROR_ROW_LIMIT));
+        // 실패한 줄을 하나씩 늘어놓으면 같은 원인이 수십 번 반복되고, 그 옆에 칸 스무 개짜리
+        // 원문이 붙는다. 사람이 알아야 하는 것은 «무엇이 왜 안 됐고 어디를 고치면 되는지» 다.
+        Map<String, String> labels = new LinkedHashMap<>();
+        adminService.targetFields(id)
+                .forEach(field -> labels.put(field.getFieldKey(), field.getDisplayName()));
+        Map<String, String> sourceOf = new LinkedHashMap<>();
+        existingByTarget(id).forEach((target, map) -> sourceOf.put(target, map.getSourceField()));
+        model.addAttribute("errorGroups", RunErrorGroupView.of(
+                queryService.errors(runId, ERROR_ROW_LIMIT), labels, sourceOf));
 
         // JSON 원문을 그대로 뿌리면 값이 제대로 들어갔는지 사람이 중괄호를 읽어야 한다.
         // 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 된다.

@@ -121,8 +121,14 @@
         </details>
     </section>
 
-    <!--/* 담지 못한 줄 — «왜» 가 함께 있어야 고칠 수 있다. */-->
-    <section class="mb-8" th:unless="${errors.isEmpty()}">
+    <!--/* 담지 못한 줄 — 원인별로 묶는다.
+
+           예전에는 실패한 줄을 하나씩 늘어놓았다. 24줄이 같은 이유로 떨어지면 같은 말이 24번
+           나오고 그 옆에 칸 스무 개짜리 원문이 붙었다. 화면을 봐도 무엇을 고쳐야 할지 알 수
+           없어 결국 서버 로그를 뒤져야 했다 — 확인하라고 만든 화면이 확인을 못 하게 했다.
+
+           원인은 대개 몇 가지뿐이다. 줄 수는 «얼마나 퍼졌는지» 를 말할 뿐이다. */-->
+    <section class="mb-8" th:unless="${errorGroups.isEmpty()}">
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">담지 못한 줄</h2>
             <span class="text-xs text-base-content/60">
@@ -131,42 +137,42 @@
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body p-0">
-            <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                <tr class="text-xs">
-                    <th class="w-12">줄</th>
-                    <th class="w-1/3">왜 못 담았나</th>
-                    <th>저쪽이 보낸 값</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="e : ${errors}">
-                    <td class="tabular-nums text-base-content/60" th:text="${e.rowNumber}">1</td>
-                    <td>
-                        <div class="text-sm" th:text="${e.message}">메시지</div>
-                        <div class="text-xs text-base-content/60 mt-0.5"
-                             th:text="${e.errorCode}">코드</div>
-                    </td>
-                    <td>
-                        <code class="text-xs break-all text-base-content/60"
-                              th:text="${e.sourceRow}">{}</code>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-            </div>
-          </div>
-        </div>
+        <div class="grid gap-3">
+            <div th:each="g : ${errorGroups}" class="card bg-base-100 shadow-sm">
+                <div class="card-body gap-3">
+                    <div class="flex flex-wrap items-baseline gap-2">
+                        <!--/* 원인이 제목이다. 코드는 제목이 될 수 없다 — «K007» 이 무엇인지
+                               찾으러 화면을 떠나게 된다. */-->
+                        <h3 class="font-semibold" th:text="${g.title}">원인</h3>
+                        <span class="badge badge-ghost badge-sm tabular-nums"
+                              th:text="${g.count} + '줄'">0줄</span>
+                        <span class="text-xs text-base-content/60"
+                              th:text="${g.rowRange}">1–24번 줄</span>
+                    </div>
 
-        <p class="text-xs text-base-content/60 mt-2">
-            숫자·날짜를 바꾸다 실패했을 때는 <b>저쪽이 보낸 값</b>을 봐야 원인이 보입니다.
-        </p>
+                    <!--/* 원인만 알려주고 끝내면 사람은 거기서 멈춘다. */-->
+                    <p class="text-sm" th:text="${g.hint}">무엇을 하면 되는지</p>
+
+                    <div th:unless="${#lists.isEmpty(g.evidence)}"
+                         class="flex flex-wrap gap-x-4 gap-y-1">
+                        <span th:each="e : ${g.evidence}"
+                              class="font-mono text-xs text-base-content/60"
+                              th:text="${e}">칸 = 값</span>
+                    </div>
+
+                    <details class="collapse collapse-arrow bg-base-200">
+                        <summary class="collapse-title text-sm">저쪽이 보낸 값 그대로 보기</summary>
+                        <div class="collapse-content">
+                            <code class="text-xs break-all text-base-content/60"
+                                  th:text="${g.raw}">{}</code>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
     </section>
 
-    <div th:if="${errors.isEmpty() and staging.isEmpty()}" class="card bg-base-100 shadow-sm">
+    <div th:if="${errorGroups.isEmpty() and staging.isEmpty()}" class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
             <p class="text-base-content/70">보여줄 내역이 없습니다.</p>
             <p class="text-sm text-base-content/60">
