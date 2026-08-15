@@ -63,11 +63,11 @@
                             <td class="text-right">
                                 <div class="flex gap-1 justify-end">
                                     <!--/* 이 화면의 주 동작. 여기를 눌러야 대조에 들어간다. */-->
-                                    <form th:action="@{/reconcile/units/members/{id}/confirm(id=${m.id})}"
+                                    <form th:action="@{/reconcile/units/members/{id}/confirm(id=${m.id},definitionId=${definition?.id})}"
                                           method="post">
                                         <button type="submit" class="btn btn-primary btn-sm">맞습니다</button>
                                     </form>
-                                    <form th:action="@{/reconcile/units/members/{id}/detach(id=${m.id})}"
+                                    <form th:action="@{/reconcile/units/members/{id}/detach(id=${m.id},definitionId=${definition?.id})}"
                                           method="post">
                                         <button type="submit" class="btn btn-ghost btn-sm">아닙니다</button>
                                     </form>
@@ -85,13 +85,63 @@
 
            후보마다 카드를 쌓으면 카드 안에 표와 폼이 또 들어가 박스가 3겹이 된다 —
            표 하나로 편다(11-UI-RULES B7). */-->
-    <section class="mb-8" th:if="${candidates != null and not #lists.isEmpty(candidates)}">
+    <!--/* 대조가 여럿이면 «어느 두 곳에서» 찾을지 사람이 고른다. 예전에는 코드가 코드순
+           첫 번째를 집었는데, 그러면 정의 이름만 바꿔도 후보가 통째로 달라지면서 화면
+           어디에도 그 이유가 없었다. */-->
+    <section class="mb-8" th:if="${mustPickDefinition}">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">어느 대조에서 찾을까요</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-3">
+                <p class="text-sm text-base-content/70">
+                    어느 두 곳에서 이을 품목을 찾을지 고르세요.
+                    <b>이어 둔 것은 모든 대조가 함께 씁니다</b> — 여기서 고르는 것은 찾아볼
+                    범위일 뿐입니다.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <a th:each="d : ${definitions}"
+                       th:href="@{/reconcile/units(definitionId=${d.id})}"
+                       class="btn btn-sm btn-ghost">
+                        <span th:text="${d.name}">대조</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 「이을 만한 것」 구역. «어느 대조에서 찾았는지» 와 «다른 대조로 가는 길» 은 후보가
+           0건이어도 남아야 한다 — 표 안에 두면 0건일 때 통째로 사라져, 화면이 무엇을 골랐는지
+           말하지도 않고 되돌아갈 길도 없는 상태가 된다(11-UI-RULES E5). */-->
+    <section class="mb-8" th:if="${definition != null}">
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">이을 만한 것</h2>
             <span class="text-xs text-base-content/60">이름이 비슷한 것끼리 묶어 봤습니다</span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
+        <p class="text-sm text-base-content/60 mb-2">
+            <span th:text="${definition.leftSource}">좌</span>
+            <span class="mx-1 text-base-content/40">↔</span>
+            <span th:text="${definition.rightSource}">우</span>
+            <span class="ml-1">에서 찾았습니다.</span>
+            <a th:if="${definitions != null and #lists.size(definitions) > 1}"
+               th:href="@{/reconcile/units}" class="link ml-1">다른 대조에서 찾기</a>
+        </p>
+
+        <!--/* 0건도 결과다. 아무것도 안 그리면 「고르긴 했는데 아무 일도 안 났다」 가 된다. */-->
+        <div th:if="${candidates == null or #lists.isEmpty(candidates)}"
+             class="card bg-base-100 shadow-sm">
+            <div class="card-body items-center text-center py-10">
+                <p class="text-base-content/70">이 두 곳에서 새로 이을 만한 것을 찾지 못했습니다.</p>
+                <p class="text-sm text-base-content/60">
+                    아직 담긴 자료가 없거나, 이미 다 이어 두었을 수 있습니다.
+                </p>
+            </div>
+        </div>
+
+        <th:block th:if="${candidates != null and not #lists.isEmpty(candidates)}">
         <div class="card bg-base-100 shadow-sm">
             <div class="card-body p-0">
                 <div class="overflow-x-auto">
@@ -127,7 +177,7 @@
                                 </div>
                             </td>
                             <td class="align-top">
-                                <form th:action="@{/reconcile/units/from-candidate}" method="post"
+                                <form th:action="@{/reconcile/units/from-candidate(definitionId=${definition?.id})}" method="post"
                                       class="flex flex-wrap gap-2 items-end">
                                     <input type="hidden" name="sources" th:each="i : ${c.items}"
                                            th:value="${i.source}">
@@ -158,6 +208,7 @@
                 </div>
             </div>
         </div>
+        </th:block>
     </section>
 
     <!--/* 이미 정한 것들. 확인을 통과했다는 사실은 «이 구역에 있다» 는 것으로 말한다. */-->

@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -18,6 +19,8 @@ import kr.suhsaechan.palim.notification.payload.NewOrderPayload;
 import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
 import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
 import kr.suhsaechan.palim.notification.payload.UnmappedProductPayload;
@@ -57,6 +60,16 @@ class NotificationMessageIntegrationTest extends IntegrationTest {
             case STOCK_PUSH_FAILURE -> new StockPushFailurePayload("롯데온", "SKU-005",
                     "전송실패 상품", 10, 0, true, "변동량 상한 초과");
             case STOCK_MISMATCH -> new StockMismatchPayload("SKU-006", "불일치 상품", 20, 17);
+            // 대조 알림 둘은 위 STOCK_MISMATCH 와 «다른 사건» 이다. 한때 종류를 빌려 써서
+            // 받는 쪽이 빈 값을 그렸다 — 여기 각자 들어 있는 것 자체가 그 재발을 막는다.
+            case RECONCILE_MISMATCH -> new ReconcileMismatchPayload(
+                    "전산 대 물류", "erp-stock", "wms-stock",
+                    Instant.parse("2026-08-15T00:00:00Z"), 7,
+                    List.of(new ReconcileMismatchPayload.Sample("UNIT-1",
+                            new BigDecimal("120"), new BigDecimal("118"), new BigDecimal("2"))));
+            case RECONCILE_BLOCKED -> new ReconcileBlockedPayload(
+                    "전산 대 물류", "「물류」 쪽에 비교할 재고가 없습니다.", 3,
+                    Instant.parse("2026-08-15T06:30:00Z"));
             case DAILY_REPORT -> new DailyReportPayload(
                     LocalDate.of(2026, 7, 27), 24, 487_600L,
                     List.of(new DailyReportPayload.ChannelSummary("쿠팡", 14, 281_200L),

@@ -366,6 +366,36 @@
             확정하면 이 연결이 실행 기록에 남습니다. 나중에 바꿔도
             <b>과거 자료가 어느 기준으로 들어왔는지</b> 설명할 수 있습니다.
         </p>
+
+        <!--/* 시험과 적재가 «다른 판» 으로 도는 상태. 일부러 그렇게 만든 구조지만(최신 판으로
+               시험, 확정판으로 적재) 화면이 말해 주지 않으면 「시험은 됐는데 적재만 실패」가
+               되고, 사람은 같은 화면에서 같은 버튼을 눌렀으므로 무엇이 달랐는지 모른다.
+
+               경고 옆에 「연결 확정」 이 이미 있어 여기서 바로 풀 수 있다 — 막다른 길이 아니다.
+
+               «칸이 있는 초안» 일 때만 뜬다. 「다시 받아오기」 가 만든 빈 초안에서도 뜨면
+               문구가 사실과 반대가 되고, 그 문구가 권하는 확정이 멀쩡한 판을 내려버린다. */-->
+        <div th:if="${mappingState != null and mappingState.drifted()}"
+             class="alert alert-warning mb-3" role="alert">
+            <span class="text-sm">
+                지금 <b>시험</b>은 방금 고친 것(<span th:text="'v' + ${mappingState.latestVersion}">v2</span>)으로 돌고,
+                <b>실제 적재</b>는 확정해 둔 옛 것(<span th:text="'v' + ${mappingState.activeVersion}">v1</span>)으로 돕니다.
+                시험이 잘 됐다면 <b>「연결 확정」을 먼저 누르세요</b> — 안 그러면 적재만 실패합니다.
+            </span>
+        </div>
+
+        <!--/* 아직 칸을 안 골랐다. 이것은 «잘못» 이 아니라 아직 안 한 일이라 경고색을 쓰지
+               않는다 — 정상 설정 과정 내내 주황이 떠 있으면 색이 뜻을 잃는다(11-UI-RULES). */-->
+        <p th:if="${mappingState != null and mappingState.needsFields()}"
+           class="text-sm text-base-content/70 mb-3">
+            아직 이어 둔 칸이 없습니다. 위에서 칸을 고른 뒤 <b>「연결 저장」</b> 을 먼저 누르세요 —
+            빈 채로는 확정할 수 없습니다.
+        </p>
+        <p th:if="${mappingState != null and mappingState.neverActivated()}"
+           class="text-sm text-base-content/70 mb-3">
+            아직 한 번도 확정하지 않았습니다. <b>「연결 확정」</b> 을 눌러야 담을 수 있습니다.
+        </p>
+
         <div class="flex flex-wrap gap-2 items-end">
             <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post">
                 <button type="submit" class="btn btn-sm">연결 확정</button>

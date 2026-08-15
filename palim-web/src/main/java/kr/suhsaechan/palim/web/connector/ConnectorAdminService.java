@@ -270,6 +270,18 @@ public class ConnectorAdminService {
                 .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MAPPING_NOT_FOUND));
 
+        // 이을 칸이 하나도 없는 초안은 확정하지 않는다.
+        //
+        // 확정은 되돌리기 어렵다 — 쓰던 확정판이 내려가고 이것이 그 자리에 올라간다. 빈
+        // 초안을 올리면 그 뒤의 모든 적재가 「필수 칸이 비었다」 로 전 행 실패하는데, 확정
+        // 자체는 정상적으로 끝난 것처럼 보여 원인을 찾기 어렵다.
+        //
+        // 빈 초안은 사람이 만든 것이 아닐 수 있다. 「다시 받아오기」 가 저장된 초안이 없으면
+        // 빈 초안을 새로 만들기 때문에, 확정 직후 칸 구조만 갱신해도 이 상태가 된다.
+        if (fieldMapRepository.findByMappingIdOrderBySortOrder(draft.getId()).isEmpty()) {
+            throw new BusinessException(ErrorCode.MAPPING_EMPTY);
+        }
+
         mappingRepository.findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
                 .ifPresent(active -> {
                     active.archive();
