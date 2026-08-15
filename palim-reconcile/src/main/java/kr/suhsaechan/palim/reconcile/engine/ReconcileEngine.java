@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -48,6 +49,8 @@ public class ReconcileEngine {
     private final SnapshotAggregator aggregator;
     private final BaseAtResolver baseAtResolver;
     private final DiffPromoter promoter;
+    /** 실패 사유를 사람 말로 옮긴다. 로그용 문자열이 화면에 그대로 나가면 안 된다. */
+    private final ErrorMessageResolver errorMessages;
 
     /**
      * 대조 한 번.
@@ -79,9 +82,14 @@ public class ReconcileEngine {
                     definition.getLeftSource(), definition.getRightSource(),
                     e.getErrorCode(), Arrays.toString(e.messageArgs()), e);
             // 실패도 기록이다. 「어제는 왜 안 돌았나」 에 답할 수 있어야 사람이 고친다.
+            //
+            // getMessage() 를 그대로 담지 않는다. 그것은 「RECONCILE_SNAPSHOT_MISSING(R002)
+            // args=[ecount-stock]」 같은 로그용 문자열이라, 화면에 그대로 나가면 사람은
+            // 무엇을 해야 하는지 알 수 없다 — 실제로 그 화면을 보고 원인을 못 찾아 서버
+            // 로그를 뒤져야 했다. 연동 화면은 이 규칙을 지키고 있었는데 대조 화면만 빠져 있었다.
             ReconcileRun failed = runs.save(
                     ReconcileRun.start(tenantId, definitionId, Instant.EPOCH));
-            failed.fail(e.getMessage());
+            failed.fail(errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return runs.save(failed);
         }
 

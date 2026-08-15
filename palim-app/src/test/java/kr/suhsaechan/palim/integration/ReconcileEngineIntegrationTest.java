@@ -223,4 +223,32 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
         assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
         assertThat(run.getMessage()).isNotBlank();
     }
+
+    /**
+     * 실패 사유가 <b>사람 말</b>인가.
+     *
+     * <p>사장님이 대조를 눌렀을 때 화면에 이런 것이 떴다.
+     *
+     * <pre>RECONCILE_SNAPSHOT_MISSING(R002) args=[ecount-stock]</pre>
+     *
+     * <p>이건 로그용 문자열이다. 「R002 가 뭐지」 를 찾으러 화면을 떠나야 하고, 결국 서버
+     * 로그를 뒤져야 원인을 알 수 있었다. <b>사람 말은 이미 준비돼 있었는데 쓰이지 않고
+     * 있었다</b> — 연동 화면은 이 규칙을 지키는데 대조 화면만 빠져 있었다.
+     */
+    @Test
+    @DisplayName("실패 사유를 코드가 아니라 사람 말로 남긴다")
+    void 사유를_사람_말로_남긴다() {
+        // 한쪽에만 자료가 있는 상태 — 담기를 안 했을 때 사장님이 겪는 그 상황이다
+        snapshot(erp, "E-" + UUID.randomUUID().toString().substring(0, 6), "10", baseAt);
+
+        ReconcileRun run = engine.run(definition("0").getId());
+
+        assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
+        assertThat(run.getMessage())
+                .as("코드 이름이 그대로 나가면 무엇을 해야 하는지 알 수 없다")
+                .doesNotContain("R002")
+                .doesNotContain("args=")
+                .doesNotContain("RECONCILE_SNAPSHOT_MISSING")
+                .contains("비교할 재고가 없습니다");
+    }
 }

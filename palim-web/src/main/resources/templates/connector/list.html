@@ -47,6 +47,7 @@
                         <th>자동 수집</th>
                         <!--/* 상세의 행 이름과 같아야 «목록에서 본 그 칸» 이 상세의 어디인지 이어진다. */-->
                         <th>실행 이력</th>
+                        <th class="text-right">조작</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -56,7 +57,11 @@
                         <td>
                             <a th:href="@{/connectors/{id}(id=${c.id})}"
                                class="link link-hover font-medium" th:text="${c.name}">이름</a>
-                            <div class="text-xs text-base-content/60" th:text="${c.sourceType}">원천</div>
+                            <div class="text-xs text-base-content/60">
+                                <span th:text="${c.sourceType}">원천</span>
+                                <!--/* 꺼 둔 것이 켜진 것과 똑같이 보이면 «왜 안 돌지» 가 생긴다. */-->
+                                <span th:unless="${c.enabled}" class="ml-1">· 꺼짐</span>
+                            </div>
                         </td>
                         <!--/* 끝난 일에는 색을 쓰지 않는다 — 색은 «여기를 보라» 일 때만 켠다. */-->
                         <td class="text-sm">
@@ -94,6 +99,23 @@
                             <span th:if="${c.lastRunAt != null and !c.hasFailure}"
                                   class="text-base-content/60 ml-1"
                                   th:text="${c.lastSuccess} + '건'">0건</span>
+                        </td>
+                        <!--/* 끄기와 지우기.
+
+                               지우기는 «쓴 적 없는 것» 에만 통한다. 자료를 담았거나 대조가
+                               쓰고 있으면 막고 이유를 말한다 — DB 에 외래키가 없어 그냥 지우면
+                               대조가 다음 날 아침 조용히 깨진다. */-->
+                        <td class="text-right whitespace-nowrap">
+                            <form th:action="@{/connectors/{id}/enabled(id=${c.id})}" method="post"
+                                  class="inline">
+                                <input type="hidden" name="enabled" th:value="${!c.enabled}">
+                                <button type="submit" class="btn btn-ghost btn-xs"
+                                        th:text="${c.enabled} ? '끄기' : '켜기'">끄기</button>
+                            </form>
+                            <form th:action="@{/connectors/{id}/remove(id=${c.id})}" method="post"
+                                  class="inline">
+                                <button type="submit" class="btn btn-ghost btn-xs">지우기</button>
+                            </form>
                         </td>
                     </tr>
                     </tbody>

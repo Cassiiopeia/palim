@@ -60,6 +60,7 @@ public class ConnectorController {
     private final ErrorMessageResolver errorMessages;
     private final MappingViewAssembler assembler;
     private final PostScriptAdminService postScripts;
+    private final ConnectorRemovalService removal;
 
     @GetMapping("/connectors")
     public String list(Model model) {
@@ -344,6 +345,37 @@ public class ConnectorController {
             }
         }
         return "redirect:/connectors/" + id + "/mapping";
+    }
+
+    /**
+     * 연동 지우기.
+     *
+     * <p>자료를 담은 적이 있거나 대조가 쓰고 있으면 <b>막고 이유를 말한다.</b> DB 에 외래키가
+     * 없어 지우는 것 자체는 아무것도 막아주지 않는다 — 그대로 지우면 대조가 다음 날 아침
+     * 조용히 깨지고, 화면에는 「비교할 재고가 없습니다」 만 떠서 원인을 알 수 없다.
+     */
+    @PostMapping("/connectors/{id}/remove")
+    public String remove(@PathVariable UUID id, RedirectAttributes redirect) {
+        String blocked = removal.blockedReason(id);
+        if (blocked != null) {
+            redirect.addFlashAttribute("flashError", blocked);
+            return "redirect:/connectors";
+        }
+        removal.remove(id);
+        redirect.addFlashAttribute("flashSuccess", "연동을 지웠습니다.");
+        return "redirect:/connectors";
+    }
+
+    /** 끄고 켜기. 수집은 멈추되 담긴 자료와 대조 정의는 그대로 산다. */
+    @PostMapping("/connectors/{id}/enabled")
+    public String changeEnabled(@PathVariable UUID id,
+                                @RequestParam(defaultValue = "false") boolean enabled,
+                                RedirectAttributes redirect) {
+        removal.changeEnabled(id, enabled);
+        redirect.addFlashAttribute("flashSuccess",
+                enabled ? "다시 켰습니다. 정해 둔 시각에 수집합니다."
+                        : "껐습니다. 담긴 자료와 대조 정의는 그대로 남습니다.");
+        return "redirect:/connectors";
     }
 
     @GetMapping("/connectors/{id}/runs")
