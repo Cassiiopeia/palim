@@ -1,17 +1,11 @@
 package kr.suhsaechan.palim.web.connector;
 
-import java.math.BigDecimal;
-import java.text.DecimalFormat;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,17 +22,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 public final class StagingTableView {
-
-    /** 숫자 표기. {@code 9451.0000000000} 을 그대로 두면 자릿수를 눈으로 셀 수 없다. */
-    private static final DecimalFormat NUMBER = new DecimalFormat("#,##0.###");
-
-    /**
-     * 시각 표기. 다른 화면과 같은 형식을 쓴다(11-UI-RULES).
-     *
-     * <p>시각은 안에서 «1970년부터 몇 초» 로 다룬다. 그것을 그대로 뿌리면 {@code 1,786,719,600}
-     * 이 되어 <b>사람이 읽을 수 없고</b>, 숫자로 보이니 수량과 구분되지도 않는다.
-     */
-    private static final DateTimeFormatter MOMENT = DateTimeFormatter.ofPattern("MM-dd HH:mm");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -72,13 +55,12 @@ public final class StagingTableView {
      * <p>칸 목록은 <b>실제로 담긴 것들의 합집합</b>이다. 매핑에 있는 항목이라도 값이 하나도
      * 없으면 보여줄 이유가 없고, 빈 칸이 늘어서면 정작 봐야 할 값이 묻힌다.
      */
-    public static StagingTableView of(List<StagingRow> staging, Set<String> momentColumns) {
+    public static StagingTableView of(List<StagingRow> staging) {
         Set<String> columns = new LinkedHashSet<>();
         List<Map<String, String>> parsed = new ArrayList<>();
-        Predicate<String> isMoment = momentColumns::contains;
 
         for (StagingRow row : staging) {
-            Map<String, String> values = parse(row.payload(), isMoment);
+            Map<String, String> values = parse(row.payload());
             parsed.add(values);
             columns.addAll(values.keySet());
         }
@@ -96,12 +78,12 @@ public final class StagingTableView {
         return new StagingTableView(ordered, rows);
     }
 
-    private static Map<String, String> parse(String payload, Predicate<String> isMoment) {
+    private static Map<String, String> parse(String payload) {
         Map<String, String> values = new LinkedHashMap<>();
         try {
             JsonNode node = MAPPER.readTree(payload == null ? "{}" : payload);
             node.properties().forEach(entry -> values.put(entry.getKey(),
-                    readable(entry.getValue(), isMoment.test(entry.getKey()))));
+                    readable(entry.getValue())));
         } catch (RuntimeException e) {
             // 읽지 못해도 화면은 열려야 한다. 원문을 그대로 한 칸에 넣어 사람이 볼 수 있게 둔다.
             log.warn("시험 결과를 표로 펼치지 못했다. 원문을 그대로 보여준다.", e);
@@ -113,42 +95,26 @@ public final class StagingTableView {
     /**
      * 값 하나를 읽을 수 있게 만든다.
      *
+     * <p><b>화면은 값을 손대지 않는다.</b> 여기는 「진짜로 넣기 전에 눈으로 보는」 자리라,
+     * 보이는 것과 담긴 것이 다르면 확인이 거짓이 된다. 읽기 좋게 만드는 일은 담을 때 한다.
+     *
      * <p>중첩 객체({@code attributes})는 통째로 펼치지 않는다. 표가 옆으로 끝없이 늘어나
      * 정작 봐야 할 수량·품목이 화면 밖으로 밀린다.
      */
-    private static String readable(JsonNode value, boolean moment) {
+    private static String readable(JsonNode value) {
         if (value == null || value.isNull()) {
             return "";
         }
+        // 중첩 객체만 예외다. 통째로 펼치면 표가 옆으로 끝없이 늘어나 정작 봐야 할 수량·품목이
+        // 화면 밖으로 밀린다.
         if (value.isObject() || value.isArray()) {
             return value.isEmpty() ? "" : "…";
         }
-        if (moment) {
-            return asMoment(value);
-        }
-        if (value.isNumber()) {
-            return NUMBER.format(value.decimalValue());
-        }
-        // 글자로 온 것은 글자로 둔다.
+        // 그 밖에는 받은 값을 그대로 보여준다.
         //
-        // 예전에는 숫자처럼 보이면 숫자로 바꿨다. 그래서 품목코드 «00094» 가 «94» 로 보였다 —
-        // 앞자리 0 이 사라지고 천 단위 쉼표가 붙어 «01002» 는 «1,002» 가 됐다. 담긴 값은
-        // 멀쩡한데 화면만 거짓말을 하는 셈이라, 확인하라고 만든 화면이 확인을 망친다.
+        // 예전에는 숫자처럼 «생긴» 값을 숫자로 다듬었다. 그래서 품목코드 «00094» 가 «94» 로,
+        // «01002» 가 «1,002» 로 보였다. 담긴 것은 멀쩡한데 화면만 다르게 말하는 셈이라,
+        // 진짜로 넣기 전에 눈으로 보라고 만든 자리가 오히려 판단을 망쳤다.
         return value.asString();
-    }
-
-    /** «1970년부터 몇 초» 를 사람이 읽는 시각으로. 소수점이 붙어 오는 경우가 있다. */
-    private static String asMoment(JsonNode value) {
-        try {
-            BigDecimal epochSeconds = value.isNumber()
-                    ? value.decimalValue()
-                    : new BigDecimal(value.asString());
-            return Instant.ofEpochMilli(epochSeconds.multiply(BigDecimal.valueOf(1000)).longValue())
-                    .atZone(ZoneId.systemDefault())
-                    .format(MOMENT);
-        } catch (RuntimeException e) {
-            // 시각으로 못 읽으면 원래 값을 그대로 보여준다. 화면이 멈출 이유는 아니다.
-            return value.asString();
-        }
     }
 }

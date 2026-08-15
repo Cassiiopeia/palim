@@ -14,7 +14,6 @@ import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
 import kr.suhsaechan.palim.connector.define.SourceType;
-import kr.suhsaechan.palim.connector.model.FieldDataType;
 import kr.suhsaechan.palim.connector.model.TargetField;
 import kr.suhsaechan.palim.connector.run.ConnectorRun;
 import kr.suhsaechan.palim.connector.run.ConnectorRunner;
@@ -370,15 +369,9 @@ public class ConnectorController {
 
         // JSON 원문을 그대로 뿌리면 값이 제대로 들어갔는지 사람이 중괄호를 읽어야 한다.
         // 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 된다.
-        // 시각은 안에서 «1970년부터 몇 초» 로 다룬다. 어느 칸이 시각인지 알려주지 않으면
-        // 화면이 그것을 수량과 같은 숫자로 뿌려 «1,786,719,600» 이 된다.
-        Set<String> moments = adminService.targetFields(id).stream()
-                .filter(field -> field.getDataType() == FieldDataType.TIMESTAMP
-                        || field.getDataType() == FieldDataType.DATE)
-                .map(TargetField::getFieldKey)
-                .collect(Collectors.toSet());
+        // 화면은 담긴 값을 그대로 보여준다. 읽기 좋게 만드는 일은 담을 때 끝낸다.
         model.addAttribute("staging",
-                StagingTableView.of(queryService.staging(runId, PREVIEW_LIMIT), moments));
+                StagingTableView.of(queryService.staging(runId, PREVIEW_LIMIT)));
         return "connector/run-detail";
     }
 
