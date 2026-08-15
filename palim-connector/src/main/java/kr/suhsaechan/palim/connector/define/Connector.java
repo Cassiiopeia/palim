@@ -153,6 +153,17 @@ public class Connector extends BaseTimeEntity {
         return new Connector(tenantId, code, name, targetModelId, sourceType, defaultUnit);
     }
 
+    /**
+     * 끄고 켜기.
+     *
+     * <p>지우는 것과 다르다. 이미 담은 자료가 있고 대조 정의가 이 연동의 <b>코드 이름으로</b>
+     * 원천을 가리키므로, 지우면 대조가 다음 날 아침 조용히 깨진다 — 화면에는 「비교할 재고가
+     * 없습니다」 만 뜨고 원인은 알 수 없다. 잠시 멈추려는 것이라면 끄는 쪽이 맞다.
+     */
+    public void changeEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
     public void configureSource(Map<String, Object> sourceConfig, String credentialRef) {
         this.sourceConfig = sourceConfig;
         this.credentialRef = credentialRef;
