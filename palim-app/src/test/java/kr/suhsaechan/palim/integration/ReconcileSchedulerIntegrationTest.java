@@ -6,9 +6,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.notification.NotificationOutbox;
+import kr.suhsaechan.palim.notification.NotificationOutboxRepository;
+import kr.suhsaechan.palim.notification.NotificationType;
+import kr.suhsaechan.palim.notification.OutboxService;
+import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileScheduler;
@@ -39,6 +45,8 @@ class ReconcileSchedulerIntegrationTest extends IntegrationTest {
     @Autowired private ReconcileDefinitionRepository definitions;
     @Autowired private ReconcileRunRepository runs;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private NotificationOutboxRepository outbox;
+    @Autowired private OutboxService outboxService;
 
     private Instant baseAt;
     private String erp;
@@ -158,5 +166,50 @@ class ReconcileSchedulerIntegrationTest extends IntegrationTest {
                 .isNotEmpty()
                 .allSatisfy(run -> assertThat(run.getStatus()).isEqualTo(RunStatus.SUCCESS));
         assertThat(runs.findByDefinitionIdOrderByStartedAtDesc(broken.getId())).isNotEmpty();
+    }
+
+    /**
+     * <b>찾은 차이가 실제로 나가는가.</b>
+     *
+     * <p>이 시험이 없으면 알림 경로가 통째로 죽어도 전 시험이 초록으로 남는다. 실제로 그랬다 —
+     * 대기열에 넣는 쪽이 {@code propagation = MANDATORY} 인데 스케줄러는 트랜잭션 밖이라
+     * 예외가 났고, 그 예외를 {@code runAll} 의 catch 가 「자동 대조 실패」 로 삼켰다. 회차는
+     * 엔진이 자기 트랜잭션에서 이미 SUCCESS 로 커밋한 뒤라 <b>실행 상태를 보는 시험도 통과</b>
+     * 했다. 차이를 찾아 놓고도 아무에게도 못 알리는 상태가 그렇게 숨어 있었다.
+     *
+     * <p>그래서 회차 상태가 아니라 <b>대기열에 실제로 들어갔는지</b>를 본다.
+     *
+     * <p>두 번 도는 이유는 승격 때문이다. 차이는 한 번 봤다고 확정되지 않는다 — 같은 차이가
+     * 두 회차 연속 나와야 확정되고, 확정된 것만 알린다.
+     */
+    @Test
+    @DisplayName("찾은 차이가 알림 대기열에 실제로 들어간다")
+    void 차이가_알림으로_나간다() {
+        ReconcileDefinition definition = linkedDefinition("100", "80", baseAt);
+
+        scheduler.runAll();
+        scheduler.runAll();
+
+        List<NotificationOutbox> sent = outbox.findAll().stream()
+                .filter(row -> row.getType() == NotificationType.RECONCILE_MISMATCH)
+                .filter(row -> row.getDedupeKey() != null)
+                .filter(row -> row.getDedupeKey().contains(definition.getCode()))
+                .toList();
+
+        assertThat(sent)
+                .as("차이를 찾아 놓고 못 알리면 대조가 있으나 마나다")
+                .hasSize(1);
+
+        // 받는 쪽이 읽는 모양 그대로 되읽는다. 한때 다른 종류의 형식으로 넣어 빈 값이 나갔다.
+        ReconcileMismatchPayload payload =
+                outboxService.readPayload(sent.getFirst(), ReconcileMismatchPayload.class);
+        assertThat(payload.definition()).isEqualTo(definition.getName());
+        assertThat(payload.leftSource()).isEqualTo(erp);
+        assertThat(payload.rightSource()).isEqualTo(wms);
+        assertThat(payload.count()).isPositive();
+        assertThat(payload.samples()).isNotEmpty();
+        assertThat(payload.baseAt())
+                .as("시각은 Instant 로 담아야 표시 직전에 지역 시각으로 바뀐다")
+                .isNotNull();
     }
 }

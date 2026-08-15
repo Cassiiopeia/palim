@@ -13,6 +13,10 @@ import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
+import kr.suhsaechan.palim.connector.define.ConnectorFieldMapRepository;
+import kr.suhsaechan.palim.connector.define.ConnectorMapping;
+import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
+import kr.suhsaechan.palim.connector.define.MappingStatus;
 import kr.suhsaechan.palim.connector.define.SourceType;
 import kr.suhsaechan.palim.connector.model.TargetField;
 import kr.suhsaechan.palim.connector.run.ConnectorRun;
@@ -61,6 +65,8 @@ public class ConnectorController {
     private final MappingViewAssembler assembler;
     private final PostScriptAdminService postScripts;
     private final ConnectorRemovalService removal;
+    private final ConnectorMappingRepository mappings;
+    private final ConnectorFieldMapRepository fieldMaps;
 
     @GetMapping("/connectors")
     public String list(Model model) {
@@ -101,6 +107,26 @@ public class ConnectorController {
      * <p>파일을 올리기 전에는 왼쪽(원천 필드)이 비어 있다. 목표 필드는 항상 보여준다 —
      * 무엇을 채워야 하는지 먼저 알아야 어떤 파일을 올릴지 판단할 수 있다.
      */
+    /**
+     * 시험이 쓰는 판과 적재가 쓰는 판이 같은가.
+     *
+     * <p>둘은 일부러 다르다(초안으로 시험, 확정판으로 적재). 화면이 그 차이를 말하지 않으면
+     * 「시험은 됐는데 적재만 실패」 가 되고, 사람은 같은 화면에서 같은 버튼을 눌렀으므로
+     * 무엇이 달랐는지 알 길이 없다.
+     */
+    private MappingStateView mappingState(UUID connectorId) {
+        Integer active = mappings
+                .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
+                .map(ConnectorMapping::getVersion).orElse(null);
+        ConnectorMapping latest = mappings
+                .findFirstByConnectorIdOrderByVersionDesc(connectorId).orElse(null);
+        // 「칸이 있는가」 로 «사람이 만든 초안» 과 «다시 받아오기가 만든 빈 뼈대» 를 가른다.
+        boolean hasFields = latest != null
+                && !fieldMaps.findByMappingIdOrderBySortOrder(latest.getId()).isEmpty();
+        return new MappingStateView(active,
+                latest == null ? null : latest.getVersion(), hasFields);
+    }
+
     @GetMapping("/connectors/{id}/mapping")
     public String mapping(@PathVariable UUID id, Model model) {
         Connector connector = adminService.connector(id);
@@ -112,6 +138,7 @@ public class ConnectorController {
         model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
         // 담기 직전에 값을 다듬는 스크립트들. 꺼 둔 것도 보여야 켜고 끌 수 있다.
         model.addAttribute("postScripts", postScripts.active(id));
+        model.addAttribute("mappingState", mappingState(id));
 
         // 담아 둔 것을 먼저 쓴다.
         //
@@ -213,8 +240,9 @@ public class ConnectorController {
             model.addAttribute("schema", schema);
             model.addAttribute("headerRow", headerRow);
             model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
-        // 담기 직전에 값을 다듬는 스크립트들. 꺼 둔 것도 보여야 켜고 끌 수 있다.
-        model.addAttribute("postScripts", postScripts.active(id));
+            // 담기 직전에 값을 다듬는 스크립트들. 꺼 둔 것도 보여야 켜고 끌 수 있다.
+            model.addAttribute("postScripts", postScripts.active(id));
+            model.addAttribute("mappingState", mappingState(id));
             addMappingView(model, id, connector, schema);
             return "connector/mapping";
 

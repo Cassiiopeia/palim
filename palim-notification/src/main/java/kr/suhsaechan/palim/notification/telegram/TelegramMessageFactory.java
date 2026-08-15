@@ -1,9 +1,11 @@
 package kr.suhsaechan.palim.notification.telegram;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 import kr.suhsaechan.palim.notification.NotificationOutbox;
 import kr.suhsaechan.palim.notification.OutboxService;
 import kr.suhsaechan.palim.notification.payload.CollectFailurePayload;
@@ -13,6 +15,8 @@ import kr.suhsaechan.palim.notification.payload.NewOrderPayload;
 import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
 import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
 import kr.suhsaechan.palim.notification.payload.UnmappedProductPayload;
@@ -53,6 +57,10 @@ public class TelegramMessageFactory {
                     stockPushFailure(outboxService.readPayload(outbox, StockPushFailurePayload.class));
             case STOCK_MISMATCH ->
                     stockMismatch(outboxService.readPayload(outbox, StockMismatchPayload.class));
+            case RECONCILE_MISMATCH -> reconcileMismatch(
+                    outboxService.readPayload(outbox, ReconcileMismatchPayload.class));
+            case RECONCILE_BLOCKED -> reconcileBlocked(
+                    outboxService.readPayload(outbox, ReconcileBlockedPayload.class));
             case DAILY_REPORT ->
                     dailyReport(outboxService.readPayload(outbox, DailyReportPayload.class));
             case RISING_INFLUENCER ->
@@ -225,6 +233,59 @@ public class TelegramMessageFactory {
                 재고 기준값과 변동 이력이 어긋났습니다. 이력을 확인해 원인을 찾아야 합니다."""
                 .formatted(payload.skuCode(), payload.productName(),
                         payload.snapshotQuantity(), payload.historySum(), payload.difference());
+    }
+
+    /**
+     * 두 시스템의 재고가 어긋났다.
+     *
+     * <p>차이만 나열하고 <b>무엇이 맞는지는 말하지 않는다.</b> 어느 쪽이 옳은지는 자료로
+     * 알 수 없고, 코드가 짐작해 「전산이 맞습니다」 라고 쓰면 그 짐작이 사람의 판단을 대신한다.
+     */
+    private String reconcileMismatch(ReconcileMismatchPayload payload) {
+        String lines = payload.samples().stream()
+                .map(sample -> "· %s : %s ↔ %s (%s)".formatted(
+                        sample.unit(), sample.left(), sample.right(), signed(sample.delta())))
+                .collect(Collectors.joining("\n"));
+        // 담은 것보다 많으면 그 사실을 밝힌다. 안 밝히면 「5건뿐이네」 로 읽힌다.
+        int hidden = payload.count() - payload.samples().size();
+        String more = hidden > 0 ? "%n… 그 밖에 %d건".formatted(hidden) : "";
+        return """
+                🔍 재고 대조 차이
+
+                [%s] %s ↔ %s
+                기준 시각 : %s
+                차이     : %d건
+
+                %s%s
+
+                어느 쪽이 맞는지 확인이 필요합니다."""
+                .formatted(payload.definition(), payload.leftSource(), payload.rightSource(),
+                        timestamp(payload.baseAt()), payload.count(), lines, more);
+    }
+
+    /** 부호를 붙여 «어느 쪽이 많은지» 를 한눈에 보이게 한다. */
+    private String signed(BigDecimal delta) {
+        return delta.signum() > 0 ? "+" + delta : delta.toString();
+    }
+
+    /**
+     * 대조가 여러 날 연속으로 못 돌았다.
+     *
+     * <p>하루 못 돈 것은 오지 않는다 — 그건 다음 회차에 풀린다. 이 알림이 왔다는 것 자체가
+     * <b>사람이 손대야 풀린다</b>는 뜻이다.
+     */
+    private String reconcileBlocked(ReconcileBlockedPayload payload) {
+        return """
+                ⚠️ 대조가 계속 막혀 있습니다
+
+                [%s]
+                막힌 지   : %d일째
+                마지막 시도 : %s
+                사유     : %s
+
+                저절로 풀리지 않는 상태입니다. 수집이 도는지부터 확인하세요."""
+                .formatted(payload.definition(), payload.failedDays(),
+                        timestamp(payload.lastTriedAt()), payload.reason());
     }
 
     /**
