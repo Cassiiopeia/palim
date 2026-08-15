@@ -371,7 +371,18 @@ public enum ErrorCode {
     RECONCILE_BASE_AT_MISMATCH("R001", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
 
     /** 비교할 재고가 한쪽에 아예 없다. 수집이 안 돌았거나 기준일이 어긋난 것이다. */
-    RECONCILE_SNAPSHOT_MISSING("R002", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
+    RECONCILE_SNAPSHOT_MISSING("R002", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /** 아무것도 담지 않고 「잇기」 를 눌렀다. */
+    RECONCILE_LINK_EMPTY("R003", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /**
+     * 서로 다른 두 물건에 속한 품목을 함께 이으려 했다.
+     *
+     * <p>그것은 「두 물건을 합치는」 일이다. 어느 이름을 남길지·수량을 어떻게 볼지가 사람의
+     * 판단이라 조용히 정해 버리면 안 된다.
+     */
+    RECONCILE_LINK_TWO_UNITS("R004", HttpStatus.CONFLICT, LogLevel.DEBUG);
 
     private final String code;
     private final HttpStatus httpStatus;
