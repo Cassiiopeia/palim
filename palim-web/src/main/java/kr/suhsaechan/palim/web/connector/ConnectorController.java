@@ -59,6 +59,7 @@ public class ConnectorController {
     private final RollbackService rollbackService;
     private final ErrorMessageResolver errorMessages;
     private final MappingViewAssembler assembler;
+    private final PostScriptAdminService postScripts;
 
     @GetMapping("/connectors")
     public String list(Model model) {
@@ -108,6 +109,8 @@ public class ConnectorController {
         model.addAttribute("transformTypes", TransformType.values());
         model.addAttribute("existing", existingByTarget(id));
         model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
+        // 담기 직전에 값을 다듬는 스크립트들. 꺼 둔 것도 보여야 켜고 끌 수 있다.
+        model.addAttribute("postScripts", postScripts.active(id));
 
         // 담아 둔 것을 먼저 쓴다.
         //
@@ -209,6 +212,8 @@ public class ConnectorController {
             model.addAttribute("schema", schema);
             model.addAttribute("headerRow", headerRow);
             model.addAttribute("fetchesItself", adminService.fetchesItself(connector));
+        // 담기 직전에 값을 다듬는 스크립트들. 꺼 둔 것도 보여야 켜고 끌 수 있다.
+        model.addAttribute("postScripts", postScripts.active(id));
             addMappingView(model, id, connector, schema);
             return "connector/mapping";
 
@@ -272,7 +277,7 @@ public class ConnectorController {
                     at(transformTypes, i), at(params, i), i));
         }
         adminService.saveDraft(id, new SourceSchema(schemaFields, List.of(), 0), forms);
-        return run(id, null, 1, RunMode.TEST, redirect);
+        return run(id, null, 1, RunMode.TEST, false, redirect);
     }
 
     /**
@@ -285,7 +290,9 @@ public class ConnectorController {
     public String run(@PathVariable UUID id,
                       @RequestParam(required = false) MultipartFile file,
                       @RequestParam(defaultValue = "1") int headerRow,
-                      @RequestParam RunMode mode, RedirectAttributes redirect) {
+                      @RequestParam RunMode mode,
+                      @RequestParam(defaultValue = "false") boolean skipPostScripts,
+                      RedirectAttributes redirect) {
         Path temp = null;
         try {
             // 스스로 가져오는 원천은 올릴 파일이 없다. 파일을 필수로 두면 API 커넥터는
@@ -294,7 +301,7 @@ public class ConnectorController {
                 temp = adminService.saveTemporary(file);
             }
             ConnectorRun run = runner.run(new RunRequest(id, mode, RunTrigger.MANUAL, temp,
-                    headerRow));
+                    headerRow, skipPostScripts));
 
             redirect.addFlashAttribute("flashSuccess",
                     "%s 실행 완료 — 총 %d건 중 성공 %d건, 실패 %d건".formatted(
