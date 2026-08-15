@@ -1,8 +1,6 @@
 package kr.suhsaechan.palim.reconcile.match;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,15 +32,18 @@ public class MatchCandidateFinder {
     /**
      * 두 원천의 미연결 품목을 정규화해 묶는다.
      *
-     * @param baseAt 어느 시점 재고를 볼지. 보통 가장 최근 것
+     * <p><b>원천마다 자기 기준 시각을 쓴다.</b> 예전에는 왼쪽 원천의 시각 하나로 양쪽을
+     * 훑었다. 두 원천이 같은 굵기로 담을 때는 우연히 맞지만, 한쪽을 촘촘하게 담도록 바꾸는
+     * 순간 오른쪽 조회가 <b>0건</b>이 되고 후보가 절반만 나온다 — 화면은 「이을 만한 것이
+     * 없습니다」 라고만 말하므로 사람은 그것이 잘못된 결과인 줄 모른다.
+     *
      * @return 정규화 이름이 같은 것끼리 묶은 후보. 양쪽이 섞인 묶음이 앞에 온다
      */
     @Transactional(readOnly = true)
-    public List<MatchCandidate> suggest(UUID tenantId, String leftSource, String rightSource,
-                                        Instant baseAt) {
+    public List<MatchCandidate> suggest(UUID tenantId, String leftSource, String rightSource) {
         List<SourceItem> items = new ArrayList<>();
-        items.addAll(unlinkedItems(tenantId, leftSource, baseAt));
-        items.addAll(unlinkedItems(tenantId, rightSource, baseAt));
+        items.addAll(unlinkedItems(tenantId, leftSource));
+        items.addAll(unlinkedItems(tenantId, rightSource));
 
         Map<String, List<SourceItem>> grouped = new LinkedHashMap<>();
         for (SourceItem item : items) {
@@ -61,8 +62,15 @@ public class MatchCandidateFinder {
                 .toList();
     }
 
-    /** 확정된 연결이 없는 품목들. 제안만 있는 것도 «아직 연결되지 않은» 것으로 본다. */
-    private List<SourceItem> unlinkedItems(UUID tenantId, String source, Instant baseAt) {
+    /**
+     * 확정된 연결이 없는 품목들 — <b>그 원천의 가장 최근 것</b>에서.
+     *
+     * <p>제안만 있는 것도 «아직 연결되지 않은» 것으로 본다.
+     *
+     * <p>기준 시각을 인자로 받지 않고 SQL 안에서 그 원천의 최신값을 쓴다. 부르는 쪽이
+     * 시각을 정하면 <b>한쪽 시각으로 양쪽을 훑는 실수</b>가 다시 생긴다.
+     */
+    private List<SourceItem> unlinkedItems(UUID tenantId, String source) {
         return jdbcClient.sql("""
                         SELECT s.item_ref AS item_ref,
                                max(coalesce(s.raw_item_name, '')) AS raw_name,
@@ -75,14 +83,13 @@ public class MatchCandidateFinder {
                            AND m.confirmed_at IS NOT NULL
                          WHERE s.tenant_id = :tenantId
                            AND s.source    = :source
-                           AND s.base_at   = :baseAt
+                           AND s.base_at   = (SELECT max(base_at) FROM std_stock_snapshot
+                                               WHERE tenant_id = :tenantId AND source = :source)
                            AND m.id IS NULL
                          GROUP BY s.item_ref
                         """)
                 .param("tenantId", tenantId)
                 .param("source", source)
-                // JdbcClient 는 Instant 를 바인딩하지 못한다. timestamptz 에는 OffsetDateTime.
-                .param("baseAt", baseAt.atOffset(ZoneOffset.UTC))
                 .query((rs, rowNum) -> new SourceItem(
                         source,
                         rs.getString("item_ref"),

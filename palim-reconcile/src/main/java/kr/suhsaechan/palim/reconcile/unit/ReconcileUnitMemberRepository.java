@@ -16,4 +16,12 @@ public interface ReconcileUnitMemberRepository
 
     /** 아직 확인하지 않은 제안들. 매칭 화면이 이것을 보여준다. */
     List<ReconcileUnitMember> findByConfirmedAtIsNullOrderBySource();
+
+    /** 이 단위에서 아직 확인하지 않은 것들. 확인은 <b>단위 단위</b>로 한다. */
+    List<ReconcileUnitMember> findByUnitIdAndConfirmedAtIsNull(UUID unitId);
+
+    /** 아직 확인하지 않은 제안이 걸려 있는 단위들. */
+    @org.springframework.data.jpa.repository.Query(
+            "select distinct m.unitId from ReconcileUnitMember m where m.confirmedAt is null")
+    List<UUID> findUnitIdsWithPending();
 }

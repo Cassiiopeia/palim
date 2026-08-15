@@ -100,7 +100,7 @@ class MatchCandidateIntegrationTest extends IntegrationTest {
         snapshot(erp, "E-1", "제품A 16g (26.11.07)");
         snapshot(wms, "W-1", "제품A16g");
 
-        var candidates = finder.suggest(TENANT, erp, wms, baseAt);
+        var candidates = finder.suggest(TENANT, erp, wms);
 
         assertThat(candidates)
                 .filteredOn(MatchCandidateFinder.MatchCandidate::hasBothSides)
@@ -120,7 +120,7 @@ class MatchCandidateIntegrationTest extends IntegrationTest {
         snapshot(erp, "E-2", "제품B 227g (27.04.07)");
         snapshot(wms, "W-2", "제품B227g");
 
-        var candidates = finder.suggest(TENANT, erp, wms, baseAt);
+        var candidates = finder.suggest(TENANT, erp, wms);
 
         assertThat(candidates.getFirst().hasBothSides())
                 .as("쉬운 것부터 처리할 수 있어야 한다")
@@ -142,7 +142,7 @@ class MatchCandidateIntegrationTest extends IntegrationTest {
         unitService.confirm(unitService.propose(
                 unit.getId(), erp, "E-DONE", BigDecimal.ONE).getId());
 
-        var candidates = finder.suggest(TENANT, erp, wms, baseAt);
+        var candidates = finder.suggest(TENANT, erp, wms);
 
         assertThat(candidates)
                 .as("확정된 것이 다시 올라오면 사람이 또 해야 하나 헷갈린다")
