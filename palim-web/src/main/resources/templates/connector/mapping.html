@@ -86,16 +86,22 @@
         <div class="card-body p-0">
             <div class="flex items-center justify-between px-4 pt-4">
                 <h2 class="card-title text-base">받아온 자료</h2>
+                <!--/* 「45행 중 5행」 은 나머지 40행에 무엇이 있는지 모른다는 뜻이다.
+                       받아온 것을 다 보여주고, 잘렸으면 잘렸다고 말한다. */-->
                 <span class="text-sm text-base-content/60"
-                      th:text="${schema.totalCount > 0}
-                               ? ${schema.totalCount} + '행 중 ' + ${#lists.size(schema.sampleRows)} + '행'
-                               : ${#lists.size(schema.sampleRows)} + '행'">5행</span>
+                      th:with="shown=${#lists.size(schema.sampleRows)}"
+                      th:text="${schema.totalCount > shown}
+                               ? ${schema.totalCount} + '행 중 처음 ' + ${shown} + '행'
+                               : ${shown} + '행 전부'">24행 전부</span>
             </div>
-            <div class="overflow-x-auto p-4">
+            <!--/* 행이 많아도 화면을 밀어내지 않게 스스로 스크롤한다. 머리글은 붙여 둔다 —
+                   스무 번째 줄에서 이 값이 어느 칸이었는지 다시 위로 올라가야 하면 못 읽는다. */-->
+            <div class="overflow-auto p-4 max-h-96">
                 <table class="table table-sm">
                     <thead>
                     <tr class="text-xs">
-                        <th th:each="f : ${schema.fields}" th:text="${f}" class="font-mono">칸</th>
+                        <th th:each="f : ${schema.fields}" th:text="${f}"
+                            class="font-mono sticky top-0 bg-base-100">칸</th>
                     </tr>
                     </thead>
                     <tbody>

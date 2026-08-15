@@ -21,7 +21,8 @@ import org.springframework.stereotype.Component;
 public class UploadSourceReader implements SourceReader {
 
     /** 미리보기 행 수. 5행이면 컬럼의 성격(코드·수량·날짜)이 눈에 드러난다. */
-    private static final int SAMPLE_LIMIT = 5;
+    /** 매핑 화면에 보여줄 행 수. 몇 줄만 보여주면 무엇을 고를지 정할 수가 없다. */
+    private static final int SAMPLE_LIMIT = 200;
 
     private final ExcelParser excelParser;
 
