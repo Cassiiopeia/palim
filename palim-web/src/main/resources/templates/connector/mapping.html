@@ -254,6 +254,79 @@
 
     <div class="divider my-8"></div>
 
+    <!--/* 후처리 스크립트 — 담기 직전에 값을 다듬는다.
+
+           두 시스템이 같은 물건을 다르게 적을 때(「초콜릿」 vs 「초콜렛」) 여기서 맞춰 두면
+           품목 맞추기에서 이어진다. 규칙 편집기를 두지 않고 글 하나로 둔 이유는, 어느 규칙이
+           어디까지 뭉개는지는 자료를 보면서 사람이 판단해야 하기 때문이다. */-->
+    <section class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">후처리 스크립트</h2>
+            <span class="text-xs text-base-content/60">담기 직전에 값을 다듬습니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+            <a th:href="@{/connectors/{id}/scripts/new(id=${connector.id})}"
+               class="btn btn-sm btn-outline">+ 추가</a>
+        </div>
+
+        <div th:if="${#lists.isEmpty(postScripts)}" class="text-sm text-base-content/60">
+            아직 없습니다. 받아온 값을 그대로 담습니다.
+        </div>
+
+        <form th:unless="${#lists.isEmpty(postScripts)}" data-script-order-form
+              th:action="@{/connectors/{id}/scripts/order(id=${connector.id})}" method="post">
+        </form>
+
+        <div th:unless="${#lists.isEmpty(postScripts)}" class="card bg-base-100 shadow-sm">
+          <div class="card-body p-0">
+            <table class="table table-sm">
+                <tbody data-script-list>
+                <tr th:each="s, i : ${postScripts}" th:attr="data-script-row=${s.id}">
+                    <td class="w-8 cursor-grab text-base-content/40" title="끌어서 순서를 바꿉니다">⠿</td>
+                    <td class="w-10 tabular-nums text-base-content/60" th:text="${i.count}">1</td>
+                    <td>
+                        <a th:href="@{/connectors/{id}/scripts/{sid}(id=${connector.id},sid=${s.id})}"
+                           class="link link-hover font-medium" th:text="${s.name}">이름</a>
+                        <span class="text-xs text-base-content/60 ml-1"
+                              th:text="'v' + ${s.version}">v1</span>
+                        <div th:unless="${s.enabled}" class="text-xs text-base-content/60">
+                            꺼짐 — 이 스크립트는 건너뜁니다
+                        </div>
+                    </td>
+                    <td class="w-56 text-right">
+                        <!--/* 스크립트가 막혔을 때를 위한 길. 살아 있으면 숨는다. */-->
+                        <form th:action="@{/connectors/{id}/scripts/{sid}/move(id=${connector.id},sid=${s.id})}"
+                              method="post" class="inline">
+                            <input type="hidden" name="delta" value="-1">
+                            <button type="submit" data-move-fallback
+                                    class="btn btn-ghost btn-xs">▲</button>
+                        </form>
+                        <form th:action="@{/connectors/{id}/scripts/{sid}/move(id=${connector.id},sid=${s.id})}"
+                              method="post" class="inline">
+                            <input type="hidden" name="delta" value="1">
+                            <button type="submit" data-move-fallback
+                                    class="btn btn-ghost btn-xs">▼</button>
+                        </form>
+                        <form th:action="@{/connectors/{id}/scripts/{sid}/enabled(id=${connector.id},sid=${s.id})}"
+                              method="post" class="inline">
+                            <input type="hidden" name="enabled" th:value="${!s.enabled}">
+                            <button type="submit" class="btn btn-ghost btn-xs"
+                                    th:text="${s.enabled} ? '끄기' : '켜기'">끄기</button>
+                        </form>
+                        <form th:action="@{/connectors/{id}/scripts/{sid}/remove(id=${connector.id},sid=${s.id})}"
+                              method="post" class="inline">
+                            <button type="submit" class="btn btn-ghost btn-xs">내리기</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+          </div>
+        </div>
+        <p th:unless="${#lists.isEmpty(postScripts)}" class="text-xs text-base-content/60 mt-2">
+            위에서부터 차례로 돌고, 앞 결과를 다음이 이어받습니다.
+        </p>
+    </section>
+
     <!--/* 진짜 자료에 넣기 전에 «따로 마련된 자리» 에 먼저 담고 눈으로 본다. */-->
     <section class="mb-6">
         <div class="flex items-center gap-3 mb-2">
@@ -264,6 +337,15 @@
         <p class="text-sm text-base-content/60 mb-3" th:if="${fetchesItself}">
             위 「저장하고 시험 실행」 을 누르면 고른 그대로 한 번 돌려 봅니다.
         </p>
+        <!--/* 스크립트를 거치기 «전» 모습과 대볼 수 있어야 «이게 스크립트 때문인지» 를 가른다. */-->
+        <form th:if="${fetchesItself and not #lists.isEmpty(postScripts)}"
+              th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
+              enctype="multipart/form-data" class="flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="mode" value="TEST">
+            <input type="hidden" name="headerRow" value="1">
+            <input type="hidden" name="skipPostScripts" value="true">
+            <button type="submit" class="btn btn-ghost btn-sm">후처리 스크립트 없이 돌려 보기</button>
+        </form>
         <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
               enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end"
               th:unless="${fetchesItself}">

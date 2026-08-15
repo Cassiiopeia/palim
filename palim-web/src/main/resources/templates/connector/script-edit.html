@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<!--/* 후처리 스크립트 편집.
+
+       파이썬을 모르는 사람이 쓴다는 전제로 만든다 — 외울 것이 없어야 한다. 무엇이 들어오고
+       무엇을 돌려줘야 하는지가 늘 보이고, 자주 하는 처리는 눌러서 넣는다.
+
+       시험 화면을 따로 두지 않는다. 스크립트는 담기 직전에 도므로 「담길 모습」 표가 곧
+       스크립트를 거친 결과다. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="mb-3">
+        <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}"
+           class="btn btn-ghost btn-sm">← 칸 연결</a>
+    </div>
+
+    <p class="text-sm text-base-content/60 mb-4">
+        받아온 값을 <b>담기 전에</b> 다듬습니다. 두 시스템이 같은 물건을 다르게 적을 때
+        (「초콜릿」 vs 「초콜렛」) 여기서 맞춰 두면 품목 맞추기에서 이어집니다.
+    </p>
+
+    <form th:action="@{/connectors/{id}/scripts(id=${connector.id})}" method="post"
+          class="grid gap-4">
+        <input type="hidden" name="scriptId" th:if="${script != null}" th:value="${script.id}">
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-4">
+
+                <label class="form-control max-w-md">
+                    <div class="label"><span class="label-text font-medium">이름</span></div>
+                    <input type="text" name="name" required maxlength="100"
+                           class="input input-bordered input-sm"
+                           th:value="${script != null} ? ${script.name} : '이름 다듬기'">
+                    <div class="label">
+                        <span class="label-text-alt text-base-content/60">
+                            목록에서 알아볼 이름입니다. 고치면 새 버전이 되고 지난 것은 남습니다.
+                        </span>
+                    </div>
+                </label>
+
+                <!--/* 계약을 늘 보이게 둔다. 파이썬을 모르는 사람이 매번 문서를 찾을 수는 없다. */-->
+                <div class="rounded-box bg-base-200 p-4 text-sm">
+                    <div class="font-medium mb-2">들어오는 것과 나가야 하는 것</div>
+                    <div class="grid gap-1 font-mono text-xs">
+                        <div><b>들어옴</b> {"rows": [{"_row": 1, "raw_item_name": "…", …}]}</div>
+                        <div><b>나가야</b> {"rows": [{"_row": 1, "normalized_name": "…"}]}</div>
+                    </div>
+                    <ul class="list-disc ml-5 mt-2 space-y-1 text-base-content/70">
+                        <li><code>_row</code> 는 어느 줄인지 알려주는 손잡이입니다.
+                            <b>그대로 돌려주기만</b> 하면 됩니다</li>
+                        <li>바꿀 칸만 담아 돌려주세요. <b>안 담은 칸은 그대로</b> 갑니다</li>
+                        <li>사람에게 할 말은 <code>stderr</code> 로. <code>stdout</code> 에는
+                            마지막 JSON 하나만</li>
+                        <li>어느 칸이든 바꿀 수 있습니다. 다만 <b>꼭 필요한 칸</b>(품목·수량·출처·
+                            기준 시각)을 비우면 그 줄은 담기지 않고 이유가 남습니다</li>
+                    </ul>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-[1fr_16rem]">
+                    <label class="form-control">
+                        <div class="label"><span class="label-text font-medium">파이썬</span></div>
+                        <textarea name="body" id="scriptBody" rows="22" required
+                                  class="textarea textarea-bordered font-mono text-xs leading-relaxed"
+                                  th:text="${body}"></textarea>
+                    </label>
+
+                    <!--/* 빈 상자를 주면 아무도 시작하지 못한다. 눌러서 넣는다. */-->
+                    <div>
+                        <div class="label"><span class="label-text font-medium">예제 넣기</span></div>
+                        <div class="grid gap-1">
+                            <button type="button" th:each="e : ${examples}"
+                                    class="btn btn-sm btn-outline justify-start font-normal"
+                                    th:classappend="${e.risky} ? 'btn-warning'"
+                                    data-example
+                                    th:attr="data-snippet=${e.snippet}"
+                                    th:title="${e.note}">
+                                <span th:text="${e.risky} ? '⚠ ' + ${e.label} : ${e.label}">예제</span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-base-content/60 mt-2">
+                            누르면 커서 자리에 붙습니다. 마우스를 올리면 무엇을 하는지 보입니다.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <a th:href="@{/connectors/{id}/mapping(id=${connector.id})}"
+                       class="btn btn-ghost btn-sm">취소</a>
+                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!--/* 저장한 뒤 바로 돌려볼 수 있어야 한다. 시험은 진짜 자료에 닿지 않는다. */-->
+    <section th:if="${script != null}" class="mt-6">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">돌려 보기</h2>
+            <span class="text-xs text-base-content/60">진짜 자료에는 넣지 않습니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <p class="text-sm text-base-content/60 mb-3">
+            「담길 모습」 표에 <b>이 스크립트를 거친 결과</b>가 나옵니다.
+            스크립트가 죽으면 무엇이 몇 번째 줄에서 틀렸는지 함께 보입니다.
+        </p>
+        <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"
+              enctype="multipart/form-data">
+            <input type="hidden" name="mode" value="TEST">
+            <input type="hidden" name="headerRow" value="1">
+            <button type="submit" class="btn btn-sm">지금 가져와서 시험 실행</button>
+        </form>
+    </section>
+
+</div>
+</body>
+</html>
