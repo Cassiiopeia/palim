@@ -37,14 +37,19 @@ class UploadSourceReaderTest {
     @Test
     @DisplayName("스키마 조회는 샘플만 읽되 전체 건수는 알려준다")
     void 스키마는_샘플만_읽는다() throws IOException {
-        Path csv = write(csvWithRows(20));
+        // 상한(200)보다 넉넉히 크게 잡는다. 상한 안쪽 개수로는 «전체를 읽지 않는다» 를
+        // 확인할 수 없어, 테스트가 통과해도 아무것도 보장하지 못한다.
+        Path csv = write(csvWithRows(500));
 
         SourceSchema schema = reader.readSchema(SourceContext.ofUpload(null, csv, 1));
 
         assertThat(schema.fields()).containsExactly("코드", "수량");
         assertThat(schema.sampleRows())
-                .as("매핑 화면이 전체를 읽으면 큰 파일에서 멈춘다").hasSize(5);
-        assertThat(schema.totalCount()).isEqualTo(20);
+                .as("매핑 화면이 전체를 읽으면 큰 파일에서 멈춘다")
+                .hasSize(200);
+        assertThat(schema.totalCount())
+                .as("보여준 것이 전부가 아니라는 사실을 화면이 말할 수 있어야 한다")
+                .isEqualTo(500);
     }
 
     @Test

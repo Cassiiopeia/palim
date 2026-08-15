@@ -40,7 +40,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HttpApiSourceReader implements SourceReader {
 
-    private static final int SAMPLE_LIMIT = 5;
+    /**
+     * 매핑 화면에 보여줄 행 수.
+     *
+     * <p>다섯 줄만 보여주면 <b>무엇을 고를지 정할 수가 없다.</b> 같은 값이 두 칸에 들어 있는지,
+     * 어느 칸에만 이따금 빈 값이 오는지, 화면 배지 글자가 섞인 칸이 어느 것인지는 <b>여러 줄을
+     * 나란히 놓고 봐야</b> 드러난다. 실제로 「00101품절」 처럼 오염된 칸이 24행 중 한 줄에만
+     * 있었다.
+     *
+     * <p>상한을 두는 이유는 담아 두는 크기 때문이다. 이 목록은 매핑에 함께 저장된다.
+     */
+    private static final int SAMPLE_LIMIT = 200;
 
     private final EcountSessionClient ecount;
     private final FormSessionClient form;
