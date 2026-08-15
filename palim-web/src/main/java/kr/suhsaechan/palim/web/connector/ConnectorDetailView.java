@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.web.connector;
 
 import java.time.Instant;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.connector.define.ConnectionStatus;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.SourceType;
@@ -17,7 +18,8 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
                                   ConnectionStatus connectionStatus, boolean mappingActive,
                                   Integer activeVersion, String scheduleCron,
                                   Instant lastRunAt, String lastStatus,
-                                  int lastSuccess, int lastFailed) {
+                                  int lastSuccess, int lastFailed,
+                                  BaseAtGranularity baseAtGranularity) {
 
     public static ConnectorDetailView of(Connector connector, boolean mappingActive,
                                          Integer activeVersion, RunSummary lastRun) {
@@ -28,7 +30,9 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
                 lastRun == null ? null : lastRun.startedAt(),
                 lastRun == null ? null : lastRun.status(),
                 lastRun == null ? 0 : lastRun.successCount(),
-                lastRun == null ? 0 : lastRun.failedCount());
+                lastRun == null ? 0 : lastRun.failedCount(),
+                connector.getBaseAtGranularity() == null
+                        ? BaseAtGranularity.DAY : connector.getBaseAtGranularity());
     }
 
     public boolean connected() {

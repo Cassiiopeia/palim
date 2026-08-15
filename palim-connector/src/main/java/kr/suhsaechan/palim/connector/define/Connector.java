@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
@@ -83,6 +84,16 @@ public class Connector extends BaseTimeEntity {
     @Column(length = 100)
     private String scheduleCron;
 
+    /**
+     * 기준 시각을 어느 굵기로 볼지.
+     *
+     * <p>원천마다 실제 해상도가 다르다 — 이카운트는 날짜만 주고, 물류는 「지금 재고」 를 준다.
+     * 하루로 못박혀 있던 탓에 한 시간마다 수집하면 그날 것이 서로 덮어썼다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private BaseAtGranularity baseAtGranularity;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -129,6 +140,8 @@ public class Connector extends BaseTimeEntity {
         this.defaultUnit = defaultUnit;
         this.incrementalMode = IncrementalMode.FULL;
         this.enabled = true;
+        // 지금까지의 동작 그대로. 원천이 더 촘촘하면 화면에서 바꾼다.
+        this.baseAtGranularity = BaseAtGranularity.DAY;
         this.connectionStatus = ConnectionStatus.NOT_CONFIGURED;
     }
 
@@ -160,6 +173,11 @@ public class Connector extends BaseTimeEntity {
      * 원천을 가리키므로, 지우면 대조가 다음 날 아침 조용히 깨진다 — 화면에는 「비교할 재고가
      * 없습니다」 만 뜨고 원인은 알 수 없다. 잠시 멈추려는 것이라면 끄는 쪽이 맞다.
      */
+    /** 눈금 바꾸기. 바꿔도 이미 담긴 자료는 그대로다 — 다음 수집부터 새 눈금으로 들어간다. */
+    public void changeBaseAtGranularity(BaseAtGranularity granularity) {
+        this.baseAtGranularity = granularity;
+    }
+
     public void changeEnabled(boolean enabled) {
         this.enabled = enabled;
     }

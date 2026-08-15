@@ -2,10 +2,13 @@ package kr.suhsaechan.palim.reconcile.define;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
@@ -64,6 +67,19 @@ public class ReconcileDefinition extends BaseTimeEntity {
     @Column(precision = 19, scale = 3)
     private BigDecimal alertThreshold;
 
+    /**
+     * 견줄 <b>눈금</b>. 두 원천의 기준 시각을 이 굵기로 내려 같은 칸에 들어오는지 본다.
+     *
+     * <p>원천마다 실제 해상도가 다르다 — 전산은 기준일을 날짜로만 받고, 물류는 「지금 재고」를
+     * 준다. 「정확히 같은 시각」을 요구하면 대조는 사실상 절대 돌지 않는다.
+     *
+     * <p><b>수집 눈금보다 굵어야 한다.</b> 하루 한 번 담는 원천을 시간 눈금으로 견주면 두 원천이
+     * 같은 칸에 들어오는 일이 없다. 기본값이 하루인 이유다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private BaseAtGranularity baseAtGranularity;
+
     @Column(nullable = false)
     private boolean isActive;
 
@@ -80,6 +96,7 @@ public class ReconcileDefinition extends BaseTimeEntity {
         this.compareField = compareField == null ? "base_quantity" : compareField;
         this.tolerance = tolerance == null ? BigDecimal.ZERO : tolerance;
         this.alertThreshold = alertThreshold;
+        this.baseAtGranularity = BaseAtGranularity.DAY;
         this.isActive = true;
     }
 
@@ -97,6 +114,16 @@ public class ReconcileDefinition extends BaseTimeEntity {
 
     public void changeAlertThreshold(BigDecimal alertThreshold) {
         this.alertThreshold = alertThreshold;
+    }
+
+    /** 견줄 눈금을 바꾼다. 비우면 하루로 되돌린다. */
+    public void changeBaseAtGranularity(BaseAtGranularity granularity) {
+        this.baseAtGranularity = granularity == null ? BaseAtGranularity.DAY : granularity;
+    }
+
+    /** 예전에 만든 정의는 이 값이 비어 있을 수 있다 — 그때의 동작인 하루로 본다. */
+    public BaseAtGranularity granularityOrDay() {
+        return baseAtGranularity == null ? BaseAtGranularity.DAY : baseAtGranularity;
     }
 
     public void deactivate() {
