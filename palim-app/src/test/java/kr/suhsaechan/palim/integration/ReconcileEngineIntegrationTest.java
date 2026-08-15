@@ -241,6 +241,10 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
         // 한쪽에만 자료가 있는 상태 — 담기를 안 했을 때 사장님이 겪는 그 상황이다
         snapshot(erp, "E-" + UUID.randomUUID().toString().substring(0, 6), "10", baseAt);
 
+        // 언어를 일부러 정하지 않는다 — 매일 자동으로 도는 대조가 바로 이 상태다.
+        //
+        // 예전에는 여기서 서버 기본값(영어)이 나와, 사람이 누른 것은 한글이고 자동으로 돈
+        // 것은 영문이라 같은 목록에 두 언어가 섞였다. 화면이 전부 한국어인 제품에서.
         ReconcileRun run = engine.run(definition("0").getId());
 
         assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
@@ -249,6 +253,7 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
                 .doesNotContain("R002")
                 .doesNotContain("args=")
                 .doesNotContain("RECONCILE_SNAPSHOT_MISSING")
+                .as("자동으로 돈 것도 화면과 같은 말이어야 한다")
                 .contains("비교할 재고가 없습니다");
     }
 }
