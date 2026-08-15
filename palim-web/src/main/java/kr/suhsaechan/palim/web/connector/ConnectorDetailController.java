@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.web.connector;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.connector.define.Connector;
@@ -11,6 +12,7 @@ import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * 가지만, 이미 붙여 둔 것을 손볼 때 그 긴 흐름을 다시 타게 하면 안 된다 — 비밀번호만 바꾸고
  * 싶은 사람에게 칸 맞추기를 다시 시킬 이유가 없다.
  */
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class ConnectorDetailController {
@@ -53,6 +56,8 @@ public class ConnectorDetailController {
                 active.isPresent(),
                 active.map(ConnectorMapping::getVersion).orElse(null),
                 runs.isEmpty() ? null : runs.get(0)));
+        // 고를 수 있는 눈금은 «코드가» 안다. 화면이 enum 을 직접 부르면 그 판단이 템플릿으로 샌다.
+        model.addAttribute("granularities", BaseAtGranularity.values());
         return "connector/detail";
     }
 
@@ -96,6 +101,31 @@ public class ConnectorDetailController {
 
         redirectAttributes.addFlashAttribute("flashSuccess",
                 "매일 %02d:%02d 에 가져옵니다.".formatted(h, m));
+        return "redirect:/connectors/" + id;
+    }
+
+    /**
+     * 기준 시각을 <b>어느 굵기로 남길지</b> 정한다.
+     *
+     * <p>담긴 재고는 (원천, 기준 시각, 품목, 창고, 로트) 로 구분된다. 그래서 눈금이 하루면
+     * 하루에 두 번 담아도 <b>둘이 같은 칸을 차지해 뒤엣것이 앞엣것을 덮는다</b> — 오전 재고를
+     * 나중에 볼 방법이 없고, 덮였다는 사실조차 남지 않는다.
+     *
+     * <p>그렇다고 무조건 잘게 두면 안 된다. 원천이 날짜만 주는데 시간 눈금으로 남기면 부른
+     * 시각이 기준 시각이 되어, 같은 자료가 시각만 다른 여러 벌로 쌓인다. <b>원천이 실제로
+     * 주는 해상도</b>에 맞춘다.
+     */
+    @PostMapping("/connectors/{id}/granularity")
+    public String granularity(@PathVariable UUID id,
+                              @RequestParam BaseAtGranularity granularity,
+                              RedirectAttributes redirectAttributes) {
+        Connector connector = adminService.connector(id);
+        connector.changeBaseAtGranularity(granularity);
+        connectorRepository.save(connector);
+
+        log.info("기준 시각 눈금 변경 — 커넥터={} 눈금={}", connector.getCode(), granularity);
+        redirectAttributes.addFlashAttribute("flashSuccess",
+                "기준 시각을 «%s» 단위로 남깁니다.".formatted(granularity.getLabel()));
         return "redirect:/connectors/" + id;
     }
 

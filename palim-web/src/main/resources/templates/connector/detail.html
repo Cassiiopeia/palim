@@ -91,6 +91,28 @@
                 </div>
             </div>
 
+            <!--/* 하루에 여러 번 담을 때 앞엣것이 덮이지 않게 하는 값이다. 자동 수집 바로
+                   아래에 두는 이유는 «얼마나 자주 담느냐» 와 한 덩어리의 결정이기 때문이다. */-->
+            <div class="flex items-start gap-4 p-4 border-b border-base-300">
+                <div class="w-28 font-medium">남길 눈금</div>
+                <div class="grow text-sm">
+                    <form method="post"
+                          th:action="@{/connectors/{id}/granularity(id=${view.id})}"
+                          class="flex items-center gap-2 flex-wrap">
+                        <select name="granularity" class="select select-bordered select-sm w-36">
+                            <option th:each="g : ${granularities}"
+                                    th:value="${g}" th:text="${g.label}"
+                                    th:selected="${g == view.baseAtGranularity}">하루</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm">저장</button>
+                    </form>
+                    <p class="text-base-content/60 mt-2">
+                        이 굵기로 「언제 시점의 재고인가」를 남깁니다. 하루에 여러 번 가져오는데
+                        「하루」로 두면 <b>나중 것이 앞엣것을 덮습니다.</b>
+                    </p>
+                </div>
+            </div>
+
             <!--/* 적재가 단위 때문에 막히면 여기로 와서 푼다. 지금은 실패를 본 화면에서 해결
                    화면으로 가는 길이 없어 사이드바에서 스스로 찾아야 했다. */-->
             <div class="flex items-center gap-4 p-4 border-b border-base-300">

@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.web.reconcile;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -123,7 +124,48 @@ public class ReconcileController {
         model.addAttribute("title", definition.getName() + " · 대조");
         model.addAttribute("definition", definition);
         model.addAttribute("runs", runs.findByDefinitionIdOrderByStartedAtDesc(id));
+        model.addAttribute("granularities", BaseAtGranularity.values());
         return "reconcile/detail";
+    }
+
+    /**
+     * <b>얼마나 굵게 견줄지</b> 정한다.
+     *
+     * <p>두 원천을 정확히 같은 순간에 뽑는 일은 없다. 전산은 기준일을 날짜로만 주고 물류는
+     * 「지금 재고」 를 준다. 그래서 양쪽 기준 시각을 이 눈금으로 내려 <b>같은 칸</b>에 들어오면
+     * 견준다.
+     *
+     * <p>담는 눈금보다 잘게 잡으면 <b>저장을 막는다.</b> 하루에 한 번 담는 원천은 늘 자정에
+     * 찍히므로, 시간 눈금으로 견주면 상대가 그 칸에 있을 수 없다 — 대조는 매일 「기준 시각이
+     * 다릅니다」 만 남기고 사람은 무엇이 잘못됐는지 알 길이 없다. 조용히 안 도는 대조를 만드느니
+     * 여기서 막는 편이 낫다.
+     */
+    @PostMapping("/reconcile/{id}/granularity")
+    public String changeGranularity(@PathVariable UUID id,
+                                    @RequestParam BaseAtGranularity granularity,
+                                    RedirectAttributes redirect) {
+        ReconcileDefinition definition = definitions.findById(id).orElseThrow();
+        UUID tenantId = TenantContext.current();
+
+        for (String source : List.of(definition.getLeftSource(), definition.getRightSource())) {
+            BaseAtGranularity collected = connectorQueryService.granularityOf(tenantId, source);
+            if (granularity.isFinerThan(collected)) {
+                redirect.addFlashAttribute("flashError",
+                        ("«%s» 는 %s 단위로 담고 있어 %s 단위로는 맞춰 볼 수 없습니다. "
+                                + "%s 단위 이상으로 고르거나, 담는 눈금을 먼저 바꾸세요.")
+                                .formatted(source, collected.getLabel(), granularity.getLabel(),
+                                        collected.getLabel()));
+                return "redirect:/reconcile/" + id;
+            }
+        }
+
+        definition.changeBaseAtGranularity(granularity);
+        definitions.save(definition);
+
+        log.info("대조 눈금 변경 — 정의={} 눈금={}", definition.getCode(), granularity);
+        redirect.addFlashAttribute("flashSuccess",
+                "«%s» 단위로 맞춰 봅니다.".formatted(granularity.getLabel()));
+        return "redirect:/reconcile/" + id;
     }
 
     /**

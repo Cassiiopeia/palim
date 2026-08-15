@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.web.connector;
 
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,26 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConnectorQueryService {
 
     private final JdbcClient jdbcClient;
+
+    /**
+     * 그 원천을 담는 연동이 <b>어느 눈금으로</b> 기준 시각을 남기는가.
+     *
+     * <p>대조가 견줄 눈금을 정할 때 이 값보다 잘게 잡으면 두 원천이 같은 칸에 영영 못 들어온다.
+     * 연동을 찾지 못하면 <b>하루</b>로 본다 — 연동을 지웠어도 담긴 자료는 견줄 수 있어야 한다.
+     */
+    @Transactional(readOnly = true)
+    public BaseAtGranularity granularityOf(UUID tenantId, String code) {
+        return jdbcClient.sql("""
+                        SELECT base_at_granularity FROM connector
+                        WHERE tenant_id = :tenant AND code = :code
+                        """)
+                .param("tenant", tenantId)
+                .param("code", code)
+                .query(String.class)
+                .optional()
+                .map(BaseAtGranularity::valueOf)
+                .orElse(BaseAtGranularity.DAY);
+    }
 
     /**
      * 커넥터 목록.

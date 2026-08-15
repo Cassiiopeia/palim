@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.connector.define.Connector;
@@ -53,6 +54,9 @@ public class ConnectorRunner {
      * <p>행 단위 커밋은 대량 적재에서 느리고, 전체를 한 트랜잭션에 묶으면 부분 실패가 사라진다.
      */
     private static final int CHUNK_SIZE = 500;
+
+    /** 손으로 지정한 기준일이 «어느 자정» 인지. 코드베이스 다른 곳과 같은 값이어야 한다. */
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
 
     private final ConnectorLoader loader;
     private final SourceReaderRegistry readers;
@@ -274,16 +278,24 @@ public class ConnectorRunner {
         Object raw = config == null ? null : config.get("baseDate");
         String text = raw == null ? null : String.valueOf(raw).trim();
 
-        LocalDate date = LocalDate.now();
+        // 기준일을 손으로 지정한 경우 — 지난 날짜를 다시 받아올 때 쓴다. 그때는 그날로 본다.
         if (text != null && !text.isBlank()) {
             try {
-                date = LocalDate.parse(text);
+                return LocalDate.parse(text).atStartOfDay(BUSINESS_ZONE).toInstant();
             } catch (DateTimeParseException e) {
-                log.warn("기준일 형식을 읽지 못해 오늘로 봅니다 — connector={} 값='{}'",
+                log.warn("기준일 형식을 읽지 못해 지금으로 봅니다 — connector={} 값='{}'",
                         connector.getCode(), text);
             }
         }
-        return date.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        // 연동이 정한 눈금으로 내린다.
+        //
+        // 예전에는 늘 그날 0시로 내렸다. 그래서 한 시간마다 수집하도록 시각을 정해 두면
+        // 그날 것이 전부 같은 기준 시각이 되어 서로 덮어썼다 — 자연키에 기준 시각이 들어
+        // 있어서다. 오전 10시 재고를 나중에 볼 방법이 없었고 덮였다는 사실도 안 남았다.
+        BaseAtGranularity granularity = connector.getBaseAtGranularity() == null
+                ? BaseAtGranularity.DAY
+                : connector.getBaseAtGranularity();
+        return granularity.truncate(Instant.now());
     }
 
     private void recordError(Connector connector, ConnectorRun run, SourceRow sourceRow,

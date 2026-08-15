@@ -70,10 +70,11 @@ public class ReconcileEngine {
                 definition.getLeftSource(), definition.getRightSource(),
                 definition.getCompareField(), definition.getTolerance());
 
-        Instant baseAt;
+        BaseAtResolver.Aligned aligned;
         try {
-            baseAt = baseAtResolver.resolve(tenantId,
-                    definition.getLeftSource(), definition.getRightSource());
+            aligned = baseAtResolver.resolve(tenantId,
+                    definition.getLeftSource(), definition.getRightSource(),
+                    definition.granularityOrDay());
         } catch (BusinessException e) {
             // 거부 사유는 «양쪽 시각» 이 함께 있어야 읽힌다. 한쪽만 남기면 왜 어긋났는지 모른다.
             log.error("기준 시각 확인 실패 — 대조를 거부한다. 정의={}({}) 좌원천={} 우원천={} "
@@ -93,18 +94,23 @@ public class ReconcileEngine {
             return runs.save(failed);
         }
 
+        // 실행에 남는 것은 «칸» 이다. 두 원천이 몇 시에 뽑혔든 「이 칸의 대조」 로 읽혀야
+        // 이력이 한 줄로 이어진다. 합산은 각 원천이 실제로 가진 시각으로 한다 — 칸 시작
+        // 시각에는 자료가 없을 수 있다.
+        Instant baseAt = aligned.bucket();
         ReconcileRun run = runs.save(ReconcileRun.start(tenantId, definitionId, baseAt));
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);
 
         Map<UUID, BigDecimal> left = aggregator.sumByUnit(
-                tenantId, definition.getLeftSource(), baseAt, definition.getCompareField());
+                tenantId, definition.getLeftSource(), aligned.left(), definition.getCompareField());
         Map<UUID, BigDecimal> right = aggregator.sumByUnit(
-                tenantId, definition.getRightSource(), baseAt, definition.getCompareField());
-        log.debug("단위 합산 — 실행={} 기준시각={} 좌원천={} {}단위 우원천={} {}단위",
+                tenantId, definition.getRightSource(), aligned.right(),
+                definition.getCompareField());
+        log.debug("단위 합산 — 실행={} 칸={} 좌원천={}({}) {}단위 우원천={}({}) {}단위",
                 run.getId(), baseAt,
-                definition.getLeftSource(), left.size(),
-                definition.getRightSource(), right.size());
+                definition.getLeftSource(), aligned.left(), left.size(),
+                definition.getRightSource(), aligned.right(), right.size());
 
         if (left.isEmpty() && right.isEmpty()) {
             log.warn("양쪽 합산 결과가 비어 있다 — 확정된 정합 단위가 없거나 해당 기준 시각의 "
@@ -114,7 +120,7 @@ public class ReconcileEngine {
 
         List<ReconcileDiff> found = new ArrayList<>();
         found.addAll(compareUnits(definition, run, left, right));
-        int unmatched = recordUnmatched(definition, run, baseAt, found);
+        int unmatched = recordUnmatched(definition, run, aligned, found);
 
         diffs.saveAll(found);
         run.succeed(left.size(), right.size(), found.size() - unmatched, unmatched);
@@ -186,12 +192,14 @@ public class ReconcileEngine {
      * <p><b>미매칭은 실패가 아니라 결과의 한 유형이다.</b> 이것 때문에 대조 전체를 중단하면
      * 나머지 결과도 못 보게 되고, 사람이 매칭을 끝낼 때까지 대조를 아예 쓸 수 없다.
      */
-    private int recordUnmatched(ReconcileDefinition definition, ReconcileRun run, Instant baseAt,
-                                List<ReconcileDiff> found) {
+    private int recordUnmatched(ReconcileDefinition definition, ReconcileRun run,
+                                BaseAtResolver.Aligned aligned, List<ReconcileDiff> found) {
         int count = 0;
-        count += addUnmatched(run, definition, baseAt, definition.getLeftSource(),
+        // 원천마다 자기가 실제로 가진 시각으로 훑는다. 칸 시작 시각으로 훑으면 그 시각에
+        // 담긴 자료가 없어 «전부 미매칭» 이 된다.
+        count += addUnmatched(run, definition, aligned.left(), definition.getLeftSource(),
                 DiffType.UNMATCHED_LEFT, found);
-        count += addUnmatched(run, definition, baseAt, definition.getRightSource(),
+        count += addUnmatched(run, definition, aligned.right(), definition.getRightSource(),
                 DiffType.UNMATCHED_RIGHT, found);
         return count;
     }

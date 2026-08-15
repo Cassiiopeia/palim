@@ -21,6 +21,30 @@
         </div>
     </div>
 
+    <!--/* 「기준 시각이 다릅니다」 로 대조가 계속 실패할 때 사람이 올 자리다. 이 값이 화면
+           어디에도 없으면 왜 안 맞는지 알 방법이 없어 서버 로그를 뒤져야 한다. */-->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body p-4 flex-row items-start gap-4 flex-wrap">
+            <div class="w-28 font-medium text-sm">견줄 눈금</div>
+            <div class="grow text-sm">
+                <form method="post"
+                      th:action="@{/reconcile/{id}/granularity(id=${definition.id})}"
+                      class="flex items-center gap-2 flex-wrap">
+                    <select name="granularity" class="select select-bordered select-sm w-36">
+                        <option th:each="g : ${granularities}"
+                                th:value="${g}" th:text="${g.label}"
+                                th:selected="${g == definition.granularityOrDay()}">하루</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm">저장</button>
+                </form>
+                <p class="text-base-content/60 mt-2">
+                    두 시스템의 재고를 정확히 같은 순간에 뽑는 일은 없습니다. 이 굵기로 내려
+                    <b>같은 칸에 들어오면</b> 맞춰 봅니다. 담는 눈금보다 잘게 잡을 수는 없습니다.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <section>
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">맞춰 본 기록</h2>
