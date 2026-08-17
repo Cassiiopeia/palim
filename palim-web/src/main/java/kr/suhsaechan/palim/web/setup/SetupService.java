@@ -8,10 +8,11 @@ import kr.suhsaechan.palim.connector.define.ConnectorRepository;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import kr.suhsaechan.palim.connector.define.SourceType;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
+import kr.suhsaechan.palim.reconcile.match.MatchBoard;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRunRepository;
 import kr.suhsaechan.palim.reconcile.run.RunStatus;
-import kr.suhsaechan.palim.reconcile.unit.ReconcileUnitService;
 import kr.suhsaechan.palim.web.connector.ConnectorAdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,9 +33,9 @@ public class SetupService {
 
     private final ConnectorRepository connectorRepository;
     private final ConnectorMappingRepository mappingRepository;
-    private final ReconcileUnitService unitService;
     private final ReconcileDefinitionRepository definitionRepository;
     private final ReconcileRunRepository runRepository;
+    private final MatchBoard matchBoard;
 
     @Transactional(readOnly = true)
     public List<SetupStep> steps() {
@@ -100,28 +101,54 @@ public class SetupService {
                 : connector.getConnectionStatus().getLabel();
     }
 
+    /**
+     * 품목 맞추기가 어디까지 왔나 — <b>대조표의 실제 남은 일</b>로 센다.
+     *
+     * <p>예전에는 「확인 대기 0건 + 이어 둔 것 1건」 이면 완료라고 했다. 스물세 품목 중 하나만
+     * 이어 두어도 완료였다는 뜻이다. 홈이 완료라고 하는데 품목 잇기 화면에는 할 일이 스물두
+     * 건 남아 있으면, 두 화면이 같은 사실에 대해 반대로 말하는 셈이다.
+     */
     private SetupStep matchingStep(List<Connector> collecting) {
         if (collecting.size() < 2) {
             return new SetupStep(2, "품목 맞추기", SetupStep.State.WAITING,
                     "자료가 들어오는 곳이 둘이 되면 시작합니다", null, null);
         }
-        int pending = unitService.pending().size();
-        if (pending > 0) {
-            return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
-                    "확인을 기다리는 품목 %d 건".formatted(pending),
-                    "같은 물건인지 보고 확인해 주세요", "/reconcile/units");
+
+        List<ReconcileDefinition> definitions =
+                definitionRepository.findByIsActiveTrueOrderByCode();
+        if (definitions.isEmpty()) {
+            // 어느 두 곳을 견줄지 정해야 무엇을 이을지도 정해진다. 할 수 없는 일을 시키면
+            // 화면을 오가다 포기한다.
+            return new SetupStep(2, "품목 맞추기", SetupStep.State.WAITING,
+                    "대조할 두 곳을 정하면 시작합니다", null, null);
         }
-        // 「확인을 기다리는 것이 없다」와 「아무것도 안 이었다」는 다르다. 하나도 잇지 않았는데
-        // 완료라고 하면, 바로 아래 「아직 안 이어진 품목 N건」과 같은 화면에서 서로 반대되는
-        // 말을 하게 된다.
-        if (unitService.activeUnits().isEmpty()) {
+
+        // 대조가 여럿이면 각 짝마다 이을 것이 따로 있으므로 더한다. 같은 품목이 두 대조에
+        // 걸쳐 있으면 두 번 세지만, 한 번 이으면 양쪽에서 함께 빠진다.
+        int todo = 0;
+        int linked = 0;
+        for (ReconcileDefinition definition : definitions) {
+            MatchBoard.Counts counts = matchBoard.load(TenantContext.current(),
+                    definition.getLeftSource(), definition.getRightSource(),
+                    MatchBoard.Tab.TODO, null, 0).counts();
+            todo += counts.todo();
+            linked += counts.linked();
+        }
+
+        if (todo > 0) {
             return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
-                    "아직 이어 둔 품목이 없습니다",
+                    "아직 짝을 정하지 않은 것 %d 건".formatted(todo),
+                    "같은 물건끼리 이어 주세요", "/reconcile/units");
+        }
+        if (linked == 0) {
+            // 「할 일이 없다」 와 「이을 자료가 없다」 는 다르다. 하나도 안 이었는데 완료라고
+            // 하면 대조가 0건을 견주게 된다.
+            return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
+                    "이어 둔 품목이 없습니다",
                     "같은 물건끼리 이어 주세요", "/reconcile/units");
         }
         return new SetupStep(2, "품목 맞추기", SetupStep.State.DONE,
-                "이어 둔 품목 %d 건 — 확인을 기다리는 것은 없습니다"
-                        .formatted(unitService.activeUnits().size()),
+                "이어 둔 품목 %d 건 — 남은 일 없음".formatted(linked),
                 null, "/reconcile/units");
     }
 

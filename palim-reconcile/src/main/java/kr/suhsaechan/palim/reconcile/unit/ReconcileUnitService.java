@@ -204,6 +204,24 @@ public class ReconcileUnitService {
         members.deleteById(memberId);
     }
 
+    /**
+     * 이 물건을 <b>통째로 푼다</b> — 든 품목을 전부 떼고 물건을 접는다.
+     *
+     * <p>표의 한 줄이 물건 하나이므로 「되돌리기」 도 줄 단위여야 한다. 한 품목만 떼면 나머지가
+     * 반쪽으로 남아 대조가 매일 유령 차이를 올리는데, 사람은 그것을 되돌리다 만 흔적이 아니라
+     * <b>재고 사고로 읽는다.</b>
+     *
+     * <p>떼어 낸 품목들은 다시 「이을 수 있는 것」 으로 돌아온다.
+     */
+    @Transactional
+    public void unlinkUnit(UUID unitId) {
+        members.deleteAll(members.findByUnitIdOrderBySource(unitId));
+        units.findById(unitId).ifPresent(unit -> {
+            unit.deactivate();
+            units.save(unit);
+        });
+    }
+
     @Transactional(readOnly = true)
     public List<ReconcileUnit> activeUnits() {
         return units.findByIsActiveTrueOrderByCode();

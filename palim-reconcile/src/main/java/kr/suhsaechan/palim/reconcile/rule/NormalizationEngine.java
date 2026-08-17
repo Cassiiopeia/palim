@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.reconcile.rule;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -45,18 +46,60 @@ public class NormalizationEngine {
      */
     @Transactional(readOnly = true)
     public String normalize(String rawName) {
+        return apply(rules.findByIsActiveTrueOrderBySortOrder(), rawName);
+    }
+
+    /**
+     * 규칙을 <b>한 번만 읽어</b> 여러 이름을 다듬는 도구를 만든다.
+     *
+     * <p>{@link #normalize} 는 부를 때마다 규칙을 조회한다. 품목 하나에 한 번이면 괜찮지만,
+     * 목록 화면처럼 <b>수천 품목을 한 요청에서 다듬는</b> 자리에서는 그만큼 조회가 반복된다 —
+     * 품목이 늘수록 화면이 느려지는데 원인이 화면 코드 어디에도 안 보인다.
+     */
+    @Transactional(readOnly = true)
+    public Batch batch() {
+        return new Batch(this, rules.findByIsActiveTrueOrderBySortOrder());
+    }
+
+    /** 규칙을 들고 있는 다듬기 도구. 한 요청 안에서만 쓴다 — 규칙을 고치면 다시 만들어야 한다. */
+    public record Batch(NormalizationEngine engine, List<NormalizationRule> rules) {
+
+        public String normalize(String rawName) {
+            return engine.apply(rules, rawName);
+        }
+    }
+
+    /**
+     * 주어진 규칙들을 순서대로 적용한다.
+     *
+     * @param active 적용할 규칙. 순서가 곧 적용 순서다
+     */
+    public String apply(List<NormalizationRule> active, String rawName) {
+        return apply(active, rawName, value -> value);
+    }
+
+    /**
+     * 입력을 <b>감싼 뒤</b> 규칙을 건다.
+     *
+     * <p>{@code guard} 가 있는 이유는 미리보기 화면 때문이다. 거기서는 사람이 방금 타이핑한
+     * 정규식이 돌아가므로 <b>되돌아가는 패턴</b>이 들어올 수 있는데, 자바의 {@code Matcher} 는
+     * 인터럽트를 보지 않아 그냥 두면 취소가 먹지 않는다. 입력이 글자를 내줄 때마다 확인하게
+     * 감싸면 그때만 멈출 수 있다. 평소 경로는 감싸지 않는다 — 규칙은 이미 검증된 것이다.
+     */
+    public String apply(List<NormalizationRule> active, String rawName,
+                        UnaryOperator<CharSequence> guard) {
         if (rawName == null || rawName.isBlank()) {
             return "";
         }
         String value = rawName.length() > MAX_INPUT ? rawName.substring(0, MAX_INPUT) : rawName;
 
-        for (NormalizationRule rule : rules.findByIsActiveTrueOrderBySortOrder()) {
+        for (NormalizationRule rule : active) {
             Pattern pattern = patternOf(rule);
             if (pattern == null) {
                 continue;
             }
             try {
-                value = pattern.matcher(value).replaceAll(rule.getReplacement());
+                value = pattern.matcher(guard.apply(value)).replaceAll(rule.getReplacement());
             } catch (RuntimeException e) {
                 // 치환 문자열의 $1 같은 참조가 어긋나면 던진다. 규칙 하나 때문에 매칭 화면
                 // 전체가 열리지 않으면 사람이 그 규칙을 고칠 수도 없다.
@@ -67,10 +110,11 @@ public class NormalizationEngine {
         return value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
-    /** 여러 이름을 한 번에. 규칙 조회를 한 번만 하려는 것이 아니라 호출부를 단순하게 하려는 것이다. */
+    /** 여러 이름을 한 번에. 규칙 조회는 한 번만 한다. */
     @Transactional(readOnly = true)
     public List<String> normalizeAll(List<String> rawNames) {
-        return rawNames.stream().map(this::normalize).toList();
+        Batch batch = batch();
+        return rawNames.stream().map(batch::normalize).toList();
     }
 
     private Pattern patternOf(NormalizationRule rule) {
