@@ -251,7 +251,7 @@ class ManualLinkIntegrationTest extends IntegrationTest {
                         .param("rows", rowKeyOf(erp, "B2")))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("flashSuccess",
-                        Matchers.containsString("2개를 이었습니다")));
+                        Matchers.containsString("2개를 묶었습니다")));
 
         assertThat(members.findBySourceAndItemRef(wms, "B1W")).isPresent();
         assertThat(members.findBySourceAndItemRef(wms, "B2W")).isPresent();
