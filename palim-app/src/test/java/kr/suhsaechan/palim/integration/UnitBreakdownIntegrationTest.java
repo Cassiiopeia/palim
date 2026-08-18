@@ -18,6 +18,7 @@ import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
+import kr.suhsaechan.palim.reconcile.match.BreakdownAxis;
 import kr.suhsaechan.palim.reconcile.match.MatchBoard;
 import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
 import kr.suhsaechan.palim.reconcile.match.UnitNaming;
@@ -145,7 +146,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
         ReconcileUnit unit = linkedUnit();
 
         UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt);
+                baseAt, baseAt, baseAt, BreakdownAxis.byName());
 
         assertThat(result.lines()).hasSize(4);
         assertThat(result.leftTotal()).isEqualByComparingTo("318");
@@ -179,7 +180,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 "U-" + UUID.randomUUID().toString().substring(0, 8), "클래식 850g", "EA");
 
         UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt);
+                baseAt, baseAt, baseAt, BreakdownAxis.byName());
 
         assertThat(result.orphans())
                 .as("한쪽에 하나 더 붙어 있다는 사실이 안 보이면 잘못 이은 것을 못 찾는다")
@@ -322,6 +323,123 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 .singleElement()
                 .satisfies(active ->
                         assertThat(active.getName()).isEqualTo("클래식 피넛버터 850g"));
+    }
+
+    /**
+     * <b>기준이 코드에 박혀 있으면 다른 구조의 자료에서는 이 화면이 통째로 쓸모없어진다.</b>
+     *
+     * <p>이 발주사 자료는 로트가 <b>품명 안에</b> 들어 있어 「품명이 닮은 것끼리」 로 잘 맞는다.
+     * 그런데 그건 이 자료의 사정이지 이 프로그램의 성질이 아니다 — 로트를 별도 칸으로 주는
+     * 시스템에서는 품명이 전부 같아 그 기준으로는 아무것도 못 가린다.
+     *
+     * <p>그래서 기준은 <b>표준 모델의 칸 목록</b>에서 나온다. 칸이 늘면 고를 것도 저절로 는다.
+     */
+    @Test
+    @DisplayName("뜯어보기 기준을 표준 모델의 칸에서 고를 수 있다")
+    void 기준을_고를_수_있다() {
+        List<BreakdownAxis> axes = breakdowns.axes(TENANT);
+
+        assertThat(axes).first().satisfies(axis ->
+                assertThat(axis.kind()).isEqualTo(BreakdownAxis.Kind.NAME));
+        assertThat(axes)
+                .as("칸이 늘면 고를 것도 저절로 늘어야 한다 — 코드에 박아 두면 그럴 수 없다")
+                .anySatisfy(axis -> assertThat(axis.fieldKey()).isEqualTo("lot_code"))
+                .anySatisfy(axis -> assertThat(axis.fieldKey()).isEqualTo("warehouse_code"));
+        assertThat(axes)
+                .as("수량으로 묶으면 같은 수량끼리 모이는데 아무 뜻이 없다")
+                .noneSatisfy(axis -> assertThat(axis.fieldKey()).isEqualTo("base_quantity"));
+    }
+
+    /**
+     * <b>로트를 별도 칸으로 주는 시스템</b>에서도 뜯어볼 수 있어야 한다.
+     *
+     * <p>이런 자료는 품명이 전부 같으므로 「품명이 닮은 것끼리」 로는 짝을 가릴 수 없다.
+     */
+    @Test
+    @DisplayName("로트가 별도 칸으로 오는 자료는 그 칸을 기준으로 짝짓는다")
+    void 칸을_기준으로_짝짓는다() {
+        String left = "erpL-" + UUID.randomUUID().toString().substring(0, 6);
+        String right = "wmsL-" + UUID.randomUUID().toString().substring(0, 6);
+        // 품명이 전부 같고 로트만 다르다 — 이름으로는 아무것도 못 가린다.
+        lotSnapshot(left, "P1", "제품A", "L-01", "5");
+        lotSnapshot(left, "P2", "제품A", "L-02", "7");
+        lotSnapshot(right, "Q1", "제품A", "L-02", "7");
+        lotSnapshot(right, "Q2", "제품A", "L-01", "3");
+
+        ReconcileUnit unit = unitService.link(List.of(
+                        new ReconcileUnitService.Pick(left, "P1", BigDecimal.ONE),
+                        new ReconcileUnitService.Pick(left, "P2", BigDecimal.ONE),
+                        new ReconcileUnitService.Pick(right, "Q1", BigDecimal.ONE),
+                        new ReconcileUnitService.Pick(right, "Q2", BigDecimal.ONE)),
+                "U-" + UUID.randomUUID().toString().substring(0, 8), "제품A", "EA");
+
+        BreakdownAxis byLot = breakdowns.axisOf(TENANT, "FIELD:lot_code");
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), left, right,
+                baseAt, baseAt, baseAt, byLot);
+
+        assertThat(result.lines()).hasSize(2);
+        assertThat(result.orphans()).isZero();
+        assertThat(result.lines())
+                .as("같은 로트끼리 맺어야 «무엇과 무엇이» 다른지 보인다")
+                .allSatisfy(line -> assertThat(line.left().axisKey())
+                        .isEqualTo(line.right().axisKey()));
+        assertThat(result.lines())
+                .filteredOn(line -> line.axisKey().equals("L-01"))
+                .singleElement()
+                .satisfies(line -> assertThat(line.diff()).isEqualByComparingTo("2"));
+    }
+
+    /**
+     * 고른 기준이 <b>그 자료에 없으면 말해야 한다.</b>
+     *
+     * <p>조용히 「전부 짝 없음」 을 보여주면 사람은 자료가 잘못된 줄 알지, 기준을 잘못 골랐다고는
+     * 생각하지 못한다. 실제로 이 발주사의 물류 쪽에는 창고 칸이 비어 있다.
+     */
+    @Test
+    @DisplayName("고른 기준의 값이 한쪽에 없으면 그 사실을 알린다")
+    void 기준이_안_맞으면_말한다() {
+        ReconcileUnit unit = linkedUnit();
+
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
+                baseAt, baseAt, baseAt, breakdowns.axisOf(TENANT, "FIELD:lot_code"));
+
+        assertThat(result.axisUnusable())
+                .as("말하지 않으면 사람은 자료가 잘못된 줄 안다")
+                .isTrue();
+    }
+
+    /** 견줄 근거가 없으면 <b>억지로 맺지 않는다.</b> 못 맺는 것이 잘못 맺는 것보다 낫다. */
+    @Test
+    @DisplayName("짝짓지 않기로 하면 양쪽을 그대로 늘어놓는다")
+    void 짝짓지_않는다() {
+        ReconcileUnit unit = linkedUnit();
+
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
+                baseAt, baseAt, baseAt, BreakdownAxis.none());
+
+        assertThat(result.lines()).hasSize(8);
+        assertThat(result.lines()).noneSatisfy(line -> assertThat(line.paired()).isTrue());
+    }
+
+    private void lotSnapshot(String source, String itemRef, String name, String lot, String qty) {
+        var at = baseAt.atOffset(ZoneOffset.UTC);
+        jdbcClient.sql("""
+                        INSERT INTO std_stock_snapshot
+                            (id, tenant_id, item_ref, base_at, source, warehouse_code, lot_code,
+                             quantity, base_quantity, base_unit, raw_item_name,
+                             created_at, updated_at)
+                        VALUES (:id, :tenant, :item, :at, :source, '', :lot,
+                                :qty, :qty, 'EA', :name, :at, :at)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", TENANT)
+                .param("item", itemRef)
+                .param("at", at)
+                .param("source", source)
+                .param("lot", lot)
+                .param("qty", new BigDecimal(qty))
+                .param("name", name)
+                .update();
     }
 
     /**

@@ -7,6 +7,7 @@ import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.reconcile.match.BreakdownAxis;
 import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
@@ -207,6 +208,7 @@ public class ReconcileController {
     @GetMapping("/reconcile/runs/{runId}")
     public String runDetail(@PathVariable UUID runId,
                             @RequestParam(required = false) UUID expand,
+                            @RequestParam(required = false) String axis,
                             Model model) {
         ReconcileRun run = runs.findById(runId).orElseThrow();
         ReconcileDefinition definition = definitions.findById(run.getDefinitionId()).orElseThrow();
@@ -231,10 +233,16 @@ public class ReconcileController {
                 .toList();
 
         if (expand != null) {
+            // 주소로 온 기준이 있으면 그것, 없으면 이 대조에 정해 둔 기준. 자료 구조가 회사마다
+            // 다르므로 기준도 다르다 — 코드가 하나로 정해 버리면 다른 곳에서는 못 쓴다.
+            BreakdownAxis using = breakdowns.axisOf(tenantId,
+                    axis == null || axis.isBlank() ? definition.getBreakdownAxis() : axis);
             model.addAttribute("expandUnitId", expand);
+            model.addAttribute("axis", using);
+            model.addAttribute("axes", breakdowns.axes(tenantId));
             model.addAttribute("breakdown", breakdowns.of(tenantId, expand,
                     definition.getLeftSource(), definition.getRightSource(),
-                    run.getLeftBaseAt(), run.getRightBaseAt(), run.getStartedAt()));
+                    run.getLeftBaseAt(), run.getRightBaseAt(), run.getStartedAt(), using));
         }
 
         model.addAttribute("title", definition.getName() + " · 결과");
@@ -248,6 +256,32 @@ public class ReconcileController {
         model.addAttribute("unmatched", rows.stream()
                 .filter(DiffRowView::unmatched).toList());
         return "reconcile/run-detail";
+    }
+
+    /**
+     * 뜯어보는 기준을 <b>이 대조의 기본값</b>으로 정한다.
+     *
+     * <p>즉석으로 바꿔 보는 것과 「우리는 늘 이 기준으로 본다」 는 다른 이야기다. 매번 골라야
+     * 한다면 결국 기본값만 쓰게 되고, 그 기본값이 안 맞는 회사에서는 이 화면을 안 보게 된다.
+     */
+    @PostMapping("/reconcile/{id}/breakdown-axis")
+    public String changeBreakdownAxis(@PathVariable UUID id,
+                                      @RequestParam String axis,
+                                      @RequestParam(required = false) UUID runId,
+                                      @RequestParam(required = false) UUID expand,
+                                      RedirectAttributes redirect) {
+        ReconcileDefinition definition = definitions.findById(id).orElseThrow();
+        // 실제로 있는 칸만 받아들인다 — 사람이 준 글자가 그대로 저장되면 안 된다.
+        BreakdownAxis using = breakdowns.axisOf(TenantContext.current(), axis);
+        definition.changeBreakdownAxis(using.token());
+        definitions.save(definition);
+        redirect.addFlashAttribute("flashSuccess",
+                "앞으로 「%s」 기준으로 뜯어봅니다.".formatted(using.label()));
+        if (runId == null) {
+            return "redirect:/reconcile/" + id;
+        }
+        return "redirect:/reconcile/runs/" + runId
+                + (expand == null ? "" : "?expand=" + expand);
     }
 
     /** 사람이 처리했다고 표시한다. */
