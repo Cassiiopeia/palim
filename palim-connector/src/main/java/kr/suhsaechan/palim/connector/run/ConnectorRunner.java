@@ -16,6 +16,8 @@ import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
 import kr.suhsaechan.palim.connector.define.ConnectorMapping;
+import kr.suhsaechan.palim.connector.define.Intake;
+import kr.suhsaechan.palim.connector.define.SourceType;
 import kr.suhsaechan.palim.connector.model.TargetModel;
 import kr.suhsaechan.palim.connector.source.SourceContext;
 import kr.suhsaechan.palim.connector.source.SourceReader;
@@ -74,7 +76,14 @@ public class ConnectorRunner {
                 request.headerRow());
 
         Connector connector = loader.connector(request.connectorId());
-        ConnectorMapping mapping = loader.mappingFor(connector, request.mode());
+        // «파일 길» 은 스스로 가져오는 연동에 파일이 올라왔을 때만이다 — 상대 사이트가 바뀌어
+        // 자동 수집이 깨졌을 때 쓰는 우회로다.
+        //
+        // 원래 파일로 받는 연동(UPLOAD)에게 파일은 «정상 경로» 이지 우회로가 아니다. 그것까지
+        // 파일 길로 보면 여태 맞춰 둔 칸을 못 찾아 전 실행이 죽는다.
+        Intake intake = request.file() != null && connector.getSourceType() != SourceType.UPLOAD
+                ? Intake.FILE : Intake.AUTO;
+        ConnectorMapping mapping = loader.mappingFor(connector, intake, request.mode());
         log.debug("정의 적재 — 커넥터={} 원천유형={} 매핑id={} 매핑버전={} 매핑상태={}",
                 connector.getCode(), connector.getSourceType(), mapping.getId(),
                 mapping.getVersion(), mapping.getStatus());
@@ -119,7 +128,9 @@ public class ConnectorRunner {
                 run.getId(), model.getCode(), model.getStorage(), fieldMaps.size(), specs.size(),
                 hasBaseQuantity);
 
-        SourceReader reader = readers.of(connector.getSourceType());
+        // 엑셀 열 이름은 API 칸 이름과 다르므로 칸 맞추기도 길마다 다르다. 리더도 마찬가지다.
+        SourceReader reader = readers.of(request.file() == null
+                ? connector.getSourceType() : SourceType.UPLOAD);
         SourceContext context = new SourceContext(connector.getId(), request.file(),
                 request.headerRow(), connector.getCursorValue(), connector.getSourceConfig());
         // sourceConfig 에는 API URL·응답 경로 같은 비민감 값만 들어온다(비밀값은 credentialRef)

@@ -16,6 +16,7 @@ import kr.suhsaechan.palim.connector.define.ConnectorFieldMapRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorMapping;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
+import kr.suhsaechan.palim.connector.define.Intake;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import kr.suhsaechan.palim.connector.define.SourceType;
 import kr.suhsaechan.palim.connector.model.TargetField;
@@ -89,8 +90,15 @@ public class ConnectorAdminService {
      * <p>임시 파일은 <b>호출자가 지운다.</b> 스키마만 보고 끝나는 경우와 이어서 실행까지 하는
      * 경우가 있어, 여기서 지우면 두 번째 흐름이 깨진다.
      */
+    /**
+     * 올린 파일에서 칸을 읽는다.
+     *
+     * <p><b>연동 유형이 아니라 「파일이 왔다」 는 사실로 리더를 고른다.</b> 유형으로 고르면
+     * 스스로 가져오는 연동에 파일을 올려도 API 를 부르고, 그 API 가 죽어 있어서 파일을 올린
+     * 것이므로 <b>우회로가 우회로가 아니게 된다.</b>
+     */
     public SourceSchema readSchema(Connector connector, Path file, int headerRow) {
-        return readers.of(connector.getSourceType())
+        return readers.of(SourceType.UPLOAD)
                 .readSchema(SourceContext.ofUpload(connector.getId(), file, headerRow));
     }
 
@@ -163,11 +171,51 @@ public class ConnectorAdminService {
                 total instanceof Number n ? n.intValue() : -1);
     }
 
+    /**
+     * 그 길의 초안 — 없으면 만든다.
+     *
+     * <p>길을 안 가리고 찾으면 파일용 초안을 만들려는데 자동 수집용 초안이 잡힌다. 그러면 API
+     * 칸 이름 위에 엑셀 열 이름을 덮어써 <b>둘 다 못 쓰게 된다.</b>
+     */
+    private ConnectorMapping draftFor(Connector connector, Intake intake) {
+        return mappingRepository
+                .findByConnectorIdAndIntakeOrderByVersionDesc(connector.getId(), intake).stream()
+                .filter(candidate -> candidate.getStatus() == MappingStatus.DRAFT)
+                .findFirst()
+                .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(),
+                        connector.getId(), nextVersion(connector.getId()), intake, Map.of()));
+    }
+
+    /** 파일을 어디서 받는지. 상대 사이트가 바뀌면 사람이 그 자리에서 고쳐 둔다. */
+    @Transactional
+    public void changeFileGuide(UUID connectorId, String guide) {
+        Connector connector = connector(connectorId);
+        connector.changeFileGuide(guide);
+        connectorRepository.save(connector);
+    }
+
     /** 확정해 둔 것이 있는가. 「확정할 것이 없다」와 「이미 확정했다」를 가르는 데 쓴다. */
     @Transactional(readOnly = true)
     public boolean hasActiveMapping(UUID connectorId) {
+        return hasActiveMapping(connectorId, Intake.AUTO);
+    }
+
+    /** 길마다 확정판이 따로다 — 엑셀 열 이름과 API 칸 이름이 다르기 때문이다. */
+    @Transactional(readOnly = true)
+    public boolean hasActiveMapping(UUID connectorId, Intake intake) {
         return mappingRepository
-                .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE).isPresent();
+                .findByConnectorIdAndIntakeAndStatus(connectorId, intake, MappingStatus.ACTIVE)
+                .isPresent();
+    }
+
+    /** 그 길의 확정판 칸 수. 화면이 「7칸 맞춤 / 아직 없음」 을 말하는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public int activeFieldCount(UUID connectorId, Intake intake) {
+        return mappingRepository
+                .findByConnectorIdAndIntakeAndStatus(connectorId, intake, MappingStatus.ACTIVE)
+                .map(mapping -> fieldMapRepository
+                        .findByMappingIdOrderBySortOrder(mapping.getId()).size())
+                .orElse(0);
     }
 
     /**
@@ -217,11 +265,13 @@ public class ConnectorAdminService {
      */
     @Transactional
     public void rememberSchema(UUID connectorId, SourceSchema schema) {
+        rememberSchema(connectorId, Intake.AUTO, schema);
+    }
+
+    @Transactional
+    public void rememberSchema(UUID connectorId, Intake intake, SourceSchema schema) {
         Connector connector = connector(connectorId);
-        ConnectorMapping draft = mappingRepository
-                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
-                .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(), connectorId,
-                        nextVersion(connectorId), Map.of()));
+        ConnectorMapping draft = draftFor(connector, intake);
         draft.replaceSchema(snapshotOf(schema));
         mappingRepository.save(draft);
     }
@@ -229,12 +279,14 @@ public class ConnectorAdminService {
     @Transactional
     public ConnectorMapping saveDraft(UUID connectorId, SourceSchema schema,
                                       List<FieldMappingForm> forms) {
-        Connector connector = connector(connectorId);
+        return saveDraft(connectorId, Intake.AUTO, schema, forms);
+    }
 
-        ConnectorMapping draft = mappingRepository
-                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
-                .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(), connectorId,
-                        nextVersion(connectorId), Map.of()));
+    @Transactional
+    public ConnectorMapping saveDraft(UUID connectorId, Intake intake, SourceSchema schema,
+                                      List<FieldMappingForm> forms) {
+        Connector connector = connector(connectorId);
+        ConnectorMapping draft = draftFor(connector, intake);
 
         // 저장할 때 화면은 칸 «이름» 만 돌려보낸다. 그것으로 담아 둔 것을 통째로 덮으면
         // 실제로 들어올 값이 사라져, 저장 한 번에 미리보기가 전부 «—» 가 된다. 사람은 그때
@@ -266,8 +318,15 @@ public class ConnectorAdminService {
      */
     @Transactional
     public ConnectorMapping activate(UUID connectorId) {
+        return activate(connectorId, Intake.AUTO);
+    }
+
+    @Transactional
+    public ConnectorMapping activate(UUID connectorId, Intake intake) {
         ConnectorMapping draft = mappingRepository
-                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
+                .findByConnectorIdAndIntakeOrderByVersionDesc(connectorId, intake).stream()
+                .filter(candidate -> candidate.getStatus() == MappingStatus.DRAFT)
+                .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.MAPPING_NOT_FOUND));
 
         // 이을 칸이 하나도 없는 초안은 확정하지 않는다.
@@ -282,7 +341,8 @@ public class ConnectorAdminService {
             throw new BusinessException(ErrorCode.MAPPING_EMPTY);
         }
 
-        mappingRepository.findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
+        mappingRepository
+                .findByConnectorIdAndIntakeAndStatus(connectorId, intake, MappingStatus.ACTIVE)
                 .ifPresent(active -> {
                     active.archive();
                     mappingRepository.saveAndFlush(active);

@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import kr.suhsaechan.palim.connector.define.Intake;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -128,9 +129,15 @@ public class ConnectorController {
     }
 
     @GetMapping("/connectors/{id}/mapping")
-    public String mapping(@PathVariable UUID id, Model model) {
+    public String mapping(@PathVariable UUID id,
+                          @RequestParam(required = false) String intake,
+                          Model model) {
         Connector connector = adminService.connector(id);
-        model.addAttribute("title", connector.getName() + " · 매핑");
+        // 엑셀 열 이름과 API 칸 이름이 달라 칸 맞추기를 길마다 따로 둔다. 어느 길을 맞추고
+        // 있는지 화면이 말하지 않으면 사람은 자기가 무엇을 고치는지 모른다.
+        Intake using = Intake.of(intake);
+        model.addAttribute("title", connector.getName() + " · 칸 맞추기");
+        model.addAttribute("intake", using);
         model.addAttribute("connector", connector);
         model.addAttribute("targetFields", adminService.targetFields(id));
         model.addAttribute("transformTypes", TransformType.values());
@@ -207,7 +214,9 @@ public class ConnectorController {
         Connector connector = adminService.connector(id);
         try {
             SourceSchema schema = adminService.readSchema(connector);
-            adminService.rememberSchema(id, schema);
+            // 「다시 받아오기」 는 스스로 가져오는 길에만 있다. 파일 길의 칸은 사람이 올린
+            // 파일에서 읽으므로 여기로 오지 않는다.
+            adminService.rememberSchema(id, Intake.AUTO, schema);
             redirect.addFlashAttribute("flashSuccess",
                     "칸 %d 개를 다시 받아왔습니다.".formatted(schema.fields().size()));
         } catch (BusinessException e) {
@@ -224,6 +233,7 @@ public class ConnectorController {
     /** 파일 업로드 → 원천 필드 추출. 매핑 화면을 채워 다시 보여준다. */
     @PostMapping("/connectors/{id}/schema")
     public String readSchema(@PathVariable UUID id, @RequestParam MultipartFile file,
+                             @RequestParam(required = false) String intake,
                              @RequestParam(defaultValue = "1") int headerRow,
                              Model model, RedirectAttributes redirect) {
         Connector connector = adminService.connector(id);
@@ -231,8 +241,13 @@ public class ConnectorController {
         try {
             temp = adminService.saveTemporary(file);
             SourceSchema schema = adminService.readSchema(connector, temp, headerRow);
+            Intake using = Intake.of(intake);
+            // 읽은 칸을 «그 길의» 초안에 담아 둔다. 안 담으면 화면을 다시 열 때 파일을 또
+            // 올려야 하고, 급할 때 쓰는 길에서 그 왕복이 제일 아프다.
+            adminService.rememberSchema(id, using, schema);
 
-            model.addAttribute("title", connector.getName() + " · 매핑");
+            model.addAttribute("title", connector.getName() + " · 칸 맞추기");
+            model.addAttribute("intake", using);
             model.addAttribute("connector", connector);
             model.addAttribute("targetFields", adminService.targetFields(id));
             model.addAttribute("transformTypes", TransformType.values());
@@ -249,7 +264,7 @@ public class ConnectorController {
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
-            return "redirect:/connectors/" + id + "/mapping";
+            return "redirect:/connectors/" + id + "/mapping?intake=" + Intake.of(intake).name();
         } finally {
             adminService.deleteQuietly(temp);
         }
@@ -267,6 +282,7 @@ public class ConnectorController {
                               @RequestParam(required = false) List<String> transformTypes,
                               @RequestParam(required = false) List<String> params,
                               @RequestParam List<String> schemaFields,
+                              @RequestParam(required = false) String intake,
                               RedirectAttributes redirect) {
         List<FieldMappingForm> forms = new ArrayList<>();
         for (int i = 0; i < targetKeys.size(); i++) {
@@ -275,10 +291,11 @@ public class ConnectorController {
                     at(transformTypes, i), at(params, i), i));
         }
 
-        adminService.saveDraft(id, new SourceSchema(schemaFields, List.of(), 0), forms);
+        Intake using = Intake.of(intake);
+        adminService.saveDraft(id, using, new SourceSchema(schemaFields, List.of(), 0), forms);
         redirect.addFlashAttribute("flashSuccess",
-                "매핑을 저장했습니다. 테스트 실행으로 결과를 확인하세요.");
-        return "redirect:/connectors/" + id + "/mapping";
+                "칸 맞추기를 저장했습니다. 시험 실행으로 결과를 확인하세요.");
+        return "redirect:/connectors/" + id + "/mapping?intake=" + using.name();
     }
 
     /**
@@ -298,6 +315,9 @@ public class ConnectorController {
                              @RequestParam(required = false) List<String> transformTypes,
                              @RequestParam(required = false) List<String> params,
                              @RequestParam List<String> schemaFields,
+                             @RequestParam(required = false) String intake,
+                             @RequestParam(required = false) MultipartFile file,
+                             @RequestParam(defaultValue = "1") int headerRow,
                              RedirectAttributes redirect) {
         List<FieldMappingForm> forms = new ArrayList<>();
         for (int i = 0; i < targetKeys.size(); i++) {
@@ -305,8 +325,11 @@ public class ConnectorController {
                     at(sourceFields, i), at(targetKeys, i),
                     at(transformTypes, i), at(params, i), i));
         }
-        adminService.saveDraft(id, new SourceSchema(schemaFields, List.of(), 0), forms);
-        return run(id, null, 1, RunMode.TEST, false, redirect);
+        adminService.saveDraft(id, Intake.of(intake), new SourceSchema(schemaFields, List.of(), 0),
+                forms);
+        // 파일 길을 맞추는 중이면 그 파일로 시험 실행해야 한다 — API 로 돌리면 방금 맞춘 칸이
+        // 아니라 다른 칸으로 도는 셈이라 결과를 믿을 수 없다.
+        return run(id, file, headerRow, RunMode.TEST, false, redirect);
     }
 
     /**
@@ -356,10 +379,27 @@ public class ConnectorController {
      * 해야 하는지 알 수 없다.</b> 이 화면에서 그 상황은 둘 뿐이고 할 일도 서로 다르다 —
      * 아직 저장하지 않았거나, 이미 확정해 둔 것이다. 둘을 갈라 말한다.
      */
+    /**
+     * 파일을 어디서 받는지 고친다.
+     *
+     * <p>상대 사이트는 언젠가 바뀐다. 그때 사람이 그 자리에서 고쳐 두면 <b>다음부터 그게
+     * 정답</b>이 된다 — 코드를 고쳐야 하면 그 사이 아무도 못 쓴다.
+     */
+    @PostMapping("/connectors/{id}/file-guide")
+    public String changeFileGuide(@PathVariable UUID id,
+                                  @RequestParam(required = false) String guide,
+                                  RedirectAttributes redirect) {
+        adminService.changeFileGuide(id, guide);
+        redirect.addFlashAttribute("flashSuccess", "받는 방법 안내를 고쳤습니다.");
+        return "redirect:/connectors/" + id;
+    }
+
     @PostMapping("/connectors/{id}/activate")
-    public String activate(@PathVariable UUID id, RedirectAttributes redirect) {
+    public String activate(@PathVariable UUID id,
+                           @RequestParam(required = false) String intake,
+                           RedirectAttributes redirect) {
         try {
-            adminService.activate(id);
+            adminService.activate(id, Intake.of(intake));
             redirect.addFlashAttribute("flashSuccess",
                     "매핑을 확정했습니다. 이제 실제 적재가 가능합니다.");
         } catch (BusinessException e) {

@@ -39,8 +39,22 @@
         </div>
     </div>
 
-    <!--/* 파일 원천만 업로드 단계가 있다. API 는 칸 이름을 이미 안다. */-->
-    <div class="card bg-base-100 shadow-sm mb-6" th:unless="${fetchesItself}">
+    <!--/* 지금 어느 길의 칸을 맞추는 중인지. 말하지 않으면 사람은 자기가 무엇을 고치는지
+           모른 채 엑셀 열 이름을 API 칸 위에 덮어쓴다(07-DECISIONS 045). */-->
+    <div class="flex flex-wrap items-center gap-2 mb-4"
+         th:if="${intake != null and intake.name() == 'FILE'}">
+        <span class="badge badge-ghost badge-sm">파일 업로드용 칸</span>
+        <span class="text-sm text-base-content/60">
+            자동 수집이 멈췄을 때 쓰는 길입니다. 엑셀 열 이름으로 맞춥니다.
+        </span>
+        <a th:href="@{/connectors/{id}/mapping(id=${connector.id},intake='AUTO')}"
+           class="link text-sm ml-auto">자동 수집용 칸 보기</a>
+    </div>
+
+    <!--/* 파일 원천이거나 «파일 길» 을 맞추는 중이면 업로드 단계가 있다. 스스로 가져오는
+           연동이어도 파일 길의 칸은 실제 파일에서만 알 수 있다. */-->
+    <div class="card bg-base-100 shadow-sm mb-6"
+         th:if="${!fetchesItself or (intake != null and intake.name() == 'FILE')}">
         <div class="card-body gap-3">
             <h2 class="card-title text-base">원천 파일 올리기</h2>
             <p class="text-sm text-base-content/60">
@@ -48,6 +62,8 @@
             </p>
             <form th:action="@{/connectors/{id}/schema(id=${connector.id})}" method="post"
                   enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
+                <input type="hidden" name="intake"
+                       th:value="${intake != null} ? ${intake.name()} : 'AUTO'">
                 <input type="file" name="file" accept=".csv,.xlsx,.xlsm" required
                        class="file-input file-input-bordered file-input-sm">
                 <label class="form-control">
@@ -66,7 +82,8 @@
 
            예전에는 화면을 열 때마다 불렀는데, 새로고침 한 번이 원격 호출 한 번이 되고 상대가
            잠깐 삐끗하면 화면 자체가 안 열렸다 — 이미 해 둔 칸 연결조차 못 봤다. */-->
-    <div th:if="${fetchesItself}" class="flex items-center justify-between gap-3 mb-6">
+    <div th:if="${fetchesItself and (intake == null or intake.name() != 'FILE')}"
+         class="flex items-center justify-between gap-3 mb-6">
         <p class="text-sm text-base-content/60">
             <span th:if="${schema != null}">지난번에 받아온 칸으로 보여 주고 있습니다.</span>
             <span th:if="${schema == null}">아직 칸을 받아오지 못했습니다.</span>
@@ -116,7 +133,12 @@
     </div>
 
     <form th:if="${schema != null}"
-          th:action="@{/connectors/{id}/mapping(id=${connector.id})}" method="post">
+          th:action="@{/connectors/{id}/mapping(id=${connector.id})}" method="post"
+          enctype="multipart/form-data">
+        <!--/* 어느 길의 칸을 맞추는 중인지 함께 보낸다. 안 보내면 파일용을 맞춰 놓고
+               자동 수집용 초안에 저장되어 «둘 다» 못 쓰게 된다. */-->
+        <input type="hidden" name="intake"
+               th:value="${intake != null} ? ${intake.name()} : 'AUTO'">
 
         <input type="hidden" name="schemaFields" th:each="f : ${schema.fields}" th:value="${f}">
 
@@ -243,6 +265,23 @@
                전 줄이 「필수 칸이 비었다」로 떨어졌다 — 화면에는 고른 칸이 그대로 보이므로
                사람은 자기가 뭘 안 했는지 알 수 없다. 고르라고 해 놓고 고른 것을 안 쓰는
                버튼을 바로 밑에 두면 누구나 그것을 누른다. */-->
+        <!--/* 파일 길은 «그 파일로» 시험해야 한다. 폼 밖의 파일은 실려 오지 않으므로 여기서
+               한 번 더 받는다 — API 로 돌리면 방금 맞춘 칸이 아닌 다른 칸으로 도는 셈이라
+               결과를 믿을 수 없다. */-->
+        <div class="flex flex-wrap items-end justify-end gap-2"
+             th:if="${intake != null and intake.name() == 'FILE'}">
+            <label class="form-control">
+                <span class="label-text text-xs">시험 실행에 쓸 파일 (같은 파일을 다시 고르세요)</span>
+                <input type="file" name="file" accept=".csv,.xlsx,.xlsm"
+                       class="file-input file-input-bordered file-input-sm">
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs">머리글 줄</span>
+                <input type="number" name="headerRow" min="1" value="1"
+                       th:value="${headerRow} ?: 1" class="input input-bordered input-sm w-20">
+            </label>
+        </div>
+
         <div class="flex justify-end gap-2">
             <button type="submit" class="btn btn-sm">연결 저장</button>
             <button type="submit" class="btn btn-outline btn-sm"
@@ -398,6 +437,8 @@
 
         <div class="flex flex-wrap gap-2 items-end">
             <form th:action="@{/connectors/{id}/activate(id=${connector.id})}" method="post">
+                <input type="hidden" name="intake"
+                       th:value="${intake != null} ? ${intake.name()} : 'AUTO'">
                 <button type="submit" class="btn btn-sm">연결 확정</button>
             </form>
             <form th:action="@{/connectors/{id}/run(id=${connector.id})}" method="post"

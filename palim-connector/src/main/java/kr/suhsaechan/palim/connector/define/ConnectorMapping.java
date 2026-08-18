@@ -52,6 +52,16 @@ public class ConnectorMapping extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private MappingStatus status;
 
+    /**
+     * 어느 길로 들어오는 자료를 위한 칸 맞추기인가.
+     *
+     * <p>엑셀 열 이름은 API 칸 이름과 다르다. 하나로 두면 파일을 올리는 순간 칸이 안 맞아
+     * 전 행이 실패한다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Intake intake = Intake.AUTO;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false)
     private Map<String, Object> sourceSchema;
@@ -62,20 +72,27 @@ public class ConnectorMapping extends BaseTimeEntity {
 
     private Instant activatedAt;
 
-    private ConnectorMapping(UUID tenantId, UUID connectorId, int version,
+    private ConnectorMapping(UUID tenantId, UUID connectorId, int version, Intake intake,
                              Map<String, Object> sourceSchema) {
         this.id = UuidV7.generate();
         this.tenantId = tenantId;
         this.connectorId = connectorId;
         this.version = version;
         this.status = MappingStatus.DRAFT;
+        this.intake = intake == null ? Intake.AUTO : intake;
         this.sourceSchema = sourceSchema;
         this.hooks = List.of();
     }
 
     public static ConnectorMapping draft(UUID tenantId, UUID connectorId, int version,
                                          Map<String, Object> sourceSchema) {
-        return new ConnectorMapping(tenantId, connectorId, version, sourceSchema);
+        return draft(tenantId, connectorId, version, Intake.AUTO, sourceSchema);
+    }
+
+    /** 어느 길로 들어오는 자료를 위한 초안인가. 엑셀 열 이름과 API 칸 이름이 다르기 때문이다. */
+    public static ConnectorMapping draft(UUID tenantId, UUID connectorId, int version,
+                                         Intake intake, Map<String, Object> sourceSchema) {
+        return new ConnectorMapping(tenantId, connectorId, version, intake, sourceSchema);
     }
 
     /**

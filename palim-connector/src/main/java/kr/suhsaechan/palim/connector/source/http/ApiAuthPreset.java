@@ -114,6 +114,28 @@ public enum ApiAuthPreset {
     }
 
     /** 비밀값 칸 이름. 시스템마다 넣는 것이 다르다. */
+    /**
+     * 파일을 어디서 어떻게 받는지 — <b>기본 안내문.</b>
+     *
+     * <p>자동 수집이 깨졌을 때 쓰는 우회로인데 그때 방법을 찾아다니게 하면 우회로가 아니다.
+     * 여기 심어 두고 화면에서 고칠 수 있게 한다 — <b>상대 사이트는 언젠가 바뀐다.</b>
+     */
+    public String getFileGuide() {
+        return switch (this) {
+            case ECOUNT -> """
+                    ① 이카운트에 로그인합니다
+                    ② 재고 > 재고현황(또는 재고수불부) 으로 들어갑니다
+                    ③ 기준일자를 오늘로 두고 조회합니다
+                    ④ 표 위쪽 「엑셀」 내려받기를 눌러 파일을 저장합니다""";
+            case ONEWMS -> """
+                    ① ONEWMS 관리 화면에 로그인합니다
+                    ② 재고관리 > 재고현황 으로 들어갑니다
+                    ③ 창고·재고구분을 평소 조회하던 조건으로 맞춥니다
+                    ④ 표 오른쪽 위 「엑셀」 버튼을 눌러 파일을 저장합니다""";
+            case CUSTOM_FORM -> "";
+        };
+    }
+
     public String getSecretLabel() {
         return switch (this) {
             case ECOUNT -> "API 인증키";

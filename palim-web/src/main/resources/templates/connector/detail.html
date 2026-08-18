@@ -55,7 +55,24 @@
                         칸을 맞춰야 자료가 들어옵니다
                     </span>
                 </div>
-                <a th:href="@{/connectors/{id}/mapping(id=${view.id})}"
+                <a th:href="@{/connectors/{id}/mapping(id=${view.id},intake='AUTO')}"
+                   class="btn btn-ghost btn-sm">맞추러 가기</a>
+            </div>
+
+            <!--/* 파일로 올릴 때 쓰는 칸 맞추기. 엑셀 열 이름은 API 칸 이름과 다르므로
+                   («재고수량» vs stock_qty) 한 벌로는 안 된다 — 파일을 올리는 순간 칸이
+                   안 맞아 전 행이 실패한다(07-DECISIONS 045). */-->
+            <div class="flex items-center gap-4 p-4 border-b border-base-300"
+                 th:if="${view.fetchesItself()}">
+                <div class="w-28 font-medium">파일용 칸</div>
+                <div class="grow text-sm">
+                    <span th:if="${view.fileMappingFields > 0}" class="text-base-content/60"
+                          th:text="${view.fileMappingFields} + '칸 맞춤'">맞춤</span>
+                    <span th:if="${view.fileMappingFields == 0}" class="text-base-content/60">
+                        아직 없음 — 파일을 한 번 올려 칸을 맞춰 두면 급할 때 바로 씁니다
+                    </span>
+                </div>
+                <a th:href="@{/connectors/{id}/mapping(id=${view.id},intake='FILE')}"
                    class="btn btn-ghost btn-sm">맞추러 가기</a>
             </div>
 
@@ -121,6 +138,74 @@
                     원천이 「박스」로 보내는데 우리가 「낱개」로 센다면 여기서 규칙을 정합니다.
                 </div>
                 <a th:href="@{/connectors/units}" class="btn btn-ghost btn-sm">규칙 관리</a>
+            </div>
+
+            <!--/* 파일로 대신 채우기.
+
+                   공개 API 가 없는 원천은 상대 화면이 쓰는 경로를 흉내 내서 가져온다. 상대
+                   사이트가 바뀌면 그날로 깨지는데, 그때 사람이 파일을 받아 올려 계속 돌릴 수
+                   있어야 업무가 안 멈춘다. «같은 원천 이름» 으로 들어가므로 묶어 둔 품목이
+                   그대로 산다(07-DECISIONS 045). */-->
+            <div class="p-4 border-b border-base-300" th:if="${view.fetchesItself()}">
+                <div class="flex items-center gap-4 mb-3">
+                    <div class="w-28 font-medium shrink-0">파일로 채우기</div>
+                    <div class="grow text-sm text-base-content/60">
+                        자동 수집이 멈췄을 때 직접 받아 올리면 같은 자리에 들어갑니다.
+                    </div>
+                </div>
+
+                <!--/* 자동 수집이 연달아 실패하고 있다. 방금 이 화면에서 일어난 일이 아니라
+                       «지금 상태» 이므로 alert 로 외치지 않고 이 자리에서 말한다. */-->
+                <div th:if="${view.lastStatus == 'FAILED'}"
+                     class="alert alert-warning mb-3" role="alert">
+                    <span class="text-sm">
+                        마지막 자동 수집이 실패했습니다. 상대 사이트가 바뀌었을 수 있습니다 —
+                        아래에서 파일로 채우면 오늘 대조는 그대로 돌릴 수 있습니다.
+                    </span>
+                </div>
+
+                <div class="rounded border border-base-300 p-3 mb-3">
+                    <div class="text-sm font-medium mb-1">어디서 받나</div>
+                    <p th:if="${#strings.isEmpty(view.fileGuide)}"
+                       class="text-sm text-base-content/60">
+                        받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
+                    </p>
+                    <pre th:unless="${#strings.isEmpty(view.fileGuide)}"
+                         class="text-sm whitespace-pre-wrap font-sans"
+                         th:text="${view.fileGuide}">안내</pre>
+                    <form th:action="@{/connectors/{id}/file-guide(id=${view.id})}" method="post"
+                          class="flex flex-wrap items-end gap-2 mt-2">
+                        <label class="form-control grow">
+                            <span class="label-text text-xs">받는 방법 고치기 — 상대 사이트는 언젠가 바뀝니다</span>
+                            <textarea name="guide" rows="4"
+                                      class="textarea textarea-bordered textarea-sm w-full"
+                                      th:text="${view.fileGuide}"></textarea>
+                        </label>
+                        <button type="submit" class="btn btn-sm">안내 저장</button>
+                    </form>
+                </div>
+
+                <!--/* 칸을 안 맞춰 두면 올려도 전 행이 실패한다. 올리기 전에 말한다. */-->
+                <div th:if="${view.fileMappingFields == 0}" class="text-sm text-base-content/60 mb-2">
+                    파일용 칸을 아직 안 맞췄습니다. 위 「파일용 칸 · 맞추러 가기」 에서 파일을
+                    한 번 올려 칸을 맞춘 뒤에 담을 수 있습니다.
+                </div>
+                <form th:if="${view.fileMappingFields > 0}"
+                      th:action="@{/connectors/{id}/run(id=${view.id})}" method="post"
+                      enctype="multipart/form-data" class="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="mode" value="LIVE">
+                    <label class="form-control">
+                        <span class="label-text text-xs">받은 파일</span>
+                        <input type="file" name="file" required accept=".xlsx,.xls,.csv"
+                               class="file-input file-input-bordered file-input-sm">
+                    </label>
+                    <label class="form-control">
+                        <span class="label-text text-xs">머리글 줄</span>
+                        <input type="number" name="headerRow" value="1" min="1"
+                               class="input input-bordered input-sm w-20">
+                    </label>
+                    <button type="submit" class="btn btn-sm">올려서 담기</button>
+                </form>
             </div>
 
             <!--/* 목록이 붉은 뱃지로 외친 실패를 여기서 평문으로 삼키면, 빨강을 보고 들어온

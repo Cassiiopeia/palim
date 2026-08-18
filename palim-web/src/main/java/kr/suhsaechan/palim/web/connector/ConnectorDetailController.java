@@ -10,6 +10,7 @@ import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorMapping;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
+import kr.suhsaechan.palim.connector.define.Intake;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +47,8 @@ public class ConnectorDetailController {
     @GetMapping("/connectors/{id}")
     public String detail(@PathVariable UUID id, Model model) {
         Connector connector = adminService.connector(id);
-        Optional<ConnectorMapping> active =
-                mappingRepository.findByConnectorIdAndStatus(id, MappingStatus.ACTIVE);
+        Optional<ConnectorMapping> active = mappingRepository
+                .findByConnectorIdAndIntakeAndStatus(id, Intake.AUTO, MappingStatus.ACTIVE);
         List<RunSummary> runs = queryService.runs(id, RECENT_RUN_LIMIT);
 
         model.addAttribute("title", connector.getName());
@@ -55,7 +56,9 @@ public class ConnectorDetailController {
                 connector,
                 active.isPresent(),
                 active.map(ConnectorMapping::getVersion).orElse(null),
-                runs.isEmpty() ? null : runs.get(0)));
+                runs.isEmpty() ? null : runs.get(0),
+                // 파일 길의 칸이 없으면 올려도 전 행이 실패한다. 올리기 «전에» 말해야 한다.
+                adminService.activeFieldCount(id, Intake.FILE)));
         // 고를 수 있는 눈금은 «코드가» 안다. 화면이 enum 을 직접 부르면 그 판단이 템플릿으로 샌다.
         model.addAttribute("granularities", BaseAtGranularity.values());
         return "connector/detail";

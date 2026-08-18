@@ -178,6 +178,21 @@ public class Connector extends BaseTimeEntity {
         this.baseAtGranularity = granularity;
     }
 
+    /**
+     * 파일을 어디서 어떻게 받는지.
+     *
+     * <p>자동 수집이 깨졌을 때 쓰는 우회로인데, <b>그때 방법을 찾아다니게 하면</b> 우회로가
+     * 아니다. 프리셋이 기본값을 심어 두고 사람이 그 자리에서 고칠 수 있게 한다 — 상대 사이트가
+     * 바뀌면 고쳐 둔 것이 다음부터 정답이 된다.
+     */
+    @Column(nullable = false, length = 2000)
+    private String fileGuide = "";
+
+    /** 받는 위치 안내를 고친다. 상대 사이트는 언젠가 바뀐다. */
+    public void changeFileGuide(String fileGuide) {
+        this.fileGuide = fileGuide == null ? "" : fileGuide.trim();
+    }
+
     public void changeEnabled(boolean enabled) {
         this.enabled = enabled;
     }
