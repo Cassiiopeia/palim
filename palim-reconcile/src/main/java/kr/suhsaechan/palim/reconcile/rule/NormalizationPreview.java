@@ -3,13 +3,9 @@ package kr.suhsaechan.palim.reconcile.rule;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 브라우저가 기다리다 포기해도 그 스레드는 계속 돈다. 몇 번 반복하면 스레드 풀이 마르고
  * 서버 전체가 응답을 멈춘다.
  *
- * <p>{@link Matchers} 로 감싼 입력은 인터럽트를 확인하므로, 시간을 넘기면 실제로 멈춘다.
+ * <p>{@link RegexGuard} 로 감싼 입력은 인터럽트를 확인하므로, 시간을 넘기면 실제로 멈춘다.
  * 자바의 {@code Matcher} 자체는 인터럽트를 보지 않아서 이 감싸기가 없으면 취소가 안 먹는다.
  */
 @Slf4j
@@ -43,6 +39,18 @@ public class NormalizationPreview {
 
     /** 미리보기에 보여줄 품명 수. 눈으로 훑을 수 있는 만큼이면 된다. */
     public static final int SAMPLE_SIZE = 12;
+
+    /**
+     * <b>원천마다</b> 몇 개씩 뽑을지.
+     *
+     * <p>전체에서 가나다순으로 열두 개를 뽑으면 <b>한쪽 원천 이름만 나오는 일</b>이 생긴다. 그러면
+     * 「다듬으면 이렇게 됩니다」 는 보여도 「그래서 반대쪽과 붙습니까」 는 볼 수가 없다 — 규칙을
+     * 고치는 목적이 바로 그 붙이는 것인데.
+     *
+     * <p>원천이 셋 이상이면 표본이 그만큼 늘어난다. 그것이 맞다 — 어느 원천이 안 붙는지 보려면
+     * 그 원천 이름이 표본에 있어야 한다.
+     */
+    private static final int PER_SOURCE = SAMPLE_SIZE / 2;
 
     private final NormalizationEngine engine;
     private final NormalizationRuleRepository rules;
@@ -74,11 +82,11 @@ public class NormalizationPreview {
                         .sorted(java.util.Comparator.comparingInt(NormalizationRule::getSortOrder))
                         .toList();
 
-        return runWithTimeout(() -> samples.stream()
+        return RegexGuard.runWithTimeout(TIMEOUT, () -> samples.stream()
                 .map(raw -> new Line(raw,
-                        engine.apply(active, raw, Matchers::guard),
+                        engine.apply(active, raw, RegexGuard::guard),
                         candidate == null ? null
-                                : engine.apply(withCandidate, raw, Matchers::guard)))
+                                : engine.apply(withCandidate, raw, RegexGuard::guard)))
                 .toList());
     }
 
@@ -94,16 +102,46 @@ public class NormalizationPreview {
     @Transactional(readOnly = true)
     public List<String> sampleNames() {
         return jdbcClient.sql("""
-                        SELECT DISTINCT coalesce(s.raw_item_name, '') AS raw_name
-                          FROM std_stock_snapshot s
-                         WHERE coalesce(s.raw_item_name, '') <> ''
-                           AND s.base_at = (SELECT max(x.base_at) FROM std_stock_snapshot x
-                                             WHERE x.tenant_id = s.tenant_id
-                                               AND x.source    = s.source)
-                         ORDER BY raw_name
-                         LIMIT :limit
+                        SELECT raw_name
+                          FROM (SELECT source, raw_name,
+                                       row_number() OVER (PARTITION BY source
+                                                          ORDER BY raw_name) AS rn
+                                  FROM (SELECT DISTINCT s.source                       AS source,
+                                                        coalesce(s.raw_item_name, '')  AS raw_name
+                                          FROM std_stock_snapshot s
+                                         WHERE s.tenant_id = :tenantId
+                                           AND coalesce(s.raw_item_name, '') <> ''
+                                           AND s.base_at = (SELECT max(x.base_at)
+                                                              FROM std_stock_snapshot x
+                                                             WHERE x.tenant_id = s.tenant_id
+                                                               AND x.source    = s.source)) distinct_names
+                               ) ranked
+                         WHERE rn <= :perSource
+                         ORDER BY source, raw_name
                         """)
-                .param("limit", SAMPLE_SIZE)
+                .param("tenantId", TenantContext.current())
+                .param("perSource", PER_SOURCE)
+                .query(String.class)
+                .list();
+    }
+
+    /**
+     * 지금 담긴 재고에 실제로 들어 있는 원천 목록.
+     *
+     * <p>규칙을 어느 원천에 걸지 고르는 자리가 쓴다. 커넥터 목록이 아니라 <b>담긴 자료</b>에서
+     * 뽑는다 — 만들다 만 커넥터까지 나오면 고를 수는 있는데 아무 자료에도 안 걸리는 값이
+     * 섞이고, 규칙이 왜 동작하지 않는지 알 방법이 없어진다.
+     */
+    @Transactional(readOnly = true)
+    public List<String> sources() {
+        return jdbcClient.sql("""
+                        SELECT DISTINCT source
+                          FROM std_stock_snapshot
+                         WHERE tenant_id = :tenantId
+                           AND coalesce(source, '') <> ''
+                         ORDER BY source
+                        """)
+                .param("tenantId", TenantContext.current())
                 .query(String.class)
                 .list();
     }
@@ -119,42 +157,6 @@ public class NormalizationPreview {
     }
 
     /**
-     * 제한 시간을 걸어 돌린다.
-     *
-     * <p>미리보기 한 번에 스레드 하나를 쓰고 끝나면 접는다. 데몬으로 두는 이유는, 감싸기가
-     * 어떤 이유로 안 먹어 스레드가 살아남더라도 <b>서버 종료를 붙잡지 않게</b> 하려는 것이다.
-     * 요청 스레드는 어떤 경우에도 제한 시간 안에 풀려난다 — 그것이 이 구조의 목적이다.
-     */
-    private <T> T runWithTimeout(java.util.concurrent.Callable<T> work) {
-        ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "normalization-preview");
-            // 데몬으로 둔다 — 폭주 중이어도 서버 종료를 붙잡지 않는다.
-            thread.setDaemon(true);
-            return thread;
-        });
-        try {
-            Future<T> future = executor.submit(work);
-            try {
-                return future.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-                future.cancel(true);
-                throw new BusinessException(ErrorCode.NORMALIZATION_PREVIEW_TIMEOUT);
-            } catch (java.util.concurrent.ExecutionException e) {
-                if (e.getCause() instanceof BusinessException business) {
-                    throw business;
-                }
-                log.warn("미리보기 실패", e);
-                throw new BusinessException(ErrorCode.NORMALIZATION_PREVIEW_TIMEOUT);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new BusinessException(ErrorCode.NORMALIZATION_PREVIEW_TIMEOUT);
-            }
-        } finally {
-            executor.shutdownNow();
-        }
-    }
-
-    /**
      * 미리보기 한 줄.
      *
      * @param after     지금 켜져 있는 규칙까지 적용한 결과
@@ -165,49 +167,6 @@ public class NormalizationPreview {
         /** 새 규칙이 결과를 바꾸나. 안 바꾸면 그 규칙은 이 품명에 아무 일도 안 한 것이다. */
         public boolean changed() {
             return candidate != null && !candidate.equals(after);
-        }
-    }
-
-    /**
-     * 인터럽트를 확인하는 입력.
-     *
-     * <p>자바의 {@code Matcher} 는 인터럽트를 보지 않는다. 글자를 읽을 때마다 확인하게 만들면
-     * 취소가 실제로 먹는다 — 이것이 없으면 {@code future.cancel(true)} 는 아무 일도 하지 않고
-     * 스레드는 영원히 돈다.
-     */
-    static final class Matchers implements CharSequence {
-
-        private final CharSequence inner;
-
-        private Matchers(CharSequence inner) {
-            this.inner = inner;
-        }
-
-        static CharSequence guard(CharSequence value) {
-            return new Matchers(value);
-        }
-
-        @Override
-        public char charAt(int index) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new BusinessException(ErrorCode.NORMALIZATION_PREVIEW_TIMEOUT);
-            }
-            return inner.charAt(index);
-        }
-
-        @Override
-        public int length() {
-            return inner.length();
-        }
-
-        @Override
-        public CharSequence subSequence(int start, int end) {
-            return new Matchers(inner.subSequence(start, end));
-        }
-
-        @Override
-        public String toString() {
-            return inner.toString();
         }
     }
 

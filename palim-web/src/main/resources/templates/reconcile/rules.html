@@ -1,12 +1,20 @@
 <!DOCTYPE html>
 <!--/* 이름 다듬기 규칙.
 
-       이 화면이 없어서 규칙이 DB 에만 있었다. 그러면 이 프로그램은 한 회사에서만 돈다 —
-       표기 습관은 회사마다 다른데, 자기 습관에 맞는 규칙을 넣을 자리가 없으면 다른 곳에
-       가져다 놓는 순간 「묶을 수 있는 것」 이 늘 비어 있게 된다.
+       이 화면이 없으면 규칙이 DB 에만 있게 되고, 그러면 이 프로그램은 한 회사에서만 돈다 —
+       표기 습관은 회사마다 다른데 자기 습관에 맞는 규칙을 넣을 자리가 없으면 다른 곳에
+       가져다 놓는 순간 「이을 수 있는 것」 이 늘 비어 있다.
 
-       미리보기가 이 화면의 핵심이다. 규칙을 잘못 고쳤을 때 눈에 보이는 것은 「이을 수 있는
-       것이 줄었다」 뿐이고 왜인지는 어디에도 안 나온다.
+       세 가지가 이 화면의 뼈대다.
+       ① 성적표 — 규칙을 넣어 짝이 몇 개 늘었나. 이것이 없으면 규칙이 도움이 됐는지 모른다
+       ② 걸린 수 — 아무 데도 안 걸리는 규칙은 쌓여만 있고 아무 일도 안 한다
+       ③ 충돌 — 서로 다른 품목이 한 이름이 되는 것. 「재고가 맞는다」 는 거짓 보고로 이어진다
+
+       정규식 입력을 없애지 않는다. 어떤 품목명 체계가 올지 우리가 다 알 수 없다.
+       프리셋은 고르는 목록이 아니라 백지에서 시작하지 않게 해 주는 출발점이다.
+
+       손놀림(끌기·프리셋 채우기)은 /js/rule-order.js 에 있다 — 보안 정책(CSP)이 화면에 박힌
+       스크립트를 실행하지 않으므로 여기 적으면 한 줄도 돌지 않는다.
 
        daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 표준값은 11-UI-RULES §0. */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
@@ -15,17 +23,98 @@
 <div th:fragment="content" th:remove="tag">
 
     <p class="text-sm text-base-content/60 -mt-4 mb-6">
-        같은 묶음인데 시스템마다 이름을 다르게 적습니다. 견주기 전에 이름을 어떻게 다듬을지
-        여기서 정합니다.
+        같은 물건인데 시스템마다 이름을 다르게 적습니다. 견주기 전에 이름을 어떻게 다듬을지
+        여기서 정합니다. 위에서부터 차례로 적용되고, 순서가 결과를 바꿉니다.
     </p>
 
-    <div class="flex flex-wrap gap-2 mb-4">
+    <div class="flex flex-wrap gap-2 mb-6">
         <a th:href="@{/reconcile/method}" class="btn btn-ghost btn-sm">← 맞추는 방식</a>
         <a th:href="@{/reconcile/units}" class="btn btn-ghost btn-sm">품목 묶기</a>
     </div>
 
-    <!--/* 지금 있는 규칙. 순서가 결과를 바꾸므로 순서대로 보여주고 옮길 수 있게 한다 —
-           괄호를 떼기 전에 공백을 지우면 괄호 규칙이 안 맞는다. */-->
+    <!--/* 성적표. 규칙을 고치는 목적은 「짝이 늘어나는 것」 하나뿐인데 지금까지 그 숫자를
+           어디서도 볼 수 없었다. 색은 쓰지 않는다 — 정상 상태다(11-UI-RULES C2). */-->
+    <section th:if="${insight != null and insight.scanned > 0}" class="mb-6">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body py-4">
+                <div class="flex flex-wrap items-end gap-x-10 gap-y-3">
+                    <div>
+                        <div class="text-xs text-base-content/60">짝이 되는 품목</div>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-xl font-semibold tabular-nums text-base-content/40"
+                                  th:text="${insight.pairedBefore}">0</span>
+                            <span class="text-base-content/40">→</span>
+                            <span class="text-xl font-semibold tabular-nums"
+                                  th:text="${insight.pairedAfter}">0</span>
+                            <span class="text-sm tabular-nums text-base-content/60"
+                                  th:if="${insight.gained() != 0}"
+                                  th:text="'(' + (${insight.gained() > 0} ? '+' : '') + ${insight.gained()} + ')'">(+0)</span>
+                        </div>
+                        <div class="text-xs text-base-content/60 mt-1">
+                            규칙을 하나도 걸지 않았을 때와 견준 값입니다
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/60">센 품명</div>
+                        <div class="text-xl font-semibold tabular-nums"
+                             th:text="${insight.scanned}">0</div>
+                        <div class="text-xs text-base-content/60 mt-1"
+                             th:if="${insight.truncated}">
+                            품목이 많아 일부만 셌습니다
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 충돌. 이 화면에서 색을 쓰는 유일한 자리다 — 실제로 확인이 필요한 상태이고,
+           그냥 두면 「재고가 맞는다」 는 거짓 보고가 된다(11-UI-RULES C7 warning). */-->
+    <section th:if="${insight != null and insight.hasCollision()}" class="mb-6">
+        <div class="alert alert-warning" role="alert">
+            <div class="text-sm">
+                <p class="font-medium">
+                    서로 다른 품목
+                    <span th:text="${#lists.size(insight.collisions) + insight.collisionMore}">2</span>무리가
+                    다듬은 뒤 같은 이름이 됐습니다.
+                </p>
+                <p class="mt-1">
+                    규칙이 지나치면 다른 물건을 한 물건으로 셉니다. 그러면 대조는 「맞는다」 고
+                    말하는데 실제로는 합쳐진 것이라, 틀렸다는 사실조차 드러나지 않습니다.
+                </p>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm mt-3">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th class="w-1/3">다듬은 뒤</th>
+                            <th>원래 이름들</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="c : ${insight.collisions}">
+                            <td class="font-mono text-xs align-top" th:text="${c.normalized}">이름</td>
+                            <td>
+                                <div class="flex flex-col gap-0.5">
+                                    <span class="text-sm" th:each="raw : ${c.raws}" th:text="${raw}">원본</span>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <p class="text-xs text-base-content/60 mt-2" th:if="${insight.collisionMore > 0}"
+           th:text="'그 밖에 ' + ${insight.collisionMore} + '무리가 더 있습니다.'">더 있음</p>
+    </section>
+
+    <!--/* 지금 있는 규칙. 순서가 결과를 바꾸므로 옮길 수 있어야 한다 — 괄호를 떼기 전에
+           공백을 지우면 괄호 규칙이 안 맞는다. */-->
     <section class="mb-8">
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">지금 쓰는 규칙</h2>
@@ -37,10 +126,15 @@
             <div class="card-body items-center text-center py-12 gap-2">
                 <p class="text-base-content/70">규칙이 하나도 없습니다.</p>
                 <p class="text-sm text-base-content/60">
-                    규칙이 없으면 이름이 글자 하나만 달라도 다른 묶음으로 봅니다.
+                    규칙이 없으면 이름이 글자 하나만 달라도 다른 물건으로 봅니다.
+                    아래 「자주 쓰는 것」 에서 하나 눌러 시작해 보세요.
                 </p>
             </div>
         </div>
+
+        <!--/* 순서 저장 전용 폼. 표 안에 두면 행마다 폼이 겹치므로 밖에 두고 스크립트가 채운다. */-->
+        <form id="reorderForm" th:action="@{/reconcile/rules/reorder}" method="post"
+              class="hidden"></form>
 
         <div th:unless="${#lists.isEmpty(rules)}" class="card bg-base-100 shadow-sm">
             <div class="card-body p-0">
@@ -48,27 +142,55 @@
                     <table class="table table-sm">
                         <thead>
                         <tr class="text-xs">
-                            <th class="w-24">순서</th>
+                            <th class="w-20">순서</th>
+                            <th class="w-14">사용</th>
                             <th>규칙</th>
-                            <th class="text-right">동작</th>
+                            <th class="text-right w-20">걸린 수</th>
+                            <th class="text-right w-16"></th>
                         </tr>
                         </thead>
-                        <tbody>
-                        <tr th:each="r,it : ${rules}">
+                        <tbody data-reorder-rows>
+                        <tr th:each="r,it : ${rules}" th:data-id="${r.id}">
                             <td class="align-top">
-                                <div class="flex items-center gap-1">
-                                    <form th:action="@{/reconcile/rules/{id}/move(id=${r.id})}" method="post">
+                                <!--/* 끌 수 있다는 사실은 손잡이로 말한다. 스크립트가 살아 있을
+                                       때만 나타난다 — 끌리지 않는 손잡이는 거짓말이다. */-->
+                                <span data-drag-handle
+                                      class="hidden cursor-move select-none text-base-content/40"
+                                      title="끌어서 순서를 바꿉니다">⠿</span>
+                                <!--/* 스크립트가 막히거나 실패해도 순서를 바꿀 길은 있어야 한다.
+                                       끌기가 유일한 방법이면 그 순간 이 화면은 순서를 못 바꾸는
+                                       화면이 된다 — 키보드만 쓰는 사람도 마찬가지다. */-->
+                                <span data-order-fallback class="flex items-center gap-1">
+                                    <form th:action="@{/reconcile/rules/{id}/move(id=${r.id})}"
+                                          method="post">
                                         <input type="hidden" name="up" value="true">
                                         <button type="submit" class="btn btn-ghost btn-sm"
-                                                th:disabled="${it.first}">↑</button>
+                                                th:disabled="${it.first}"
+                                                title="위로">↑</button>
                                     </form>
-                                    <form th:action="@{/reconcile/rules/{id}/move(id=${r.id})}" method="post">
+                                    <form th:action="@{/reconcile/rules/{id}/move(id=${r.id})}"
+                                          method="post">
                                         <input type="hidden" name="up" value="false">
                                         <button type="submit" class="btn btn-ghost btn-sm"
-                                                th:disabled="${it.last}">↓</button>
+                                                th:disabled="${it.last}"
+                                                title="아래로">↓</button>
                                     </form>
-                                </div>
+                                </span>
                             </td>
+
+                            <td class="align-top">
+                                <!--/* 켜고 끄기는 상태다. 「끄기」/「켜기」 로 글자가 바뀌는 버튼은
+                                       지금이 어느 쪽인지 매번 읽어야 알 수 있다. */-->
+                                <form th:action="@{/reconcile/rules/{id}/toggle(id=${r.id})}"
+                                      method="post" class="flex items-center gap-2">
+                                    <input type="checkbox" class="toggle toggle-sm" data-auto-submit
+                                           th:checked="${r.active}"
+                                           th:title="${r.active} ? '적용 중입니다' : '적용되지 않습니다'">
+                                    <button type="submit" data-auto-submit-fallback
+                                            class="btn btn-ghost btn-sm">바꾸기</button>
+                                </form>
+                            </td>
+
                             <td>
                                 <!--/* 고치기가 곧 이 줄이다. 따로 화면을 만들면 규칙 하나 고치러
                                        두 번 이동해야 한다. */-->
@@ -77,36 +199,53 @@
                                     <label class="form-control">
                                         <span class="label-text text-xs">이름</span>
                                         <input type="text" name="name" th:value="${r.name}" required
-                                               class="input input-bordered input-sm w-52">
+                                               class="input input-bordered input-sm w-48">
                                     </label>
                                     <label class="form-control">
                                         <span class="label-text text-xs">찾을 것(정규식)</span>
                                         <input type="text" name="pattern" th:value="${r.pattern}" required
-                                               class="input input-bordered input-sm w-64 font-mono">
+                                               class="input input-bordered input-sm w-56 font-mono">
                                     </label>
                                     <label class="form-control">
                                         <span class="label-text text-xs">바꿀 것</span>
                                         <input type="text" name="replacement" th:value="${r.replacement}"
-                                               class="input input-bordered input-sm w-32 font-mono"
+                                               class="input input-bordered input-sm w-28 font-mono"
                                                placeholder="비우면 지웁니다">
+                                    </label>
+                                    <!--/* 원천마다 표기 습관이 다르다. 한쪽만 밑줄 뒤에 유통기한을
+                                           붙인다면 그 규칙은 그쪽에만 걸어야 한다 — 양쪽에 걸면
+                                           같은 기호를 다른 뜻으로 쓰는 원천이 붙는 순간 망가진다. */-->
+                                    <label class="form-control">
+                                        <span class="label-text text-xs">거는 곳</span>
+                                        <select name="sourceCode" class="select select-bordered select-sm w-36">
+                                            <option value="" th:selected="${r.sourceCode == null}">모든 원천</option>
+                                            <option th:each="s : ${sources}" th:value="${s}" th:text="${s}"
+                                                    th:selected="${s == r.sourceCode}">원천</option>
+                                            <!--/* 자료가 사라져도 이미 걸어 둔 값은 목록에 남긴다.
+                                                   없으면 저장할 때 조용히 「모든 원천」 이 된다. */-->
+                                            <option th:if="${r.sourceCode != null and !#lists.contains(sources, r.sourceCode)}"
+                                                    th:value="${r.sourceCode}"
+                                                    th:text="${r.sourceCode} + ' (자료 없음)'"
+                                                    selected>없는 원천</option>
+                                        </select>
                                     </label>
                                     <button type="submit" class="btn btn-sm">저장</button>
                                 </form>
-                                <!--/* 꺼진 규칙은 아무 일도 안 한다. 상태이므로 색 없이 분류로
-                                       말한다(11-UI-RULES C7). */-->
-                                <span th:unless="${r.active}"
-                                      class="badge badge-ghost badge-sm mt-2">꺼짐 — 적용되지 않습니다</span>
                             </td>
+
+                            <!--/* 아무 데도 안 걸리는 규칙은 쌓여만 있고 아무 일도 안 한다.
+                                   값 없음은 흐린 em dash 로 말한다(11-UI-RULES §0). */-->
+                            <td class="text-right align-top tabular-nums text-sm"
+                                th:with="hits=${insight != null} ? ${insight.hitsOf(r.id)} : 0">
+                                <span th:if="${hits > 0}" th:text="${hits}">0</span>
+                                <span th:if="${hits == 0}" class="text-base-content/40"
+                                      title="이 자료에서는 아무것도 바꾸지 않았습니다">—</span>
+                            </td>
+
                             <td class="text-right align-top">
-                                <div class="flex flex-col items-end gap-1">
-                                    <form th:action="@{/reconcile/rules/{id}/toggle(id=${r.id})}" method="post">
-                                        <button type="submit" class="btn btn-ghost btn-sm"
-                                                th:text="${r.active} ? '끄기' : '켜기'">끄기</button>
-                                    </form>
-                                    <form th:action="@{/reconcile/rules/{id}/delete(id=${r.id})}" method="post">
-                                        <button type="submit" class="btn btn-ghost btn-sm">지우기</button>
-                                    </form>
-                                </div>
+                                <form th:action="@{/reconcile/rules/{id}/delete(id=${r.id})}" method="post">
+                                    <button type="submit" class="btn btn-ghost btn-sm">지우기</button>
+                                </form>
                             </td>
                         </tr>
                         </tbody>
@@ -126,44 +265,70 @@
 
         <div class="card bg-base-100 shadow-sm">
             <div class="card-body gap-3">
-                <!--/* 정규식 예시를 본문 글자로 두면 안 된다. Thymeleaf 는 «[[» 를 인라인
-                       표현식의 시작으로 읽어 화면 전체가 500 으로 죽는다. th:text 안의 문자열
-                       리터럴은 그 규칙을 타지 않는다. */-->
-                <p class="text-sm text-base-content/70">
-                    예를 들어 한쪽이
-                    <span class="font-mono text-xs"
-                          th:text="'클래식 227g [2026-10-17]'">보기</span>
-                    처럼 대괄호로 유통기한을 붙인다면, 찾을 것에
-                    <span class="font-mono text-xs" th:text="'\\[[^\\]]*\\]'">정규식</span>
-                    를 넣고 바꿀 것을 비우면 됩니다.
-                </p>
+                <!--/* 프리셋은 «고르는 목록» 이 아니라 출발점이다. 누르면 칸이 채워지고 거기서
+                       고친다 — 고를 수 있는 것만 주면 그 목록에 없는 표기 습관을 가진 회사는
+                       이 제품을 쓸 수 없다. */-->
+                <div>
+                    <div class="text-xs text-base-content/60 mb-2">
+                        자주 쓰는 것 — 누르면 아래 칸이 채워집니다. 넣기 전에 고칠 수 있습니다
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" th:each="p : ${presets}"
+                                class="btn btn-ghost btn-sm"
+                                data-preset-target="ruleForm"
+                                th:data-preset-name="${p.name}"
+                                th:data-preset-pattern="${p.pattern}"
+                                th:data-preset-replacement="${p.replacement}"
+                                th:title="${p.example}"
+                                th:text="${p.name}">프리셋</button>
+                    </div>
+                </div>
 
                 <!--/* 걸어 보기는 GET 이다 — 주소에 남아 새로 고쳐도 그대로고, 아무것도 저장하지
                        않는다는 사실이 방식 자체로 드러난다. */-->
-                <form th:action="@{/reconcile/rules}" method="get"
+                <form id="ruleForm" th:action="@{/reconcile/rules}" method="get"
                       class="flex flex-wrap items-end gap-2">
                     <label class="form-control">
                         <span class="label-text text-xs">이름</span>
                         <input type="text" name="name" th:value="${name}"
-                               class="input input-bordered input-sm w-52"
-                               placeholder="대괄호와 그 안의 내용을 뺀다">
+                               class="input input-bordered input-sm w-48"
+                               placeholder="무엇을 하는 규칙인가">
                     </label>
                     <label class="form-control">
                         <span class="label-text text-xs">찾을 것(정규식)</span>
                         <input type="text" name="pattern" th:value="${pattern}"
-                               class="input input-bordered input-sm w-64 font-mono">
+                               class="input input-bordered input-sm w-56 font-mono">
                     </label>
                     <label class="form-control">
                         <span class="label-text text-xs">바꿀 것</span>
                         <input type="text" name="replacement" th:value="${replacement}"
-                               class="input input-bordered input-sm w-32 font-mono"
+                               class="input input-bordered input-sm w-28 font-mono"
                                placeholder="비우면 지웁니다">
+                    </label>
+                    <label class="form-control">
+                        <span class="label-text text-xs">거는 곳</span>
+                        <select name="sourceCode" class="select select-bordered select-sm w-36">
+                            <option value="">모든 원천</option>
+                            <option th:each="s : ${sources}" th:value="${s}" th:text="${s}"
+                                    th:selected="${s == sourceCode}">원천</option>
+                        </select>
                     </label>
                     <button type="submit" class="btn btn-sm">걸어 보기</button>
                     <!--/* 넣기는 POST 다. 같은 칸을 그대로 실어 보내므로 다시 타이핑하지 않는다. */-->
                     <button type="submit" class="btn btn-primary btn-sm"
                             th:formaction="@{/reconcile/rules}" formmethod="post">넣기</button>
                 </form>
+
+                <!--/* 정규식 예시를 본문 글자로 두면 안 된다. Thymeleaf 는 «[[» 를 인라인
+                       표현식의 시작으로 읽어 화면 전체가 500 으로 죽는다. th:text 안의 문자열
+                       리터럴은 그 규칙을 타지 않는다. */-->
+                <p class="text-sm text-base-content/60">
+                    예를 들어 한쪽이
+                    <span class="font-mono text-xs" th:text="'클래식 227g [2026-10-17]'">보기</span>
+                    처럼 대괄호로 유통기한을 붙인다면, 찾을 것에
+                    <span class="font-mono text-xs" th:text="'\\[[^\\]]*\\]'">정규식</span>
+                    를 넣고 바꿀 것을 비우면 됩니다.
+                </p>
             </div>
         </div>
     </section>
@@ -207,10 +372,10 @@
                         <tr th:each="line : ${preview}">
                             <td class="text-sm" th:text="${line.raw}">원본</td>
                             <td class="font-mono text-xs" th:text="${line.after}">결과</td>
-                            <!--/* 새 규칙이 결과를 바꾼 줄만 강조한다. 안 바뀐 줄이 대부분이면
-                                   그 규칙은 이 자료에 아무 일도 안 하는 것이다. */-->
+                            <!--/* 새 규칙이 결과를 바꾼 줄만 굵게. 안 바뀐 줄이 대부분이면 그
+                                   규칙은 이 자료에 아무 일도 안 하는 것이다. */-->
                             <td th:if="${previewingCandidate}" class="font-mono text-xs"
-                                th:classappend="${line.changed()} ? 'text-warning font-medium' : 'text-base-content/40'"
+                                th:classappend="${line.changed()} ? 'font-medium' : 'text-base-content/40'"
                                 th:text="${line.candidate}">결과</td>
                         </tr>
                         </tbody>
