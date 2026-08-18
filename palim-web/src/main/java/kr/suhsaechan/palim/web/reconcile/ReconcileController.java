@@ -7,6 +7,7 @@ import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
@@ -38,6 +39,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequiredArgsConstructor
 public class ReconcileController {
 
+    private final UnitBreakdown breakdowns;
     private final ReconcileEngine engine;
     private final ReconcileDefinitionRepository definitions;
     private final ReconcileRunRepository runs;
@@ -193,16 +195,47 @@ public class ReconcileController {
         }
     }
 
+    /**
+     * 대조 결과 한 회차.
+     *
+     * <p>줄을 <b>펼쳐서 품목별로 뜯어볼 수 있다.</b> 합계만으로는 「재고가 11개 빈다」 와
+     * 「물류가 오래된 로트 3종을 이미 털었고 최신 로트는 맞는다」 를 구분할 수 없는데, 둘은
+     * 전혀 다른 이야기이고 할 일도 다르다(07-DECISIONS 038).
+     *
+     * @param expand 뜯어볼 물건. 없으면 접힌 채로 그린다
+     */
     @GetMapping("/reconcile/runs/{runId}")
-    public String runDetail(@PathVariable UUID runId, Model model) {
+    public String runDetail(@PathVariable UUID runId,
+                            @RequestParam(required = false) UUID expand,
+                            Model model) {
         ReconcileRun run = runs.findById(runId).orElseThrow();
         ReconcileDefinition definition = definitions.findById(run.getDefinitionId()).orElseThrow();
+        UUID tenantId = TenantContext.current();
 
         List<ReconcileDiff> all = diffs.findByRunIdOrderByStateAscUnitCodeAsc(runId);
+        // 물건 이름과 «든 품목 수» 를 한 번에 받아 붙인다. 줄마다 조회하면 줄 수만큼 늘어난다.
+        var headers = breakdowns.headers(tenantId,
+                all.stream().map(ReconcileDiff::getUnitId).filter(java.util.Objects::nonNull)
+                        .distinct().toList(),
+                definition.getLeftSource(), definition.getRightSource());
+
         List<DiffRowView> rows = all.stream()
-                .map(diff -> DiffRowView.of(diff,
-                        definition.getLeftSource(), definition.getRightSource()))
+                .map(diff -> {
+                    var header = diff.getUnitId() == null ? null : headers.get(diff.getUnitId());
+                    return DiffRowView.of(diff,
+                            definition.getLeftSource(), definition.getRightSource(),
+                            header == null ? null : header.name(),
+                            header == null ? 0 : header.leftParts(),
+                            header == null ? 0 : header.rightParts());
+                })
                 .toList();
+
+        if (expand != null) {
+            model.addAttribute("expandUnitId", expand);
+            model.addAttribute("breakdown", breakdowns.of(tenantId, expand,
+                    definition.getLeftSource(), definition.getRightSource(),
+                    run.getLeftBaseAt(), run.getRightBaseAt(), run.getStartedAt()));
+        }
 
         model.addAttribute("title", definition.getName() + " · 결과");
         model.addAttribute("run", run);

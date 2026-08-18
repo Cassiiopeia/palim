@@ -121,6 +121,25 @@ public class ReconcileUnitService {
     public record Pick(String source, String itemRef, BigDecimal factor) {
     }
 
+    /**
+     * 물건 이름을 고친다.
+     *
+     * <p>이름은 <b>사람이 보는 유일한 손잡이</b>다. 대조 결과에 「U-6668d23b · +11」 이라고만
+     * 뜨면 그것이 무슨 물건인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
+     *
+     * <p>코드는 안 바꾼다 — 코드는 시스템이 쓰는 값이고, 겹치면 저장이 막힌다.
+     */
+    @Transactional
+    public ReconcileUnit rename(UUID unitId, String name) {
+        if (name == null || name.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 비울 수 없습니다.");
+        }
+        ReconcileUnit unit = units.findById(unitId).orElseThrow(() ->
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 정합 단위입니다."));
+        unit.rename(name.trim());
+        return units.save(unit);
+    }
+
     /** 이 품목의 계수를 고친다. 잘못 넣으면 수량이 통째로 어긋나므로 고칠 길이 있어야 한다. */
     @Transactional
     public ReconcileUnitMember changeFactor(UUID memberId, BigDecimal factor) {

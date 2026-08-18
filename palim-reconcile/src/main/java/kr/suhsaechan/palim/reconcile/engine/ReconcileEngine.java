@@ -98,7 +98,11 @@ public class ReconcileEngine {
         // 이력이 한 줄로 이어진다. 합산은 각 원천이 실제로 가진 시각으로 한다 — 칸 시작
         // 시각에는 자료가 없을 수 있다.
         Instant baseAt = aligned.bucket();
-        ReconcileRun run = runs.save(ReconcileRun.start(tenantId, definitionId, baseAt));
+        ReconcileRun run = ReconcileRun.start(tenantId, definitionId, baseAt);
+        // 어느 시각의 자료를 봤는지 남긴다. 이것이 없으면 나중에 「이 차이가 어느 품목에서
+        // 나왔나」 를 되짚을 때 그 회차가 본 자료를 다시 불러올 수 없다.
+        run.recordSourceTimes(aligned.left(), aligned.right());
+        run = runs.save(run);
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);
 

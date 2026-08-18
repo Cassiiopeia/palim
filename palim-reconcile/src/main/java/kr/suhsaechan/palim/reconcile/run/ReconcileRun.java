@@ -38,9 +38,23 @@ public class ReconcileRun extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID definitionId;
 
-    /** 양쪽 스냅샷이 공유하는 시각. */
+    /** 양쪽 스냅샷이 공유하는 시각(칸). 이력이 한 줄로 이어지게 하는 값이다. */
     @Column(nullable = false)
     private Instant baseAt;
+
+    /**
+     * 왼쪽 원천에서 <b>실제로 합산한</b> 시각.
+     *
+     * <p>칸 시각과 다를 수 있다 — 합산은 각 원천이 실제로 가진 시각으로 하기 때문이다. 이 값이
+     * 없으면 나중에 「이 차이가 어느 품목에서 나왔나」 를 되짚을 때 그 회차가 본 자료를 다시
+     * 불러올 수 없고, 지금 담긴 최신 재고로 계산하게 되어 <b>합계가 어긋난다.</b>
+     *
+     * <p>옛 회차는 비어 있다.
+     */
+    private Instant leftBaseAt;
+
+    /** 오른쪽 원천에서 실제로 합산한 시각. {@link #leftBaseAt} 참고. */
+    private Instant rightBaseAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -77,6 +91,12 @@ public class ReconcileRun extends BaseTimeEntity {
 
     public static ReconcileRun start(UUID tenantId, UUID definitionId, Instant baseAt) {
         return new ReconcileRun(tenantId, definitionId, baseAt);
+    }
+
+    /** 어느 시각의 자료를 봤는지 남긴다. 합산 직후 부른다. */
+    public void recordSourceTimes(Instant leftBaseAt, Instant rightBaseAt) {
+        this.leftBaseAt = leftBaseAt;
+        this.rightBaseAt = rightBaseAt;
     }
 
     public void succeed(int leftCount, int rightCount, int diffCount, int unmatchedCount) {
