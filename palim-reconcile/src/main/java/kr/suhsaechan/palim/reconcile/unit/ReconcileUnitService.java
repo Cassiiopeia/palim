@@ -224,6 +224,109 @@ public class ReconcileUnitService {
     }
 
     /**
+     * 품목 하나를 <b>이 묶음에</b> 붙인다.
+     *
+     * <p>{@link #link} 는 「담은 것들 중 이미 묶인 것이 있으면 그 묶음에 붙인다」 라 <b>고른
+     * 품목이 자유로우면 새 묶음을 만들어 버린다.</b> 편집 화면은 붙일 묶음이 이미 정해져
+     * 있으므로 그 길을 쓰면 엉뚱한 묶음이 하나 더 생긴다.
+     */
+    @Transactional
+    public ReconcileUnitMember attach(UUID unitId, String source, String itemRef,
+                                      BigDecimal factor) {
+        ReconcileUnitMember member = propose(unitId, source, itemRef, factor);
+        // 편집 화면에서 눈으로 보고 고른 것이라 바로 확정한다.
+        member.confirm();
+        return members.save(member);
+    }
+
+    /**
+     * 두 묶음을 <b>하나로 합친다.</b>
+     *
+     * <p>이 길이 없어서 「이미 서로 다른 묶음에 속한 품목입니다」 로 <b>막히기만 했다.</b>
+     * 막은 이유는 있었다 — 어느 이름을 남길지가 사람의 판단이라 조용히 정하면 안 된다. 그런데
+     * <b>막기만 하고 할 길을 안 주면</b> 그건 그냥 못 하는 일이 된다. 나눠 묶어 놓고 보니
+     * 하나로 봐야 하더라는 것은 실제로 늘 생긴다.
+     *
+     * <p>그래서 <b>어느 이름을 남길지 사람이 고른 뒤</b> 합친다. 남는 쪽이 목표 묶음이고,
+     * 다른 쪽 품목이 그리로 옮겨 온 뒤 빈 묶음은 접힌다.
+     */
+    @Transactional
+    public ReconcileUnit merge(UUID targetUnitId, UUID sourceUnitId) {
+        if (targetUnitId.equals(sourceUnitId)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "같은 묶음끼리는 합칠 수 없습니다.");
+        }
+        ReconcileUnit target = units.findById(targetUnitId).orElseThrow(() ->
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
+        ReconcileUnit source = units.findById(sourceUnitId).orElseThrow(() ->
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
+
+        for (ReconcileUnitMember member : members.findByUnitIdOrderBySource(source.getId())) {
+            member.moveTo(target.getId());
+            members.save(member);
+        }
+        source.deactivate();
+        units.save(source);
+        return target;
+    }
+
+    /**
+     * 이 묶음을 <b>여러 묶음으로 쪼갠다.</b>
+     *
+     * <p>자동 후보는 이름이 닮은 것을 <b>통째로 하나</b>로 묶는다. 그런데 로트 셋이 든 묶음은
+     * 「+50 하나」 로 볼 수도 있고 「+24 · +26 · 맞음」 셋으로 볼 수도 있다 — <b>어느 쪽이 맞는
+     * 운영인지는 회사가 정할 일</b>이다. 쪼갤 길이 없으면 코드가 정해 버린 셈이 된다.
+     *
+     * <p>각 무리가 새 묶음이 되고, 원래 묶음은 남는 품목이 없으면 접힌다. 무리가 하나뿐이면
+     * 쪼갤 것이 없으므로 아무 일도 하지 않는다.
+     *
+     * @param groups 무리마다 (그 묶음 이름, 그 묶음에 넣을 품목들)
+     * @return 새로 생긴 묶음들
+     */
+    @Transactional
+    public List<ReconcileUnit> split(UUID unitId, List<Group> groups) {
+        if (groups == null || groups.size() < 2) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "둘 이상으로 갈라야 쪼개집니다.");
+        }
+        ReconcileUnit origin = units.findById(unitId).orElseThrow(() ->
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
+
+        List<ReconcileUnit> created = new java.util.ArrayList<>();
+        for (Group group : groups) {
+            ReconcileUnit fresh = create(newCode(), group.name(), origin.getBaseUnit());
+            for (Member member : group.members()) {
+                members.findBySourceAndItemRef(member.source(), member.itemRef())
+                        .ifPresent(existing -> {
+                            existing.moveTo(fresh.getId());
+                            members.save(existing);
+                        });
+            }
+            created.add(fresh);
+        }
+
+        // 어느 무리에도 안 들어간 품목이 남으면 원래 묶음이 그대로 남는다 — 그것도 사실이므로
+        // 지우지 않는다. 다 옮겨 갔으면 빈 묶음이 목록에 쌓이지 않게 접는다.
+        if (members.findByUnitIdOrderBySource(unitId).isEmpty()) {
+            origin.deactivate();
+            units.save(origin);
+        }
+        return created;
+    }
+
+    /** 쪼갤 때 만들 묶음 하나. */
+    public record Group(String name, List<Member> members) {
+    }
+
+    /** 품목 하나를 가리키는 값. */
+    public record Member(String source, String itemRef) {
+    }
+
+    /** 코드는 사람에게 묻지 않는다 — 사람이 신경 쓸 값이 아니고, 겹치면 저장이 막힌다. */
+    private String newCode() {
+        return "U-" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /**
      * 이 묶음을 <b>통째로 푼다</b> — 든 품목을 전부 떼고 묶음을 접는다.
      *
      * <p>표의 한 줄이 묶음 하나이므로 「되돌리기」 도 줄 단위여야 한다. 한 품목만 떼면 나머지가
