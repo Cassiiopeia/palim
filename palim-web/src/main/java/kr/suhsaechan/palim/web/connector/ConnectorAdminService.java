@@ -19,6 +19,7 @@ import kr.suhsaechan.palim.connector.define.ConnectorRepository;
 import kr.suhsaechan.palim.connector.define.Intake;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import kr.suhsaechan.palim.connector.define.SourceType;
+import kr.suhsaechan.palim.connector.source.http.ApiAuthPreset;
 import kr.suhsaechan.palim.connector.model.TargetField;
 import kr.suhsaechan.palim.connector.model.TargetFieldRepository;
 import kr.suhsaechan.palim.connector.model.TargetModel;
@@ -31,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -184,6 +186,45 @@ public class ConnectorAdminService {
                 .findFirst()
                 .orElseGet(() -> ConnectorMapping.draft(connector.getTenantId(),
                         connector.getId(), nextVersion(connector.getId()), intake, Map.of()));
+    }
+
+    /**
+     * 프리셋이 아는 기본 안내를 <b>지금 넣는다.</b>
+     *
+     * <p>안내는 연결을 «저장할 때» 심는다. 그래서 <b>그 전에 만들어진 연동에는 비어 있다</b> —
+     * 정작 오래 쓴 연동일수록 안내가 없는 셈이고, 그게 급할 때 제일 아프다.
+     *
+     * <p>덮어쓰지 않고 «비어 있을 때만» 넣는다. 사람이 실제 메뉴를 확인해 고쳐 둔 것을 코드가
+     * 말없이 되돌리면 다음부터는 아무도 안 적는다.
+     *
+     * @return 넣었으면 그 내용, 이미 적혀 있거나 프리셋이 모르면 빈 문자열
+     */
+    @Transactional
+    public String seedFileGuide(UUID connectorId) {
+        Connector connector = connector(connectorId);
+        if (StringUtils.hasText(connector.getFileGuide())) {
+            return "";
+        }
+        String guide = presetOf(connector).map(ApiAuthPreset::getFileGuide).orElse("");
+        if (!StringUtils.hasText(guide)) {
+            return "";
+        }
+        connector.changeFileGuide(guide);
+        connectorRepository.save(connector);
+        return guide;
+    }
+
+    /**
+     * 이 연동이 어느 프리셋으로 붙었나.
+     *
+     * <p>연동 코드가 «프리셋 이름-모델» 로 만들어지므로 앞자리로 되짚는다. 프리셋을 따로
+     * 저장하지 않은 것은 코드가 이미 그 값을 담고 있기 때문이다.
+     */
+    private java.util.Optional<ApiAuthPreset> presetOf(Connector connector) {
+        String code = connector.getCode() == null ? "" : connector.getCode();
+        return java.util.Arrays.stream(ApiAuthPreset.values())
+                .filter(preset -> code.startsWith(preset.name().toLowerCase(java.util.Locale.ROOT)))
+                .findFirst();
     }
 
     /** 파일을 어디서 받는지. 상대 사이트가 바뀌면 사람이 그 자리에서 고쳐 둔다. */

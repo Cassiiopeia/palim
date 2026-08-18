@@ -166,10 +166,18 @@
 
                 <div class="rounded border border-base-300 p-3 mb-3">
                     <div class="text-sm font-medium mb-1">어디서 받나</div>
-                    <p th:if="${#strings.isEmpty(view.fileGuide)}"
-                       class="text-sm text-base-content/60">
-                        받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
-                    </p>
+                    <!--/* 안내는 연결을 저장할 때 심는다. 그 전에 만든 연동은 비어 있으므로
+                           지금 넣을 길을 준다 — 오래 쓴 연동일수록 비어 있는 셈이다. */-->
+                    <div th:if="${#strings.isEmpty(view.fileGuide)}"
+                         class="flex flex-wrap items-center gap-2">
+                        <p class="text-sm text-base-content/60">
+                            받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
+                        </p>
+                        <form th:action="@{/connectors/{id}/file-guide/seed(id=${view.id})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm">기본 안내 넣기</button>
+                        </form>
+                    </div>
                     <pre th:unless="${#strings.isEmpty(view.fileGuide)}"
                          class="text-sm whitespace-pre-wrap font-sans"
                          th:text="${view.fileGuide}">안내</pre>

@@ -385,6 +385,17 @@ public class ConnectorController {
      * <p>상대 사이트는 언젠가 바뀐다. 그때 사람이 그 자리에서 고쳐 두면 <b>다음부터 그게
      * 정답</b>이 된다 — 코드를 고쳐야 하면 그 사이 아무도 못 쓴다.
      */
+    /** 프리셋이 아는 기본 안내를 지금 넣는다. 연결을 저장하기 전에 만든 연동은 비어 있다. */
+    @PostMapping("/connectors/{id}/file-guide/seed")
+    public String seedFileGuide(@PathVariable UUID id, RedirectAttributes redirect) {
+        String guide = adminService.seedFileGuide(id);
+        redirect.addFlashAttribute(guide.isBlank() ? "flashError" : "flashSuccess",
+                guide.isBlank()
+                        ? "넣을 기본 안내가 없습니다. 직접 적어 주세요."
+                        : "기본 안내를 넣었습니다. 실제 메뉴 이름을 확인해 고쳐 두세요.");
+        return "redirect:/connectors/" + id;
+    }
+
     @PostMapping("/connectors/{id}/file-guide")
     public String changeFileGuide(@PathVariable UUID id,
                                   @RequestParam(required = false) String guide,
