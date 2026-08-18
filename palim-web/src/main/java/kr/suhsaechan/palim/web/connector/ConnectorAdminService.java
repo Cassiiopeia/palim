@@ -193,29 +193,22 @@ public class ConnectorAdminService {
     }
 
     /**
-     * 프리셋이 아는 기본 안내를 <b>지금 넣는다.</b>
+     * 이 연동의 «받는 방법» 안내 — <b>비어 있을 수 없다.</b>
      *
-     * <p>안내는 연결을 «저장할 때» 심는다. 그래서 <b>그 전에 만들어진 연동에는 비어 있다</b> —
-     * 정작 오래 쓴 연동일수록 안내가 없는 셈이고, 그게 급할 때 제일 아프다.
+     * <p>전에는 연결을 저장할 때 한 번 심었다. 그래서 <b>그 전에 만들어진 연동에는 비어
+     * 있었고</b>, 화면은 「기본 안내 넣기」 단추를 눌러 달라고 했다. 정작 오래 쓴 연동일수록
+     * 비어 있는 셈이고, <b>단추를 눌러야 생기는 안내는 급할 때 비어 있다.</b>
      *
-     * <p>덮어쓰지 않고 «비어 있을 때만» 넣는다. 사람이 실제 메뉴를 확인해 고쳐 둔 것을 코드가
-     * 말없이 되돌리면 다음부터는 아무도 안 적는다.
-     *
-     * @return 넣었으면 그 내용, 이미 적혀 있거나 프리셋이 모르면 빈 문자열
+     * <p>그래서 저장해 두지 않고 «읽을 때» 정한다. 사람이 고쳐 둔 것이 있으면 그것을 쓰고,
+     * 없으면 프리셋이 아는 실제 경로를 그대로 보여준다. 저장은 <b>사람이 고쳤을 때만</b>
+     * 일어나므로, 고쳐 둔 것을 코드가 말없이 되돌리는 일도 없다.
      */
-    @Transactional
-    public String seedFileGuide(UUID connectorId) {
-        Connector connector = connector(connectorId);
+    @Transactional(readOnly = true)
+    public String fileGuideOf(Connector connector) {
         if (StringUtils.hasText(connector.getFileGuide())) {
-            return "";
+            return connector.getFileGuide();
         }
-        String guide = presetOf(connector).map(ApiAuthPreset::getFileGuide).orElse("");
-        if (!StringUtils.hasText(guide)) {
-            return "";
-        }
-        connector.changeFileGuide(guide);
-        connectorRepository.save(connector);
-        return guide;
+        return presetOf(connector).map(ApiAuthPreset::getFileGuide).orElse("");
     }
 
     /**
@@ -261,11 +254,15 @@ public class ConnectorAdminService {
             return List.of();
         }
 
-        // 찾은 경로를 안내 «맨 앞» 에 둔다. 사람이 적어 둔 나머지는 그대로 살린다 — 물어서
-        // 알아낸 것과 사람이 아는 것은 서로를 대신하지 못한다.
+        // 찾은 경로를 안내 «맨 앞» 에 둔다. 나머지 단계는 그대로 살린다 — 물어서 알아낸 것은
+        // «메뉴 이름» 뿐이고, 조회 조건과 필요한 열은 여전히 안내가 알고 있다.
+        //
+        // 바탕은 저장된 값이 아니라 «지금 화면에 보이는 안내» 다. 저장된 값은 비어 있을 수
+        // 있는데(사람이 한 번도 안 고쳤으면 그렇다) 그것을 바탕으로 삼으면 확인을 누른 순간
+        // 단계 안내가 통째로 사라진다.
         String path = String.join(" > ", labels);
-        String line = "받는 곳: %s → 표 오른쪽 위 엑셀 내려받기".formatted(path);
-        String existing = connector.getFileGuide();
+        String line = "받는 곳: %s".formatted(path);
+        String existing = fileGuideOf(connector);
         connector.changeFileGuide(existing.contains(line) ? existing
                 : (line + (existing.isBlank() ? "" : "\n\n" + existing)));
         connectorRepository.save(connector);

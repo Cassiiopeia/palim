@@ -25,11 +25,13 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
     /**
      * @param fileMappingFields 파일 길의 확정된 칸 수. 0이면 파일을 올려도 전 행이 실패하므로
      *                          화면이 올리기 전에 말해야 한다
-     * @param fileGuide         파일을 어디서 어떻게 받는지. 급할 때 찾아다니지 않게 적어 둔다
+     * @param fileGuide         파일을 어디서 어떻게 받는지. <b>비어 있을 수 없다</b> — 사람이
+     *                          고쳐 둔 것이 있으면 그것, 없으면 프리셋이 아는 실제 경로다.
+     *                          급할 때 쓰는 우회로라 그때 찾아다니게 하면 우회로가 아니다
      */
     public static ConnectorDetailView of(Connector connector, boolean mappingActive,
                                          Integer activeVersion, RunSummary lastRun,
-                                         int fileMappingFields) {
+                                         int fileMappingFields, String fileGuide) {
         return new ConnectorDetailView(
                 connector.getId(), connector.getName(), connector.getCode(),
                 connector.getSourceType(), connector.getConnectionStatus(),
@@ -41,7 +43,7 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
                 connector.getBaseAtGranularity() == null
                         ? BaseAtGranularity.DAY : connector.getBaseAtGranularity(),
                 fileMappingFields,
-                connector.getFileGuide());
+                fileGuide);
     }
 
     /**

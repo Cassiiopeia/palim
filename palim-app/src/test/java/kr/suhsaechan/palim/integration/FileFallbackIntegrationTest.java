@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -48,6 +51,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class FileFallbackIntegrationTest extends IntegrationTest {
 
     private static final UUID TENANT = UUID.fromString("00000000-0000-7000-8000-000000000001");
+    /** 기준일은 «업무 기준» 이다. 서버가 어느 시간대에 있든 사장님의 오늘이 오늘이다. */
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ConnectorRepository connectors;
@@ -205,18 +210,116 @@ class FileFallbackIntegrationTest extends IntegrationTest {
     }
 
     /**
-     * 파일용 칸을 안 맞춰 뒀으면 <b>올리기 전에</b> 말한다.
+     * 파일용 칸을 안 맞춰 뒀으면 <b>미리 해 두라고</b> 말한다.
      *
-     * <p>안 그러면 급할 때 올려 놓고 전 행 실패를 본 뒤에야 안다.
+     * <p>「올리기 전에 알려 준다」 로는 부족하다. 그러면 <b>자동 수집이 멈춘 날에 처음</b>
+     * 설정하게 되는데, 그날은 엑셀을 받는 동시에 칸까지 맞춰야 한다 — 우회로가 우회로가 아니다.
+     * 그래서 평소에 화면이 준비 안 됐다고 말한다.
      */
     @Test
     @WithMockUser
-    @DisplayName("파일용 칸이 없으면 올리기 전에 알려준다")
+    @DisplayName("파일용 칸이 없으면 미리 해 두라고 말한다")
     void 칸이_없으면_먼저_말한다() throws Exception {
         mockMvc.perform(get("/connectors/{id}", connector.getId()).locale(Locale.KOREAN))
                 .andExpect(status().isOk())
                 .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(
-                        Matchers.containsString("파일용 칸을 아직 안 맞췄습니다")));
+                        Matchers.containsString("아직 파일로 채울 준비가 안 됐습니다")))
+                .andExpect(content().string(Matchers.containsString("지금 한 번 해 두세요")));
+    }
+
+    /**
+     * 받는 방법 안내는 <b>비어 있을 수 없다.</b>
+     *
+     * <p>전에는 연결을 저장할 때 한 번 심어서, 그 전에 만든 연동에는 비어 있었다. 화면은
+     * 「기본 안내 넣기」 단추를 눌러 달라고 했는데 — <b>단추를 눌러야 생기는 안내는 급할 때
+     * 비어 있다.</b> 아무도 평소에 그 단추를 누르지 않기 때문이다.
+     *
+     * <p>그리고 안내는 「확인하신 뒤 적어 두세요」 가 아니라 <b>실제 경로</b>여야 한다. 그건
+     * 제품이 할 일을 사람에게 미루는 것이다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("안내를 한 번도 안 적어 둬도 실제 경로가 화면에 있다")
+    void 안내는_비어_있지_않다() throws Exception {
+        UUID modelId = targetModels.findByTenantIdAndCode(TENANT, "std_stock_snapshot")
+                .orElseThrow().getId();
+        // 프리셋을 알아보는 코드로 만든다 — 연동 코드 앞자리가 곧 어느 시스템인지다.
+        Connector known = connectors.save(Connector.of(TENANT,
+                "onewms-" + UUID.randomUUID().toString().substring(0, 6),
+                "3자물류 재고", modelId, SourceType.HTTP_API, "EA"));
+
+        mockMvc.perform(get("/connectors/{id}", known.getId()).locale(Locale.KOREAN))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                .andExpect(RenderAssertions.noInlineCode())
+                // 어느 화면에서 어떤 조건으로 받는지가 «그 자리에» 있어야 한다.
+                .andExpect(content().string(Matchers.containsString("I100")))
+                .andExpect(content().string(Matchers.containsString("창고 1번")))
+                // 떠넘기는 문구가 남아 있으면 안 된다.
+                .andExpect(content().string(
+                        Matchers.not(Matchers.containsString("기본 안내 넣기"))));
+    }
+
+    /**
+     * 파일이 <b>며칟날 기준</b>인지 사람이 고른다.
+     *
+     * <p>자동 수집은 지금 물어보니 오늘 것이 맞다. 그런데 사람이 받아 오는 파일은 어제 것일 수
+     * 있다 — 자동 수집이 어제 멈췄다면 어제 기준으로 조회해 받는 것이 정상이다.
+     *
+     * <p>그때 오늘로 담으면 <b>어제 재고가 오늘 재고인 척</b> 들어간다. 대조는 어제 재고와
+     * 오늘 재고를 견주게 되어 <b>없는 차이를 있다고 말하고</b>, 사람은 그것이 날짜 탓인 줄
+     * 모르고 창고를 뒤진다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("파일을 며칟날 기준으로 담을지 고른 대로 들어간다")
+    void 기준일을_고른_대로() throws Exception {
+        prepareFileMapping();
+
+        LocalDate yesterday = LocalDate.now(BUSINESS_ZONE).minusDays(1);
+        mockMvc.perform(multipart("/connectors/{id}/run", connector.getId())
+                        .file(stockFile())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("mode", "LIVE").param("headerRow", "1")
+                        .param("baseDate", yesterday.toString()))
+                .andExpect(status().is3xxRedirection());
+
+        List<Instant> baseAts = jdbcClient.sql("""
+                        SELECT DISTINCT base_at FROM std_stock_snapshot
+                         WHERE tenant_id = :tenantId AND source = :source
+                        """)
+                .param("tenantId", TENANT)
+                .param("source", source)
+                .query(Instant.class)
+                .list();
+
+        assertThat(baseAts)
+                .as("고른 날짜로 담기지 않으면 대조가 없는 차이를 있다고 말한다")
+                .containsExactly(yesterday.atStartOfDay(BUSINESS_ZONE).toInstant());
+    }
+
+    /** 파일 길의 칸을 맞춰 확정한다 — 담기 전에 반드시 있어야 한다. */
+    private void prepareFileMapping() throws Exception {
+        mockMvc.perform(multipart("/connectors/{id}/schema", connector.getId())
+                        .file(stockFile())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("intake", "FILE").param("headerRow", "1"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/connectors/{id}/mapping", connector.getId())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("intake", "FILE")
+                        .param("sourceFields", "품목코드", "재고수량")
+                        .param("targetKeys", "item_ref", "quantity")
+                        .param("schemaFields", "품목코드", "품목명", "재고수량"))
+                .andExpect(status().is3xxRedirection());
+        mockMvc.perform(post("/connectors/{id}/activate", connector.getId())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("intake", "FILE"))
+                .andExpect(status().is3xxRedirection());
     }
 }
