@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!--/* 맞추는 방식 — 조절할 수 있는 것들을 한 자리에.
+
+       조절 지점이 세 군데에 흩어져 있었다: 이름 다듬기 규칙(별도 화면), 뜯어보기 기준(맞춰 본
+       결과 안쪽), 몇 개로 칠지(품목 줄 안쪽). 그래서 «무엇을 조절할 수 있는지» 를 보여주는
+       자리가 아예 없었고, 사람은 자기 자료에 안 맞아도 그냥 참고 썼다.
+
+       각 항목은 «무엇을 바꾸는지» 와 «지금 값» 을 함께 적는다. 이름만 늘어놓으면 눌러 봐야
+       무엇인지 아는 목록이 된다(07-DECISIONS 041).
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 표준값은 11-UI-RULES §0. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <p class="text-sm text-base-content/60 -mt-4 mb-6">
+        두 시스템을 어떻게 맞춰 볼지 정합니다. 자료 모양이 회사마다 다르므로 여기 값도 다릅니다.
+    </p>
+
+    <div class="flex flex-wrap gap-2 mb-6">
+        <a th:href="@{/reconcile/units}" class="btn btn-ghost btn-sm">← 품목 묶기</a>
+        <a th:href="@{/reconcile/guide}" class="btn btn-ghost btn-sm">이 화면이 무슨 일을 하나</a>
+    </div>
+
+    <section th:if="${definition == null}">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body items-center text-center py-12 gap-2">
+                <p class="text-base-content/70">아직 무엇과 무엇을 견줄지 정하지 않았습니다.</p>
+                <p class="text-sm text-base-content/60">
+                    맞춰 볼 두 곳을 먼저 정해야 방식도 정할 수 있습니다.
+                </p>
+                <a th:href="@{/reconcile}" class="btn btn-sm mt-2">대조 결과로</a>
+            </div>
+        </div>
+    </section>
+
+    <th:block th:if="${definition != null}">
+        <p class="text-sm text-base-content/70 mb-4">
+            대조 <b th:text="${definition.name}">대조</b> —
+            <span class="font-mono text-xs" th:text="${definition.leftSource}">좌</span>
+            <span class="mx-1 text-base-content/40">↔</span>
+            <span class="font-mono text-xs" th:text="${definition.rightSource}">우</span>
+        </p>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table">
+                        <thead>
+                        <tr class="text-xs">
+                            <th class="w-1/3">무엇을 바꾸나</th>
+                            <th>지금</th>
+                            <th class="text-right"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+
+                        <!--/* ① 이름 다듬기 — 자동으로 짝을 찾는 근거 */-->
+                        <tr>
+                            <td class="align-top">
+                                <div class="font-medium">이름 다듬기</div>
+                                <div class="text-sm text-base-content/60 mt-1">
+                                    품명에서 유통기한·기호 같은 군더더기를 떼고 견줍니다.
+                                    이것이 <b>자동으로 짝을 찾는 근거</b>입니다.
+                                </div>
+                            </td>
+                            <td class="align-top">
+                                <div class="text-sm">
+                                    켜져 있는 규칙 <b th:text="${activeRules}">0</b>개
+                                </div>
+                                <div class="text-xs text-base-content/60 mt-1"
+                                     th:if="${sampleBefore != null}">
+                                    <span class="font-mono" th:text="${sampleBefore}">원본</span>
+                                    <span class="mx-1">→</span>
+                                    <span class="font-mono" th:text="${sampleAfter}">결과</span>
+                                </div>
+                            </td>
+                            <td class="text-right align-top">
+                                <a th:href="@{/reconcile/rules}" class="btn btn-sm">보기</a>
+                            </td>
+                        </tr>
+
+                        <!--/* ② 묶음 이름 — 여럿을 묶을 때 뭐라 부를지 */-->
+                        <tr>
+                            <td class="align-top">
+                                <div class="font-medium">묶음 이름</div>
+                                <div class="text-sm text-base-content/60 mt-1">
+                                    여러 품목을 묶을 때 그 묶음을 뭐라 부를지.
+                                    <b>공통 부분</b>을 쓰면 「클래식 850g (27.03.16)」 대신
+                                    「클래식 850g」 이 됩니다.
+                                </div>
+                            </td>
+                            <td class="align-top">
+                                <form th:action="@{/reconcile/{id}/unit-name-rule(id=${definition.id})}"
+                                      method="post" class="flex flex-wrap items-center gap-2">
+                                    <select name="rule" class="select select-bordered select-sm">
+                                        <option th:each="r : ${nameRules}" th:value="${r.name()}"
+                                                th:selected="${r.name() == definition.unitNameRule}"
+                                                th:text="${r.label}">규칙</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm">바꾸기</button>
+                                </form>
+                            </td>
+                            <td class="text-right align-top">
+                                <a th:href="@{/reconcile/units(tab='LINKED')} + '#board'"
+                                   class="link text-sm">이름 고치러</a>
+                            </td>
+                        </tr>
+
+                        <!--/* ③ 뜯어보기 기준 — 차이 난 묶음을 무엇으로 갈라 볼지 */-->
+                        <tr>
+                            <td class="align-top">
+                                <div class="font-medium">뜯어보기 기준</div>
+                                <div class="text-sm text-base-content/60 mt-1">
+                                    맞춰 본 결과에서 차이가 난 묶음을 무엇으로 갈라 볼지.
+                                    고를 수 있는 값은 <b>담기는 자료의 칸 목록</b>에서 나옵니다.
+                                </div>
+                            </td>
+                            <td class="align-top">
+                                <form th:action="@{/reconcile/{id}/breakdown-axis(id=${definition.id})}"
+                                      method="post" class="flex flex-wrap items-center gap-2">
+                                    <select name="axis" class="select select-bordered select-sm">
+                                        <option th:each="a : ${axes}" th:value="${a.token()}"
+                                                th:selected="${a.token() == definition.breakdownAxis}"
+                                                th:text="${a.label}">기준</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm">바꾸기</button>
+                                </form>
+                            </td>
+                            <td class="text-right align-top">
+                                <a th:href="@{/reconcile/{id}(id=${definition.id})}"
+                                   class="link text-sm">결과 보기</a>
+                            </td>
+                        </tr>
+
+                        <!--/* ④ 몇 개로 칠지 — 한쪽이 박스로 셀 때 */-->
+                        <tr>
+                            <td class="align-top">
+                                <div class="font-medium">몇 개로 칠지</div>
+                                <div class="text-sm text-base-content/60 mt-1">
+                                    한쪽이 박스로 세고 한쪽이 낱개로 셀 때 「1박스 = 12개」 처럼
+                                    곱해서 견줍니다. 안 건드리면 전부 <b>1배</b>입니다.
+                                </div>
+                            </td>
+                            <td class="align-top">
+                                <div class="text-sm" th:if="${scaledCount > 0}">
+                                    <b th:text="${scaledCount}">0</b>개 품목이 1배가 아닙니다
+                                </div>
+                                <div class="text-sm text-base-content/60" th:if="${scaledCount == 0}">
+                                    전부 1배
+                                </div>
+                            </td>
+                            <td class="text-right align-top">
+                                <a th:href="@{/reconcile/units(tab='LINKED')} + '#board'"
+                                   class="link text-sm">묶음 보기</a>
+                            </td>
+                        </tr>
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+</div>
+</body>
+</html>

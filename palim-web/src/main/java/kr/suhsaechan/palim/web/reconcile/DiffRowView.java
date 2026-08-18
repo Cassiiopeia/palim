@@ -14,13 +14,13 @@ import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
  * <b>시스템 이름으로</b> 말해야 무엇을 확인해야 할지 바로 안다.
  *
  * <p><b>이름을 코드보다 앞세운다.</b> 예전에는 「U-6668d23b · +11」 이라고만 떴다. 그것이 무슨
- * 물건인지 알 수 없으니 손댈 수가 없고, 알 수 없는 줄은 결국 안 보게 된다. 이름은 물건에 이미
+ * 묶음인지 알 수 없으니 손댈 수가 없고, 알 수 없는 줄은 결국 안 보게 된다. 이름은 묶음에 이미
  * 있었는데 화면이 코드를 그리고 있었다.
  *
  * <p>{@code leftParts}·{@code rightParts} 는 <b>몇 개가 합쳐진 값인지</b>를 말한다. 「4↔4건」
  * 과 「1↔2건」 은 전혀 다른 상태인데, 합계만 보면 둘 다 그냥 숫자 하나다.
  *
- * @param unitId     펼쳐서 뜯어볼 물건. 미매칭이면 비어 있다
+ * @param unitId     펼쳐서 뜯어볼 묶음. 미매칭이면 비어 있다
  * @param unitName   사람이 부르는 이름. 없으면 코드로 대신한다
  * @param unitCode   시스템이 쓰는 코드. 이름 옆에 작게 둔다
  * @param leftParts  왼쪽에서 합쳐진 품목 수
@@ -65,7 +65,7 @@ public record DiffRowView(UUID diffId, UUID unitId, String unitName, String unit
     /**
      * 좌·우에 든 품목 수가 어긋나나.
      *
-     * <p>「1↔2건」 은 한쪽에 품목이 하나 더 붙어 있다는 뜻이고, 대개 <b>잘못 이어 둔 것</b>이다.
+     * <p>「1↔2건」 은 한쪽에 품목이 하나 더 붙어 있다는 뜻이고, 대개 <b>잘못 묶어 둔 것</b>이다.
      * 합계만 보면 그냥 차이 나는 줄로 보인다.
      */
     public boolean lopsided() {

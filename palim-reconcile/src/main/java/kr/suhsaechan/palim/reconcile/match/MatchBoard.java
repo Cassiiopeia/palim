@@ -20,18 +20,18 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 두 원천의 품목을 <b>한 표로 나란히 놓는다.</b>
  *
- * <p>예전에는 화면이 셋으로 쪼개져 있었다 — 「이을 만한 것」(이름이 같은 것끼리),
- * 「직접 골라서 잇기」(좌·우 목록 따로), 「정해 둔 품목」(코드와 이름만). 그래서
+ * <p>예전에는 화면이 셋으로 쪼개져 있었다 — 「묶을 만한 것」(이름이 같은 것끼리),
+ * 「직접 골라서 묶기」(좌·우 목록 따로), 「정해 둔 품목」(코드와 이름만). 그래서
  * <b>무엇과 무엇이 같은지를 한눈에 볼 수 없었고</b>, 잇기 전에 양쪽 수량을 견줄 수도 없었다.
  * 잇고 나면 무슨 일이 일어났는지도 안 보였다.
  *
- * <p>여기서는 한 줄이 <b>물건 하나</b>다. 왼쪽 칸에 이쪽 시스템의 품목, 오른쪽 칸에 저쪽
+ * <p>여기서는 한 줄이 <b>묶음 하나</b>다. 왼쪽 칸에 이쪽 시스템의 품목, 오른쪽 칸에 저쪽
  * 시스템의 품목, 그 옆에 수량 차이. 그러면 잇기 전에 「이게 맞나」 를 그 줄에서 판단할 수 있고,
  * 잇고 나서도 같은 줄이 남아 무엇을 이었는지 보인다.
  *
  * <p>줄이 만들어지는 근거는 셋뿐이고 순서대로 본다.
  * <ol>
- *   <li>이미 이어 둔 것이면 <b>그 물건 단위로</b> 한 줄 — 사람이 정한 것이 규칙보다 앞선다</li>
+ *   <li>이미 묶어 둔 것이면 <b>그 묶음 단위로</b> 한 줄 — 사람이 정한 것이 규칙보다 앞선다</li>
  *   <li>짝 없음으로 표시해 둔 것이면 <b>품목 하나가 한 줄</b> — 다른 것과 섞이면 안 된다</li>
  *   <li>나머지는 <b>다듬은 이름이 같은 것끼리</b> 한 줄</li>
  * </ol>
@@ -51,7 +51,7 @@ public class MatchBoard {
      * 보드를 만든다.
      *
      * @param tab     어느 갈래를 볼지
-     * @param keyword 품목코드·품명·물건 이름에 이 글자가 든 줄만. 비면 전부
+     * @param keyword 품목코드·품명·묶음 이름에 이 글자가 든 줄만. 비면 전부
      * @param page    0부터
      */
     @Transactional(readOnly = true)
@@ -101,14 +101,14 @@ public class MatchBoard {
     /**
      * 줄 안에서 고를 <b>반대쪽 짝 후보</b>.
      *
-     * <p>이어 둔 것과 짝 없음으로 둔 것은 뺀다. 이 자리는 「짝을 찾는」 자리이므로 이미 자리를
+     * <p>묶어 둔 것과 짝 없음으로 둔 것은 뺀다. 이 자리는 「짝을 찾는」 자리이므로 이미 자리를
      * 잡은 품목이 섞이면 고를 것이 늘기만 한다.
      *
      * <p>검색어가 없으면 <b>이름이 닮은 순서</b>로 준다. 자동 후보는 다듬은 이름이 «정확히»
      * 같아야 잡히므로 「초콜릿 프로틴바」 와 「초콜렛 프로틴바」 는 영영 못 만난다. 순서만
      * 바꾸는 것이지 <b>대신 정해 주지는 않는다</b> — 고르는 것은 사람이다.
      *
-     * @param side      이쪽 원천에서만 고른다. {@code null} 이면 양쪽 다 — 이미 이어 둔 물건에
+     * @param side      이쪽 원천에서만 고른다. {@code null} 이면 양쪽 다 — 이미 이어 둔 묶음에
      *                  품목을 «더 담을» 때는 어느 쪽에서 담을지 미리 정할 수 없다
      * @param reference 이 이름과 닮은 순서로 정렬한다
      */
@@ -182,7 +182,7 @@ public class MatchBoard {
     /**
      * 이 품목이 어느 줄에 들어가나.
      *
-     * <p>사람이 정한 것(이어 둔 것·짝 없음)이 규칙보다 <b>앞선다.</b> 반대로 하면 규칙 한 줄을
+     * <p>사람이 정한 것(묶어 둔 것·짝 없음)이 규칙보다 <b>앞선다.</b> 반대로 하면 규칙 한 줄을
      * 고칠 때마다 이미 정해 둔 것이 흩어진다.
      */
     private String groupKeyOf(Item item, NormalizationEngine.Batch batch) {
@@ -196,7 +196,7 @@ public class MatchBoard {
                 item.rawName() == null || item.rawName().isBlank()
                         ? item.itemRef() : item.rawName());
         // 다듬고 나니 빈 이름이면 규칙이 다 지워 버린 것이다. 그런 것끼리 한 줄로 뭉치면
-        // 서로 아무 상관 없는 품목이 같은 물건처럼 보인다 — 품목마다 따로 둔다.
+        // 서로 아무 상관 없는 품목이 같은 묶음처럼 보인다 — 품목마다 따로 둔다.
         return normalized.isBlank() ? "N:" + item.token() : "N:" + normalized;
     }
 
@@ -221,7 +221,7 @@ public class MatchBoard {
 
     private Map<UUID, String> unitNames(UUID tenantId) {
         Map<UUID, String> names = new LinkedHashMap<>();
-        // 접어 둔 물건도 이름은 필요하다. 멤버가 남아 있으면 줄에 뜨고, 그 줄에서 끊어야 한다.
+        // 접어 둔 묶음도 이름은 필요하다. 멤버가 남아 있으면 줄에 뜨고, 그 줄에서 끊어야 한다.
         jdbcClient.sql("SELECT id, name FROM reconcile_unit WHERE tenant_id = :tenantId")
                 .param("tenantId", tenantId)
                 .query((rs, rowNum) -> Map.entry(rs.getObject("id", UUID.class),
@@ -324,10 +324,10 @@ public class MatchBoard {
 
     /** 어느 갈래를 볼지. SQL 이 아니라 계산 뒤에 거르므로 개수와 목록이 항상 맞는다. */
     public enum Tab {
-        TODO("할 일", "이름이 닮은 짝과 아직 짝을 못 찾은 것"),
-        PAIRED("이을 수 있는 것", "양쪽에 이름이 닮은 품목이 있습니다"),
-        ONE_SIDED("짝을 못 찾은 것", "한쪽에만 있습니다"),
-        LINKED("이어 둔 것", "이미 같은 물건으로 정해 둔 것"),
+        TODO("할 일", "이름이 닮은 짝과 아직 묶을 짝이 없는 것"),
+        PAIRED("묶을 수 있는 것", "양쪽에 이름이 닮은 품목이 있습니다"),
+        ONE_SIDED("묶을 짝이 없는 것", "한쪽에만 있습니다"),
+        LINKED("묶어 둔 것", "이미 같은 묶음으로 정해 둔 것"),
         SET_ASIDE("짝 없음으로 둔 것", "짝이 없다고 사람이 정해 둔 것"),
         ALL("전부", "");
 
@@ -373,7 +373,7 @@ public class MatchBoard {
     }
 
     /**
-     * 표 한 줄 — <b>물건 하나</b>.
+     * 표 한 줄 — <b>묶음 하나</b>.
      *
      * @param unitId 이어 둔 줄일 때만 있다
      * @param left   왼쪽 시스템의 품목들. 로트가 갈려 여러 개일 수 있다
@@ -443,9 +443,9 @@ public class MatchBoard {
         }
 
         /**
-         * 이 줄을 물건으로 만들 때 <b>지어 줄 이름.</b>
+         * 이 줄을 묶음으로 만들 때 <b>지어 줄 이름.</b>
          *
-         * <p>첫 품목의 이름을 그대로 쓰면 로트 네 개를 묶은 물건이 「클래식 850g (27.03.16)」 이
+         * <p>첫 품목의 이름을 그대로 쓰면 로트 네 개를 묶은 묶음이 「클래식 850g (27.03.16)」 이
          * 된다 — 특정 로트 날짜가 전체를 대표하게 되고, 목록에서 그 로트 하나의 이야기로 읽힌다.
          * 그래서 여럿이면 공통 부분만 쓴다(07-DECISIONS 038).
          */
@@ -456,7 +456,7 @@ public class MatchBoard {
             return suggested.isBlank() ? displayName() : suggested;
         }
 
-        /** 사람이 부르는 이름. 이어 둔 줄은 그 물건의 이름, 아니면 첫 품목의 품명. */
+        /** 사람이 부르는 이름. 이어 둔 줄은 그 묶음의 이름, 아니면 첫 품목의 품명. */
         public String displayName() {
             if (unitName != null && !unitName.isBlank()) {
                 return unitName;
@@ -493,7 +493,7 @@ public class MatchBoard {
      * 줄 안의 품목 하나.
      *
      * @param quantity 지금 담긴 재고의 수량. <b>{@code null} 이면 담긴 재고에 없다</b>
-     * @param factor   이 품목 하나가 물건 몇 개인가. 이어 두지 않았으면 1
+     * @param factor   이 품목 하나가 묶음 몇 개인가. 이어 두지 않았으면 1
      * @param memberId 이어 둔 줄일 때만 있다. 끊기·계수 고치기가 이것을 가리킨다
      */
     public record Item(String source, String itemRef, String rawName, BigDecimal quantity,

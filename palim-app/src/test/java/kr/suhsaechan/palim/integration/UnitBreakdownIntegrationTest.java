@@ -166,7 +166,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     /**
      * 한쪽에 품목이 더 붙어 있으면 <b>그 줄이 드러나야 한다.</b>
      *
-     * <p>대개 잘못 이어 둔 것인데, 합계만 보면 그냥 차이 나는 줄로 보인다.
+     * <p>대개 잘못 묶어 둔 것인데, 합계만 보면 그냥 차이 나는 줄로 보인다.
      */
     @Test
     @DisplayName("짝이 없는 품목은 한쪽만 있는 줄로 드러난다")
@@ -440,6 +440,85 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 .param("qty", new BigDecimal(qty))
                 .param("name", name)
                 .update();
+    }
+
+    /**
+     * <b>화면이 「이걸 하면 무엇이 어떻게 되는지」 를 말해야 한다.</b>
+     *
+     * <p>말하지 않으면 버튼 이름만 늘어날 뿐 사람은 무엇을 하는 중인지 모른다. 「묶기」·
+     * 「1↔2건」 이 전부 뜻 없는 글자로 보인 이유가 그것이다. 그리고 지어낸 예시가 아니라
+     * <b>자기 화면에 실제로 있는 줄</b>이어야 「아 저게 그거구나」 로 이어진다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("안내가 자기 자료로 «묶으면 어떻게 계산되는지» 를 보여준다")
+    void 안내가_자기_자료로_설명한다() throws Exception {
+        linkedUnit();
+
+        mockMvc.perform(get("/reconcile/guide").locale(Locale.KOREAN))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(content().string(Matchers.containsString("묶음 안의 수량을 시스템별로 각각 더해서")))
+                // 지어낸 예시가 아니라 실제로 담긴 줄이어야 한다
+                .andExpect(content().string(Matchers.containsString("C850P_27.03.16")))
+                // 버튼 이름이 무엇을 하는지 적혀 있어야 한다
+                .andExpect(content().string(Matchers.containsString("묶음 풀기")))
+                .andExpect(content().string(Matchers.containsString("이 묶음에 넣기")));
+    }
+
+    /**
+     * <b>조절할 수 있는 것이 한 자리에 보여야 한다.</b>
+     *
+     * <p>이름 규칙은 별도 화면, 뜯어보기 기준은 결과 안쪽, 몇 개로 칠지는 품목 줄 안쪽에
+     * 흩어져 있었다. 무엇을 조절할 수 있는지 보여주는 자리가 없으면 자기 자료에 안 맞아도
+     * 그냥 참고 쓰게 된다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("맞추는 방식이 조절 항목과 지금 값을 함께 보여준다")
+    void 맞추는_방식이_한_자리에() throws Exception {
+        linkedUnit();
+
+        mockMvc.perform(get("/reconcile/method").locale(Locale.KOREAN))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.fullyRendered())
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(content().string(Matchers.containsString("이름 다듬기")))
+                .andExpect(content().string(Matchers.containsString("묶음 이름")))
+                .andExpect(content().string(Matchers.containsString("뜯어보기 기준")))
+                .andExpect(content().string(Matchers.containsString("몇 개로 칠지")));
+    }
+
+    /**
+     * 묶음 이름 규칙이 <b>실제로 적용된다.</b>
+     *
+     * <p>「공통 부분만」 이 모든 자료에 옳지는 않다 — 품명이 아예 다른 두 시스템에서는 공통
+     * 부분이 토막으로 남는다. 그래서 고를 수 있어야 하고, 고른 것이 실제로 먹어야 한다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("고른 묶음 이름 규칙이 실제로 적용된다")
+    void 이름_규칙이_적용된다() throws Exception {
+        mockMvc.perform(post("/reconcile/{id}/unit-name-rule", definition.getId())
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("rule", "FIRST_ITEM"))
+                .andExpect(status().is3xxRedirection());
+
+        String key = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+                .rows().getFirst().key();
+        mockMvc.perform(post("/reconcile/units/link")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("definitionId", definition.getId().toString())
+                        .param("row", key))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(unitService.activeUnits())
+                .as("첫 품목 이름 그대로를 골랐으면 로트 날짜가 붙은 이름이 나와야 한다")
+                .anySatisfy(unit ->
+                        assertThat(unit.getName()).isEqualTo("클래식 850g (27.03.16)"));
     }
 
     /**

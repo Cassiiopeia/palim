@@ -87,6 +87,10 @@ public class ReconcileDefinition extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String breakdownAxis = "NAME";
 
+    /** 여러 품목을 묶을 때 그 묶음을 뭐라 부를지. 「COMMON」·「FIRST_ITEM」·「MANUAL」. */
+    @Column(nullable = false, length = 30)
+    private String unitNameRule = "COMMON";
+
     private ReconcileDefinition(UUID tenantId, String code, String name, String leftSource,
                                 String rightSource, String compareField, BigDecimal tolerance,
                                 BigDecimal alertThreshold) {
@@ -137,6 +141,12 @@ public class ReconcileDefinition extends BaseTimeEntity {
      * 오는 곳, 창고별로 봐야 하는 곳. 코드에 박아 두면 그런 곳에서는 고칠 방법이 없다
      * (07-DECISIONS 040).
      */
+    /** 묶음 이름을 어떻게 지을지. 자료 모양에 따라 맞는 규칙이 다르다. */
+    public void changeUnitNameRule(String unitNameRule) {
+        this.unitNameRule = unitNameRule == null || unitNameRule.isBlank()
+                ? "COMMON" : unitNameRule;
+    }
+
     public void changeBreakdownAxis(String breakdownAxis) {
         this.breakdownAxis = breakdownAxis == null || breakdownAxis.isBlank()
                 ? "NAME" : breakdownAxis;

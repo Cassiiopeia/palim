@@ -13,6 +13,7 @@ import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.SnapshotAggregator;
 import kr.suhsaechan.palim.reconcile.match.MatchBoard;
 import kr.suhsaechan.palim.reconcile.match.UnpairedItem;
+import kr.suhsaechan.palim.reconcile.match.UnitNameRule;
 import kr.suhsaechan.palim.reconcile.match.UnitNaming;
 import kr.suhsaechan.palim.reconcile.match.UnpairedService;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnitService;
@@ -28,14 +29,14 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * 품목 잇기 화면 — <b>대조표 한 장.</b>
+ * 품목 묶기 화면 — <b>대조표 한 장.</b>
  *
- * <p>예전에는 화면이 셋으로 쪼개져 있었다. 「이을 만한 것」 은 좌·우를 한 칸에 세로로 쌓아
- * 무엇이 무엇과 짝인지 안 보였고, 「직접 골라서 잇기」 는 좌·우 목록이 서로 무관하게 놓여
+ * <p>예전에는 화면이 셋으로 쪼개져 있었다. 「묶을 만한 것」 은 좌·우를 한 칸에 세로로 쌓아
+ * 무엇이 무엇과 짝인지 안 보였고, 「직접 골라서 묶기」 는 좌·우 목록이 서로 무관하게 놓여
  * 견줄 수가 없었으며, 「정해 둔 품목」 은 코드와 이름만 보여줘 <b>방금 무슨 일이 일어났는지</b>
  * 알 수 없었다. 대조를 하러 온 사람에게 대조할 수 없는 화면을 준 것이다.
  *
- * <p>이제 한 줄이 물건 하나다. 왼쪽 칸·오른쪽 칸·수량 차이가 나란히 있어 <b>잇기 전에</b>
+ * <p>이제 한 줄이 묶음 하나다. 왼쪽 칸·오른쪽 칸·수량 차이가 나란히 있어 <b>잇기 전에</b>
  * 그 줄에서 판단이 선다. 그리고 그 판단이 곧 확인이므로 별도 확인 단계를 두지 않는다 —
  * 눈으로 견주지 못하는 화면에서만 확인 단계가 필요했다(07-DECISIONS 034).
  *
@@ -66,7 +67,7 @@ public class UnitController {
                         @RequestParam(required = false) String expand,
                         @RequestParam(required = false) String eq,
                         Model model) {
-        model.addAttribute("title", "품목 잇기");
+        model.addAttribute("title", "품목 묶기");
         model.addAttribute("tabs", MatchBoard.Tab.values());
 
         List<ReconcileDefinition> active = definitions.findByIsActiveTrueOrderByCode();
@@ -126,7 +127,7 @@ public class UnitController {
             // 이 쪽에 없는 줄을 펼치려 한다 — 쪽을 넘겼거나 다른 사람이 먼저 이었다.
             return;
         }
-        // 한쪽만 있는 줄은 «반대쪽» 에서 고른다. 이미 양쪽이 다 있는 줄(이어 둔 것에 더 담기)은
+        // 한쪽만 있는 줄은 «반대쪽» 에서 고른다. 이미 양쪽이 다 있는 줄(묶어 둔 것에 더 담기)은
         // 어느 쪽에서 담을지 미리 정할 수 없으므로 양쪽을 다 보여준다.
         String opposite = row.left().isEmpty() ? definition.getLeftSource()
                 : row.right().isEmpty() ? definition.getRightSource()
@@ -151,10 +152,10 @@ public class UnitController {
     }
 
     /**
-     * 고른 줄들을 <b>각각 한 물건으로</b> 잇는다.
+     * 고른 줄들을 <b>각각 한 묶음으로</b> 잇는다.
      *
-     * <p>한 줄 = 한 물건이므로 줄 셋을 고르면 물건 셋이 생긴다. 셋을 하나로 합치는 것이
-     * 아니다 — 그것은 서로 다른 물건을 합치는 일이라 사람이 이름을 정해야 한다.
+     * <p>한 줄 = 한 묶음이므로 줄 셋을 고르면 묶음 셋이 생긴다. 셋을 하나로 합치는 것이
+     * 아니다 — 그것은 서로 다른 묶음을 합치는 일이라 사람이 이름을 정해야 한다.
      *
      * <p><b>화면이 보낸 품목 목록을 받지 않는다.</b> 줄 열쇠만 받아 서버가 그 줄을 다시
      * 계산한다. 화면을 띄운 뒤 다른 사람이 그 품목을 이었을 수도, 주소를 손으로 고쳐 남의
@@ -174,7 +175,7 @@ public class UnitController {
         }
         List<String> targets = targetsOf(row, rows);
         if (targets.isEmpty()) {
-            redirect.addFlashAttribute("flashError", "이을 줄을 하나도 고르지 않았습니다.");
+            redirect.addFlashAttribute("flashError", "묶을 줄을 하나도 고르지 않았습니다.");
             return back(definitionId, tab, q, page);
         }
 
@@ -187,7 +188,7 @@ public class UnitController {
             if (found == null) {
                 continue;
             }
-            // 한쪽만 든 물건은 합산이 「좌 120 · 우 0」 이 되어 대조가 매일 전량 차이를 올린다.
+            // 한쪽만 든 묶음은 합산이 「좌 120 · 우 0」 이 되어 대조가 매일 전량 차이를 올린다.
             // 여럿을 한꺼번에 이을 때 하나 때문에 전부 막으면 나머지가 안 이어지므로, 이것만
             // 빼고 잇되 «무엇을 뺐는지» 를 반드시 말한다.
             if (!found.bothSides()) {
@@ -195,7 +196,7 @@ public class UnitController {
                 continue;
             }
             try {
-                unitService.link(picksOf(found), newCode(), found.suggestedName(), "EA");
+                unitService.link(picksOf(found), newCode(), nameOf(definition, found), "EA");
                 linked++;
             } catch (BusinessException e) {
                 redirect.addFlashAttribute("flashError",
@@ -249,7 +250,7 @@ public class UnitController {
                 .filter(pick -> MatchBoard.tokenOf(pick.source(), pick.itemRef()).equals(mate))
                 .toList());
         try {
-            var unit = unitService.link(picks, newCode(), row.suggestedName(), "EA");
+            var unit = unitService.link(picks, newCode(), nameOf(definition, row), "EA");
             redirect.addFlashAttribute("flashSuccess",
                     "「%s」 로 이었습니다. 바로 대조에 들어갑니다.".formatted(unit.getName()));
         } catch (BusinessException e) {
@@ -266,9 +267,9 @@ public class UnitController {
     }
 
     /**
-     * 이 물건을 푼다 — 든 품목이 「이을 수 있는 것」 으로 돌아온다.
+     * 이 묶음을 푼다 — 든 품목이 「묶을 수 있는 것」 으로 돌아온다.
      *
-     * <p>되돌릴 길이 없으면 잘못 이은 것이 영영 남는다. 한 품목은 한 물건에만 속하므로 그
+     * <p>되돌릴 길이 없으면 잘못 이은 것이 영영 남는다. 한 품목은 한 묶음에만 속하므로 그
      * 품목을 다시 이을 수도 없다.
      */
     @PostMapping("/reconcile/units/{unitId}/unlink")
@@ -283,7 +284,7 @@ public class UnitController {
         return back(definitionId, tab, q, page);
     }
 
-    /** 예전 경로로 만들어져 확인을 기다리는 물건을 확정한다. */
+    /** 예전 경로로 만들어져 확인을 기다리는 묶음을 확정한다. */
     @PostMapping("/reconcile/units/{unitId}/confirm")
     public String confirm(@PathVariable UUID unitId,
                           @RequestParam(required = false) UUID definitionId,
@@ -291,7 +292,7 @@ public class UnitController {
                           @RequestParam(required = false) String q,
                           @RequestParam(defaultValue = "0") int page,
                           RedirectAttributes redirect) {
-        // 물건 «통째로» 확정한다. 한쪽만 확정하면 합산이 반쪽이 되어 대조가 매일 유령 차이를
+        // 묶음 «통째로» 확정한다. 한쪽만 확정하면 합산이 반쪽이 되어 대조가 매일 유령 차이를
         // 올리고, 사람은 그것을 매칭 문제가 아니라 재고 사고로 읽는다.
         unitService.confirmUnit(unitId);
         redirect.addFlashAttribute("flashSuccess", "확인했습니다. 이제 대조에 들어갑니다.");
@@ -375,10 +376,10 @@ public class UnitController {
     }
 
     /**
-     * 물건 이름을 고친다.
+     * 묶음 이름을 고친다.
      *
      * <p>이름은 <b>대조 결과에서 사람이 잡을 수 있는 유일한 손잡이</b>다. 「U-6668d23b · +11」
-     * 이라고만 뜨면 그것이 무슨 물건인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
+     * 이라고만 뜨면 그것이 무슨 묶음인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
      */
     @PostMapping("/reconcile/units/{unitId}/rename")
     public String rename(@PathVariable UUID unitId,
@@ -402,7 +403,7 @@ public class UnitController {
     /**
      * 담긴 품명으로 이름을 <b>다시 짓는다</b> — 고른 것만.
      *
-     * <p>이름 규칙을 고쳐도 이미 만들어진 물건은 옛 이름을 그대로 달고 있다. 로트 날짜가 박힌
+     * <p>이름 규칙을 고쳐도 이미 만들어진 묶음은 옛 이름을 그대로 달고 있다. 로트 날짜가 박힌
      * 이름이 열 개 넘게 남아 있는데 하나씩 손으로 고치라고 하면 아무도 안 고친다 — 그러면
      * 규칙을 고친 의미가 없다.
      *
@@ -421,7 +422,7 @@ public class UnitController {
             return "redirect:/reconcile/units";
         }
         if (units == null || units.isEmpty()) {
-            redirect.addFlashAttribute("flashError", "다시 지을 물건을 고르지 않았습니다.");
+            redirect.addFlashAttribute("flashError", "다시 지을 묶음을 고르지 않았습니다.");
             return back(definitionId, tab, q, page);
         }
 
@@ -448,7 +449,7 @@ public class UnitController {
     }
 
     /**
-     * 이 품목 하나가 물건 몇 개인지 고친다.
+     * 이 품목 하나가 묶음 몇 개인지 고친다.
      *
      * <p>「전산의 1박스 = 물류의 12개」 같은 경우다. 잘못 넣으면 수량이 통째로 어긋나므로
      * 고칠 길이 있어야 한다. 자주 쓰는 값이 아니라 이어 둔 줄을 펼쳤을 때만 보인다.
@@ -463,7 +464,7 @@ public class UnitController {
                                RedirectAttributes redirect) {
         try {
             unitService.changeFactor(memberId, factor);
-            redirect.addFlashAttribute("flashSuccess", "몇 개로 셀지 바꿨습니다.");
+            redirect.addFlashAttribute("flashSuccess", "몇 개로 칠지 바꿨습니다.");
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
@@ -492,6 +493,19 @@ public class UnitController {
                 .map(item -> new ReconcileUnitService.Pick(item.source(), item.itemRef(),
                         item.factor()))
                 .toList();
+    }
+
+    /**
+     * 이 대조에 정해 둔 규칙으로 묶음 이름을 짓는다.
+     *
+     * <p>규칙이 「직접」 이면 코드가 짓지 않고 「이름 없음」 으로 둔다 — 목록에서 눈에 띄므로
+     * 사람이 반드시 짓게 된다. 그럴듯한 이름을 지어 두면 아무도 안 고친다.
+     */
+    private String nameOf(ReconcileDefinition definition, MatchBoard.Row row) {
+        String name = UnitNameRule.of(definition.getUnitNameRule()).nameOf(
+                row.left().stream().map(MatchBoard.Item::displayName).toList(),
+                row.right().stream().map(MatchBoard.Item::displayName).toList());
+        return name.isBlank() ? "이름 없음" : name;
     }
 
     /** 코드는 사람에게 묻지 않는다 — 사람이 신경 쓸 값이 아니고, 겹치면 저장이 막힌다. */
