@@ -19,7 +19,9 @@ import kr.suhsaechan.palim.connector.define.ConnectorRepository;
 import kr.suhsaechan.palim.connector.define.Intake;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
 import kr.suhsaechan.palim.connector.define.SourceType;
+import kr.suhsaechan.palim.connector.secret.ConnectorSecretService;
 import kr.suhsaechan.palim.connector.source.http.ApiAuthPreset;
+import kr.suhsaechan.palim.connector.source.http.MenuPathFinder;
 import kr.suhsaechan.palim.connector.model.TargetField;
 import kr.suhsaechan.palim.connector.model.TargetFieldRepository;
 import kr.suhsaechan.palim.connector.model.TargetModel;
@@ -50,6 +52,8 @@ public class ConnectorAdminService {
     public static final UUID DEFAULT_TENANT =
             UUID.fromString("00000000-0000-7000-8000-000000000001");
 
+    private final MenuPathFinder menuPathFinder;
+    private final ConnectorSecretService secretService;
     private final ConnectorRepository connectorRepository;
     private final ConnectorMappingRepository mappingRepository;
     private final ConnectorFieldMapRepository fieldMapRepository;
@@ -225,6 +229,47 @@ public class ConnectorAdminService {
         return java.util.Arrays.stream(ApiAuthPreset.values())
                 .filter(preset -> code.startsWith(preset.name().toLowerCase(java.util.Locale.ROOT)))
                 .findFirst();
+    }
+
+    /**
+     * 상대 시스템에 <b>물어서</b> 메뉴 경로를 안내에 채운다.
+     *
+     * <p>코드에 적어 두면 상대가 메뉴를 바꾼 날 거짓말이 된다 — 사람은 그 거짓말을 믿고 없는
+     * 메뉴를 찾는다. 그래서 물어보고, 상대가 바꾸면 다시 물으면 된다.
+     *
+     * <p>계정은 <b>서버 밖으로 나가지 않는다.</b> 매일 도는 수집과 같은 자리에서 같은 계정으로
+     * 로그인한다.
+     *
+     * @return 찾은 메뉴 경로. 못 찾으면 빈 목록 — <b>지어내지 않는다</b>
+     */
+    @Transactional
+    public List<String> probeMenuPath(UUID connectorId) {
+        Connector connector = connector(connectorId);
+        Map<String, String> config = connector.getSourceConfig().entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+                        entry -> String.valueOf(entry.getValue()),
+                        (a, b) -> a, LinkedHashMap::new));
+        String password = secretService.find(connector.getCredentialRef(), "password")
+                .orElse("");
+        if (password.isBlank()) {
+            return List.of();
+        }
+
+        List<String> labels = menuPathFinder.find(config, config.getOrDefault("userId", ""),
+                password);
+        if (labels.isEmpty()) {
+            return List.of();
+        }
+
+        // 찾은 경로를 안내 «맨 앞» 에 둔다. 사람이 적어 둔 나머지는 그대로 살린다 — 물어서
+        // 알아낸 것과 사람이 아는 것은 서로를 대신하지 못한다.
+        String path = String.join(" > ", labels);
+        String line = "받는 곳: %s → 표 오른쪽 위 엑셀 내려받기".formatted(path);
+        String existing = connector.getFileGuide();
+        connector.changeFileGuide(existing.contains(line) ? existing
+                : (line + (existing.isBlank() ? "" : "\n\n" + existing)));
+        connectorRepository.save(connector);
+        return labels;
     }
 
     /** 파일을 어디서 받는지. 상대 사이트가 바뀌면 사람이 그 자리에서 고쳐 둔다. */

@@ -291,6 +291,25 @@ public class FormSessionClient {
     }
 
     /** 화면이 호출하는 조회 요청을 같은 형식으로 보낸다. */
+    /**
+     * 로그인한 채로 화면 하나를 <b>그대로</b> 받아 온다.
+     *
+     * <p>자료를 읽으려는 것이 아니라 <b>사람이 볼 안내를 만들려고</b> 쓴다 — 「어느 메뉴로 들어가
+     * 엑셀을 받나」 는 로그인해야 보이고, 그걸 코드에 적어 두면 상대가 메뉴를 바꾼 날 안내가
+     * 거짓말이 된다.
+     *
+     * <p>계정은 <b>서버 밖으로 나가지 않는다.</b> 이 호출도 매일 도는 수집과 같은 자리에서
+     * 같은 계정으로 이뤄진다.
+     */
+    public String fetchPage(String url, Session session) {
+        ResponseEntity<String> response = restClient.get().uri(url)
+                .header(HttpHeaders.COOKIE, cookieHeader(session.cookies()))
+                .retrieve().toEntity(String.class);
+        log.debug("화면 받기 — 주소={}, 상태={}, 본문길이={}",
+                url, response.getStatusCode(), bodyLength(response.getBody()));
+        return response.getBody() == null ? "" : response.getBody();
+    }
+
     public List<Map<String, String>> fetch(Map<String, String> config, Session session) {
         String fetchUrl = required(config, "fetchUrl");
         String body = withNow(config.getOrDefault("fetchBody", ""));

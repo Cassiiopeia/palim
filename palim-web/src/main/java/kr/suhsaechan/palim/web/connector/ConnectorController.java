@@ -385,6 +385,28 @@ public class ConnectorController {
      * <p>상대 사이트는 언젠가 바뀐다. 그때 사람이 그 자리에서 고쳐 두면 <b>다음부터 그게
      * 정답</b>이 된다 — 코드를 고쳐야 하면 그 사이 아무도 못 쓴다.
      */
+    /**
+     * 상대 시스템에 <b>물어서</b> 메뉴 경로를 안내에 채운다.
+     *
+     * <p>코드에 적어 두면 상대가 메뉴를 바꾼 날 거짓말이 된다. 물어보면 바뀐 뒤에도 다시 물어
+     * 맞출 수 있다. <b>못 찾으면 지어내지 않고 그 사실을 말한다.</b>
+     */
+    @PostMapping("/connectors/{id}/file-guide/probe")
+    public String probeMenuPath(@PathVariable UUID id, RedirectAttributes redirect) {
+        try {
+            List<String> labels = adminService.probeMenuPath(id);
+            redirect.addFlashAttribute(labels.isEmpty() ? "flashError" : "flashSuccess",
+                    labels.isEmpty()
+                            ? "메뉴 경로를 찾지 못했습니다. 상대 화면이 바뀌었거나 메뉴 구조가 달라서입니다 "
+                                    + "— 아래에 직접 적어 주세요."
+                            : "메뉴 경로를 읽었습니다 — %s".formatted(String.join(" > ", labels)));
+        } catch (BusinessException e) {
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+        }
+        return "redirect:/connectors/" + id;
+    }
+
     /** 프리셋이 아는 기본 안내를 지금 넣는다. 연결을 저장하기 전에 만든 연동은 비어 있다. */
     @PostMapping("/connectors/{id}/file-guide/seed")
     public String seedFileGuide(@PathVariable UUID id, RedirectAttributes redirect) {
