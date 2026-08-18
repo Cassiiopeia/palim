@@ -215,4 +215,48 @@ class MatchBoardIntegrationTest extends IntegrationTest {
                 .as("이음 기호는 원천마다 제각각이라 이것만으로 갈리는 일이 잦다")
                 .isEqualTo(normalizer.normalize("제품A 227g"));
     }
+
+    /**
+     * 원천마다 표기 습관이 다르다. 한쪽만 이름 끝에 꼬리표를 붙인다면 그 규칙은 <b>그쪽에만</b>
+     * 걸어야 한다 — 양쪽에 걸면 같은 기호를 다른 뜻으로 쓰는 원천이 붙는 순간 조용히 망가진다.
+     *
+     * <p><b>규칙에 원천을 적어 두어도 대사가 그것을 보지 않으면 아무 일도 하지 않는다.</b> 실제로
+     * 그런 상태였다 — 화면에서는 원천을 고를 수 있는데 짝을 맞출 때는 모든 규칙이 양쪽에 걸렸다.
+     * 그러면 원천을 고른 사람은 자기가 한 설정이 왜 통하지 않는지 알 방법이 없다.
+     *
+     * <p>기본 규칙이 건드리지 않는 기호를 쓴다. 밑줄·괄호·날짜는 이미 기본 규칙이 떼므로 그것으로
+     * 시험하면 원천을 나눈 효과가 아니라 기본 규칙의 효과를 보게 된다.
+     */
+    @Test
+    @DisplayName("한쪽 원천에만 건 규칙이 그쪽 이름만 다듬어 짝을 맞춘다")
+    void 원천별_규칙이_대사에_걸린다() {
+        rules.save(NormalizationRule.of(TENANT, "전산 쪽 꼬리표 제거", "@@.*$", "", 5000, erp));
+        normalizer.clearCache();
+
+        snapshot(erp, "E-1", "제품B@@26.12.12");
+        snapshot(wms, "W-1", "제품B");
+
+        assertThat(load(MatchBoard.Tab.PAIRED).rows())
+                .as("전산 쪽 꼬리표를 떼면 두 이름이 같아져 한 줄이 되어야 한다")
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.left()).hasSize(1);
+                    assertThat(row.right()).hasSize(1);
+                });
+    }
+
+    /** 반대쪽에 걸어 둔 규칙이 이쪽 이름까지 바꾸면 원천을 나눈 뜻이 없다. */
+    @Test
+    @DisplayName("다른 원천에 건 규칙은 이쪽 이름을 건드리지 않는다")
+    void 다른_원천_규칙은_안_걸린다() {
+        rules.save(NormalizationRule.of(TENANT, "물류 쪽 꼬리표 제거", "@@.*$", "", 5001, wms));
+        normalizer.clearCache();
+
+        snapshot(erp, "E-2", "제품C@@26.12.12");
+        snapshot(wms, "W-2", "제품C");
+
+        assertThat(load(MatchBoard.Tab.PAIRED).rows())
+                .as("전산 쪽에 걸지 않은 규칙이 전산 이름을 바꾸면 짝이 잘못 잡힌다")
+                .isEmpty();
+    }
 }

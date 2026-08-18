@@ -293,4 +293,109 @@ class NormalizationRuleScreenIntegrationTest extends IntegrationTest {
                 .as("꺼진 규칙이 계속 적용되면 끄기가 거짓말이 된다")
                 .isNotEqualTo("클래식227g");
     }
+
+    /**
+     * 끌어서 옮긴 결과를 통째로 저장한다.
+     *
+     * <p>한 칸씩 옮기는 길만 있으면 「맨 아래를 맨 위로」 에 규칙 수만큼 눌러야 하고, 누를 때마다
+     * 화면이 새로 그려져 어디까지 옮겼는지 놓친다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("끌어서 놓은 순서를 한 번에 저장한다")
+    void 끌어서_순서를_저장한다() throws Exception {
+        NormalizationRule a = rules.save(NormalizationRule.of(TENANT, MARK + " 가", "가", "", 9101));
+        NormalizationRule b = rules.save(NormalizationRule.of(TENANT, MARK + " 나", "나", "", 9102));
+        NormalizationRule c = rules.save(NormalizationRule.of(TENANT, MARK + " 다", "다", "", 9103));
+
+        // 맨 뒤를 맨 앞으로 — 한 칸씩이면 두 번 눌러야 하는 이동이다.
+        mockMvc.perform(post("/reconcile/rules/reorder")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("id", c.getId().toString())
+                        .param("id", a.getId().toString())
+                        .param("id", b.getId().toString()))
+                .andExpect(status().is3xxRedirection());
+
+        List<UUID> mine = rules.findAllByOrderBySortOrder().stream()
+                .filter(rule -> rule.getName().contains(MARK))
+                .map(NormalizationRule::getId)
+                .toList();
+        assertThat(mine)
+                .as("끌어 놓은 순서가 그대로 저장되어야 한다")
+                .containsExactly(c.getId(), a.getId(), b.getId());
+    }
+
+    /**
+     * 순서를 저장하는 사이에 다른 사람이 규칙을 넣었을 수 있다.
+     *
+     * <p>화면이 보낸 목록에 없다고 그것을 지우거나 순서에서 빼면, 규칙 하나가 순서 저장 한 번에
+     * 사라지고 원인을 찾을 방법이 없다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("순서 목록에 없는 규칙은 사라지지 않고 뒤에 붙는다")
+    void 목록에_없는_규칙은_지키다() throws Exception {
+        NormalizationRule known = rules.save(NormalizationRule.of(TENANT,
+                MARK + " 알던것", "가", "", 9201));
+        NormalizationRule added = rules.save(NormalizationRule.of(TENANT,
+                MARK + " 그사이추가", "나", "", 9202));
+
+        // 화면은 「알던것」 하나만 알고 있는 상태로 순서를 보낸다.
+        mockMvc.perform(post("/reconcile/rules/reorder")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN)
+                        .param("id", known.getId().toString()))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(rules.findById(added.getId()))
+                .as("보내지 않은 규칙이 사라지면 순서 저장이 규칙을 지우는 기능이 된다")
+                .isPresent();
+    }
+
+    /**
+     * 원천마다 표기 습관이 다르다.
+     *
+     * <p>한쪽만 밑줄 뒤에 유통기한을 붙인다면 그 규칙은 그쪽에만 걸어야 한다. 양쪽에 걸면 지금은
+     * 무해해도 같은 기호를 다른 뜻으로 쓰는 원천이 붙는 순간 조용히 망가진다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("원천을 지정한 규칙은 그 원천에만 걸린다")
+    void 원천별로_건다() {
+        // 시드 규칙이 건드리지 않는 기호를 쓴다. 밑줄·괄호·날짜는 이미 기본 규칙이 떼므로
+        // 그것으로 시험하면 원천을 나눈 효과가 아니라 시드의 효과를 보게 된다.
+        rules.save(NormalizationRule.of(TENANT, MARK + " 원천전용",
+                "@@.*$", "", 9301, source));
+        engine.clearCache();
+
+        assertThat(engine.normalize("초콜릿 프로틴바@@26.12.12", source))
+                .as("지정한 원천에는 걸려야 한다")
+                .isEqualTo("초콜릿프로틴바");
+        assertThat(engine.normalize("초콜릿 프로틴바@@사이즈", "다른원천"))
+                .as("다른 원천에 걸리면 원천을 나눈 뜻이 없다")
+                .isEqualTo("초콜릿프로틴바@@사이즈");
+    }
+
+    /** 원천을 비워 둔 규칙은 지금까지처럼 모든 원천에 걸려야 한다 — 기존 규칙이 그 상태다. */
+    @Test
+    @WithMockUser
+    @DisplayName("원천을 비워 둔 규칙은 어느 원천에나 걸린다")
+    void 원천을_비우면_전체() {
+        rules.save(NormalizationRule.of(TENANT, MARK + " 전체적용", "@@.*$", "", 9401, null));
+        engine.clearCache();
+
+        assertThat(engine.normalize("가나@@다라", source)).isEqualTo("가나");
+        assertThat(engine.normalize("가나@@다라", "아무원천")).isEqualTo("가나");
+    }
+
+    /** 규칙을 어느 원천에 걸지 고르려면 고를 수 있는 원천이 화면에 있어야 한다. */
+    @Test
+    @WithMockUser
+    @DisplayName("화면이 지금 담긴 자료의 원천 목록을 준다")
+    void 원천_목록을_준다() throws Exception {
+        mockMvc.perform(get("/reconcile/rules").locale(Locale.KOREAN))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString(source)));
+    }
 }

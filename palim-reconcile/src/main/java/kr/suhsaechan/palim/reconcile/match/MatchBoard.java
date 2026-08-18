@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.reconcile.match;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.rule.NormalizationEngine;
+import kr.suhsaechan.palim.reconcile.rule.RegexGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -42,6 +44,15 @@ public class MatchBoard {
 
     /** 한 쪽에 보여줄 줄 수. 표가 두 칸씩이라 예전 목록보다 줄당 높이가 크다. */
     public static final int PAGE_SIZE = 25;
+
+    /**
+     * 이름 다듬기에 걸어 두는 제한 시간.
+     *
+     * <p>여기서 도는 것은 <b>사람이 넣은 정규식</b>이다. 미리보기를 통과했다고 안전한 것이 아니다 —
+     * 표본 열두 개로는 되돌아가는 패턴이 드러나지 않는다. 그런 규칙이 하나 저장되면 이 화면을 열
+     * 때마다 요청 스레드가 영영 풀려나지 않고, 몇 번이면 서버 전체가 응답을 멈춘다.
+     */
+    private static final Duration NORMALIZE_TIMEOUT = Duration.ofSeconds(10);
 
     private final JdbcClient jdbcClient;
     private final NormalizationEngine normalizer;
@@ -151,9 +162,13 @@ public class MatchBoard {
                 .filter(item -> needle.isEmpty() || item.matches(needle))
                 .toList();
 
+        // 후보는 «자기 원천» 규칙으로 다듬어야 기준 이름과 같은 모양이 된다 — 원천별 규칙의
+        // 목적이 바로 다른 표기를 같은 모양으로 만드는 것이다. 기준 이름은 어느 원천에서 왔는지
+        // 알 수 없어 전체 규칙으로 다듬는다. 순서를 정하는 용도이므로 그 근사로 충분하다.
         Comparator<Item> order = needle.isEmpty()
                 ? Comparator.comparingDouble((Item item) ->
-                        -NameSimilarity.score(base, batch.normalize(item.displayName())))
+                        -NameSimilarity.score(base,
+                                batch.normalize(item.displayName(), item.source())))
                 .thenComparing(Item::displayName)
                 : Comparator.comparing(Item::displayName);
 
@@ -190,10 +205,17 @@ public class MatchBoard {
         }
 
         NormalizationEngine.Batch batch = normalizer.batch();
-        Map<String, List<Item>> grouped = new LinkedHashMap<>();
-        for (Item item : items.values()) {
-            grouped.computeIfAbsent(groupKeyOf(item, batch), key -> new ArrayList<>()).add(item);
-        }
+        // 여기서 도는 것은 «사람이 넣은 정규식»이다. 미리보기를 통과했다고 안전한 것이 아니다 —
+        // 표본 열두 개로는 되돌아가는 패턴이 드러나지 않는다. 그런 규칙 하나가 저장되면 이 화면을
+        // 열 때마다 요청 스레드가 영영 풀려나지 않고, 몇 번이면 서버 전체가 멈춘다.
+        // 제한 시간을 넘기면 화면은 오류로 열린다 — 그래야 규칙을 고치러 갈 수 있다.
+        Map<String, List<Item>> grouped = RegexGuard.runWithTimeout(NORMALIZE_TIMEOUT, () -> {
+            Map<String, List<Item>> byKey = new LinkedHashMap<>();
+            for (Item item : items.values()) {
+                byKey.computeIfAbsent(groupKeyOf(item, batch), key -> new ArrayList<>()).add(item);
+            }
+            return byKey;
+        });
 
         Map<UUID, String> unitNames = unitNames(tenantId);
         List<Row> rows = new ArrayList<>();
@@ -216,9 +238,12 @@ public class MatchBoard {
         if (item.unpairedReason() != null) {
             return "X:" + item.token();
         }
+        // 그 원천에 걸어 둔 규칙으로 다듬는다. 원천을 안 넘기면 한쪽에만 걸어 둔 규칙이
+        // 반대쪽 이름까지 바꿔, 화면에서 원천을 고른 것이 아무 일도 하지 않게 된다.
         String normalized = batch.normalize(
                 item.rawName() == null || item.rawName().isBlank()
-                        ? item.itemRef() : item.rawName());
+                        ? item.itemRef() : item.rawName(),
+                item.source());
         // 다듬고 나니 빈 이름이면 규칙이 다 지워 버린 것이다. 그런 것끼리 한 줄로 뭉치면
         // 서로 아무 상관 없는 품목이 같은 묶음처럼 보인다 — 품목마다 따로 둔다.
         return normalized.isBlank() ? "N:" + item.token() : "N:" + normalized;

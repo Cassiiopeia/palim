@@ -5,6 +5,8 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.reconcile.rule.NormalizationInsight;
+import kr.suhsaechan.palim.reconcile.rule.NormalizationPresets;
 import kr.suhsaechan.palim.reconcile.rule.NormalizationPreview;
 import kr.suhsaechan.palim.reconcile.rule.NormalizationRuleService;
 import lombok.RequiredArgsConstructor;
@@ -35,18 +37,36 @@ public class RuleController {
 
     private final NormalizationRuleService ruleService;
     private final NormalizationPreview preview;
+    private final NormalizationInsight insight;
     private final ErrorMessageResolver errorMessages;
 
     @GetMapping("/reconcile/rules")
     public String rules(@RequestParam(required = false) String name,
                         @RequestParam(required = false) String pattern,
                         @RequestParam(required = false) String replacement,
+                        @RequestParam(required = false) String sourceCode,
                         Model model) {
         model.addAttribute("title", "이름 다듬기 규칙");
         model.addAttribute("rules", ruleService.all());
         model.addAttribute("name", name == null ? "" : name);
         model.addAttribute("pattern", pattern == null ? "" : pattern);
         model.addAttribute("replacement", replacement == null ? "" : replacement);
+        model.addAttribute("sourceCode", sourceCode == null ? "" : sourceCode);
+        // 규칙을 어느 원천에 걸지 고르려면 어떤 원천이 있는지 알아야 한다.
+        model.addAttribute("sources", ruleService.availableSources());
+        // 백지에서 정규식을 쓰지 않게 하는 출발점. 고를 수 있는 것만 주는 게 아니다.
+        model.addAttribute("presets", NormalizationPresets.all());
+        // 규칙이 실제로 무슨 일을 하는지 — 걸린 수·짝 개수·충돌. 이것이 없으면 규칙을 넣고도
+        // 도움이 됐는지 알 수 없다.
+        //
+        // 셈이 실패해도 «화면은 열려야 한다». 셈이 오래 걸리는 이유는 대개 정규식이 잘못
+        // 들어갔기 때문인데, 그 때문에 화면이 안 열리면 그 규칙을 고칠 자리조차 사라진다.
+        try {
+            model.addAttribute("insight", insight.compute());
+        } catch (BusinessException e) {
+            log.warn("규칙 성적 셈을 건너뛴다 — {}", e.getErrorCode(), e);
+            model.addAttribute("insight", null);
+        }
         addPreview(pattern, replacement, model);
         return "reconcile/rules";
     }
@@ -79,11 +99,12 @@ public class RuleController {
     public String create(@RequestParam String name,
                          @RequestParam String pattern,
                          @RequestParam(required = false) String replacement,
+                         @RequestParam(required = false) String sourceCode,
                          RedirectAttributes redirect) {
         try {
-            ruleService.create(name, pattern, replacement == null ? "" : replacement);
+            ruleService.create(name, pattern, replacement == null ? "" : replacement, sourceCode);
             redirect.addFlashAttribute("flashSuccess",
-                    "「%s」 규칙을 넣었습니다. 품목 묶기 화면에서 결과를 확인하세요.".formatted(name));
+                    "「%s」 규칙을 넣었습니다. 아래 미리보기에서 결과를 확인하세요.".formatted(name));
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
@@ -96,14 +117,37 @@ public class RuleController {
                          @RequestParam String name,
                          @RequestParam String pattern,
                          @RequestParam(required = false) String replacement,
+                         @RequestParam(required = false) String sourceCode,
                          RedirectAttributes redirect) {
         try {
-            ruleService.update(id, name, pattern, replacement == null ? "" : replacement);
+            ruleService.update(id, name, pattern, replacement == null ? "" : replacement,
+                    sourceCode);
             redirect.addFlashAttribute("flashSuccess", "규칙을 고쳤습니다.");
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
         }
+        return "redirect:/reconcile/rules";
+    }
+
+    /**
+     * 끌어서 옮긴 순서를 저장한다.
+     *
+     * <p>한 칸씩 옮기는 길({@code /move})은 규칙이 다섯 개만 되어도 「맨 아래를 맨 위로」에 네 번을
+     * 눌러야 하고, 누를 때마다 화면이 새로 그려져 어디까지 옮겼는지 놓친다. 끌어 놓은 결과를
+     * 통째로 받으면 그 왕복이 사라진다.
+     *
+     * <p><b>{@code /move} 를 남겨 둔다.</b> 끌기가 안 되는 환경 — 키보드만 쓰는 사람, 좁은 화면 —
+     * 에서 순서를 바꿀 길이 아예 없어지면 그 사람은 이 화면을 쓸 수 없다.
+     */
+    @PostMapping("/reconcile/rules/reorder")
+    public String reorder(@RequestParam(name = "id", required = false) List<UUID> ids,
+                          RedirectAttributes redirect) {
+        if (ids == null || ids.isEmpty()) {
+            return "redirect:/reconcile/rules";
+        }
+        ruleService.reorder(ids);
+        redirect.addFlashAttribute("flashSuccess", "순서를 바꿨습니다.");
         return "redirect:/reconcile/rules";
     }
 
