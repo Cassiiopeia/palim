@@ -13,6 +13,7 @@ import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.SnapshotAggregator;
 import kr.suhsaechan.palim.reconcile.match.MatchBoard;
 import kr.suhsaechan.palim.reconcile.match.UnpairedItem;
+import kr.suhsaechan.palim.reconcile.match.UnitNaming;
 import kr.suhsaechan.palim.reconcile.match.UnpairedService;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnitService;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class UnitController {
     private final ReconcileUnitService unitService;
     private final MatchBoard board;
     private final UnpairedService unpairedService;
+    private final UnitNaming naming;
     private final SnapshotAggregator aggregator;
     private final ReconcileDefinitionRepository definitions;
     private final ErrorMessageResolver errorMessages;
@@ -94,6 +96,11 @@ public class UnitController {
                 aggregator.latestBaseAt(tenantId, definition.getLeftSource()).orElse(null));
         model.addAttribute("rightLoadedAt",
                 aggregator.latestBaseAt(tenantId, definition.getRightSource()).orElse(null));
+
+        // 담긴 품명과 어긋나는 이름들. 「다시 짓기」 를 권할 자리이자, 로트 날짜가 박힌
+        // 옛 이름이 몇 개 남았는지 사람이 아는 유일한 길이다.
+        model.addAttribute("renameSuggestions", naming.suggestions(tenantId,
+                definition.getLeftSource(), definition.getRightSource()));
 
         addMateCandidates(tenantId, definition, loaded, expand, eq, model);
         return "reconcile/units";
@@ -188,7 +195,7 @@ public class UnitController {
                 continue;
             }
             try {
-                unitService.link(picksOf(found), newCode(), found.displayName(), "EA");
+                unitService.link(picksOf(found), newCode(), found.suggestedName(), "EA");
                 linked++;
             } catch (BusinessException e) {
                 redirect.addFlashAttribute("flashError",
@@ -242,7 +249,7 @@ public class UnitController {
                 .filter(pick -> MatchBoard.tokenOf(pick.source(), pick.itemRef()).equals(mate))
                 .toList());
         try {
-            var unit = unitService.link(picks, newCode(), row.displayName(), "EA");
+            var unit = unitService.link(picks, newCode(), row.suggestedName(), "EA");
             redirect.addFlashAttribute("flashSuccess",
                     "「%s」 로 이었습니다. 바로 대조에 들어갑니다.".formatted(unit.getName()));
         } catch (BusinessException e) {
@@ -364,6 +371,79 @@ public class UnitController {
         }
         redirect.addFlashAttribute("flashSuccess",
                 "%d개 품목을 할 일로 되돌렸습니다.".formatted(restored));
+        return back(definitionId, tab, q, page);
+    }
+
+    /**
+     * 물건 이름을 고친다.
+     *
+     * <p>이름은 <b>대조 결과에서 사람이 잡을 수 있는 유일한 손잡이</b>다. 「U-6668d23b · +11」
+     * 이라고만 뜨면 그것이 무슨 물건인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
+     */
+    @PostMapping("/reconcile/units/{unitId}/rename")
+    public String rename(@PathVariable UUID unitId,
+                         @RequestParam String name,
+                         @RequestParam(required = false) UUID definitionId,
+                         @RequestParam(required = false) String tab,
+                         @RequestParam(required = false) String q,
+                         @RequestParam(defaultValue = "0") int page,
+                         RedirectAttributes redirect) {
+        try {
+            var unit = unitService.rename(unitId, name);
+            redirect.addFlashAttribute("flashSuccess",
+                    "「%s」 로 이름을 바꿨습니다.".formatted(unit.getName()));
+        } catch (BusinessException e) {
+            redirect.addFlashAttribute("flashError",
+                    errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
+        }
+        return back(definitionId, tab, q, page);
+    }
+
+    /**
+     * 담긴 품명으로 이름을 <b>다시 짓는다</b> — 고른 것만.
+     *
+     * <p>이름 규칙을 고쳐도 이미 만들어진 물건은 옛 이름을 그대로 달고 있다. 로트 날짜가 박힌
+     * 이름이 열 개 넘게 남아 있는데 하나씩 손으로 고치라고 하면 아무도 안 고친다 — 그러면
+     * 규칙을 고친 의미가 없다.
+     *
+     * <p>그래도 <b>일괄로 덮지 않고 고른 것만</b> 바꾼다. 사람이 직접 지은 이름을 코드가
+     * 말없이 되돌리면, 다음부터는 이름을 짓지 않게 된다.
+     */
+    @PostMapping("/reconcile/units/rename-suggested")
+    public String renameSuggested(@RequestParam(required = false) List<String> units,
+                                  @RequestParam(required = false) UUID definitionId,
+                                  @RequestParam(required = false) String tab,
+                                  @RequestParam(required = false) String q,
+                                  @RequestParam(defaultValue = "0") int page,
+                                  RedirectAttributes redirect) {
+        ReconcileDefinition definition = requireDefinition(definitionId);
+        if (definition == null) {
+            return "redirect:/reconcile/units";
+        }
+        if (units == null || units.isEmpty()) {
+            redirect.addFlashAttribute("flashError", "다시 지을 물건을 고르지 않았습니다.");
+            return back(definitionId, tab, q, page);
+        }
+
+        UUID tenantId = TenantContext.current();
+        int renamed = 0;
+        for (String raw : units) {
+            UUID unitId;
+            try {
+                unitId = UUID.fromString(raw);
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            String suggested = naming.suggest(tenantId, unitId,
+                    definition.getLeftSource(), definition.getRightSource());
+            if (suggested.isBlank()) {
+                continue;
+            }
+            unitService.rename(unitId, suggested);
+            renamed++;
+        }
+        redirect.addFlashAttribute("flashSuccess",
+                "%d개 이름을 담긴 품명으로 다시 지었습니다.".formatted(renamed));
         return back(definitionId, tab, q, page);
     }
 

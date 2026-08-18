@@ -142,6 +142,60 @@
             </div>
         </section>
 
+        <!--/* 담긴 품명과 어긋나는 이름들.
+
+               예전에는 첫 품목의 이름을 그대로 물건 이름으로 썼다. 그래서 로트 넷을 묶은
+               물건이 「클래식 850g (27.03.16)」 이 되었다 — 특정 로트 날짜가 전체를 대표하게
+               된 것이다. 규칙을 고쳐도 이미 만들어진 것은 옛 이름을 그대로 달고 있다.
+
+               다 고치면 이 구역은 사라진다(11-UI-RULES B8). 그리고 «일괄로 덮지 않는다» —
+               사람이 직접 지은 이름을 코드가 말없이 되돌리면 다음부터는 이름을 짓지 않는다. */-->
+        <section class="mb-6" th:if="${renameSuggestions != null and not #lists.isEmpty(renameSuggestions)}">
+            <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-base font-semibold">이름을 다시 지을 수 있습니다</h2>
+                <span class="text-xs text-base-content/60">
+                    <b th:text="${#lists.size(renameSuggestions)}">0</b>개가 담긴 품명과 다릅니다
+                </span>
+                <div class="flex-1 h-px bg-base-300"></div>
+            </div>
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                            <tr class="text-xs">
+                                <th class="w-8"></th>
+                                <th>지금 이름</th>
+                                <th>담긴 품명으로 지으면</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="s : ${renameSuggestions}">
+                                <td>
+                                    <input type="checkbox" name="units" form="rename"
+                                           class="checkbox checkbox-sm" th:value="${s.unitId}">
+                                </td>
+                                <td class="text-sm" th:text="${s.currentName}">지금</td>
+                                <td class="text-sm font-medium" th:text="${s.suggestedName}">새 이름</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <form id="rename" th:action="@{/reconcile/units/rename-suggested}" method="post"
+                  class="flex flex-wrap items-center gap-2 mt-3">
+                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                <input type="hidden" name="tab" th:value="${tab.name()}">
+                <input type="hidden" name="q" th:value="${q}">
+                <input type="hidden" name="page" th:value="${board.page}">
+                <button type="submit" class="btn btn-sm">고른 것 다시 짓기</button>
+                <span class="text-sm text-base-content/60">
+                    표에서 한 줄씩 직접 고칠 수도 있습니다.
+                </span>
+            </form>
+        </section>
+
         <!--/* 표 자리. 검색·쪽 넘김·잇기가 끝난 뒤 여기로 돌아온다 — 없으면 매번 화면 맨
                위로 올라가 방금 무엇을 눌렀는지 놓친다. */-->
         <section id="board">
@@ -250,12 +304,37 @@
                                            품목의 품명이다. 지어낸 값이 아니라 둘 다 담긴 자료에
                                            실제로 있는 이름이다. */-->
                                     <td class="align-top">
-                                        <div class="font-medium text-sm"
+                                        <!--/* 이어 둔 줄은 이름을 그 자리에서 고친다. 이름은
+                                               대조 결과에서 사람이 잡을 수 있는 유일한 손잡이라,
+                                               고칠 자리가 멀면 영영 안 고친다. */-->
+                                        <form th:if="${row.kind.name() == 'LINKED'}"
+                                              th:action="@{/reconcile/units/{id}/rename(id=${row.unitId})}"
+                                              method="post" class="flex flex-wrap items-center gap-1">
+                                            <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                            <input type="hidden" name="tab" th:value="${tab.name()}">
+                                            <input type="hidden" name="q" th:value="${q}">
+                                            <input type="hidden" name="page" th:value="${board.page}">
+                                            <input type="text" name="name" required
+                                                   th:value="${row.displayName()}"
+                                                   class="input input-bordered input-sm w-44">
+                                            <button type="submit" class="btn btn-ghost btn-sm">저장</button>
+                                        </form>
+                                        <div th:unless="${row.kind.name() == 'LINKED'}"
+                                             class="font-medium text-sm"
                                              th:text="${row.displayName()}">이름</div>
                                         <div th:if="${row.kind.name() == 'LINKED'}"
                                              class="text-xs text-base-content/60 mt-0.5"
-                                             th:text="${#lists.size(row.left) + #lists.size(row.right)} + '개 품목'">
-                                            2개 품목
+                                             th:text="${#lists.size(row.left)} + '↔' + ${#lists.size(row.right)} + '건'">
+                                            2↔2건
+                                        </div>
+                                        <!--/* 아직 안 이은 줄은 이대로 이으면 어떤 이름이 붙는지
+                                               미리 보여준다. 여럿이 묶이면 첫 품목 이름이 아니라
+                                               공통 부분이 이름이 된다(07-DECISIONS 038). */-->
+                                        <div th:if="${row.kind.name() == 'PAIRED'
+                                                      and row.suggestedName() != row.displayName()}"
+                                             class="text-xs text-base-content/60 mt-0.5"
+                                             th:text="'이으면 「' + ${row.suggestedName()} + '」 로 부릅니다'">
+                                            이름
                                         </div>
                                     </td>
 

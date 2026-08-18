@@ -442,6 +442,20 @@ public class MatchBoard {
                     .divide(base, 1, RoundingMode.HALF_UP);
         }
 
+        /**
+         * 이 줄을 물건으로 만들 때 <b>지어 줄 이름.</b>
+         *
+         * <p>첫 품목의 이름을 그대로 쓰면 로트 네 개를 묶은 물건이 「클래식 850g (27.03.16)」 이
+         * 된다 — 특정 로트 날짜가 전체를 대표하게 되고, 목록에서 그 로트 하나의 이야기로 읽힌다.
+         * 그래서 여럿이면 공통 부분만 쓴다(07-DECISIONS 038).
+         */
+        public String suggestedName() {
+            String suggested = CommonName.of(
+                    left.stream().map(Item::displayName).toList(),
+                    right.stream().map(Item::displayName).toList());
+            return suggested.isBlank() ? displayName() : suggested;
+        }
+
         /** 사람이 부르는 이름. 이어 둔 줄은 그 물건의 이름, 아니면 첫 품목의 품명. */
         public String displayName() {
             if (unitName != null && !unitName.isBlank()) {
