@@ -56,9 +56,17 @@ public class RuleController {
         model.addAttribute("sources", ruleService.availableSources());
         // 백지에서 정규식을 쓰지 않게 하는 출발점. 고를 수 있는 것만 주는 게 아니다.
         model.addAttribute("presets", NormalizationPresets.all());
-        // 규칙이 실제로 무슨 일을 하는지 — 적중 수·짝 개수·충돌. 이것이 없으면 규칙을 넣고도
+        // 규칙이 실제로 무슨 일을 하는지 — 걸린 수·짝 개수·충돌. 이것이 없으면 규칙을 넣고도
         // 도움이 됐는지 알 수 없다.
-        model.addAttribute("insight", insight.compute());
+        //
+        // 셈이 실패해도 «화면은 열려야 한다». 셈이 오래 걸리는 이유는 대개 정규식이 잘못
+        // 들어갔기 때문인데, 그 때문에 화면이 안 열리면 그 규칙을 고칠 자리조차 사라진다.
+        try {
+            model.addAttribute("insight", insight.compute());
+        } catch (BusinessException e) {
+            log.warn("규칙 성적 셈을 건너뛴다 — {}", e.getErrorCode(), e);
+            model.addAttribute("insight", null);
+        }
         addPreview(pattern, replacement, model);
         return "reconcile/rules";
     }

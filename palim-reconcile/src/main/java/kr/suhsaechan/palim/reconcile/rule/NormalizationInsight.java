@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.reconcile.rule;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -99,6 +100,15 @@ public class NormalizationInsight {
     private record Named(String source, String raw) {
     }
 
+    /**
+     * 제한 시간.
+     *
+     * <p>미리보기(표본 12개)보다 길게 둔다 — 여기는 담긴 품명 전체를 돈다. 그렇다고 없앨 수는
+     * 없다. <b>사람이 넣은 정규식</b>이 도는 자리이고, 되돌아가는 패턴 하나면 요청 스레드가
+     * 영영 풀려나지 않는다.
+     */
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
+
     @Transactional(readOnly = true)
     public Insight compute() {
         List<Named> names = scan();
@@ -107,6 +117,10 @@ public class NormalizationInsight {
         }
 
         List<NormalizationRule> active = rules.findByIsActiveTrueOrderBySortOrder();
+        return RegexGuard.runWithTimeout(TIMEOUT, () -> computeFrom(names, active));
+    }
+
+    private Insight computeFrom(List<Named> names, List<NormalizationRule> active) {
 
         Map<UUID, Integer> hits = new LinkedHashMap<>();
         // 다듬은 이름 → 그 이름이 된 서로 다른 원본들. 충돌 판정에 쓴다.
@@ -122,7 +136,7 @@ public class NormalizationInsight {
 
             // 한 번 도는 동안 「어느 규칙이 이 이름을 바꿨는지」 를 함께 받는다. 규칙 하나만
             // 따로 걸어 세면 앞 규칙이 이미 바꿔 놓은 상태를 못 보므로 실제 적중과 달라진다.
-            NormalizationEngine.Trace trace = engine.trace(forSource, named.raw());
+            NormalizationEngine.Trace trace = engine.trace(forSource, named.raw(), RegexGuard::guard);
             trace.changedBy().forEach(ruleId -> hits.merge(ruleId, 1, Integer::sum));
 
             String after = trace.result();
