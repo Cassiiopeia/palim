@@ -19,10 +19,17 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
                                   Integer activeVersion, String scheduleCron,
                                   Instant lastRunAt, String lastStatus,
                                   int lastSuccess, int lastFailed,
-                                  BaseAtGranularity baseAtGranularity) {
+                                  BaseAtGranularity baseAtGranularity,
+                                  int fileMappingFields, String fileGuide) {
 
+    /**
+     * @param fileMappingFields 파일 길의 확정된 칸 수. 0이면 파일을 올려도 전 행이 실패하므로
+     *                          화면이 올리기 전에 말해야 한다
+     * @param fileGuide         파일을 어디서 어떻게 받는지. 급할 때 찾아다니지 않게 적어 둔다
+     */
     public static ConnectorDetailView of(Connector connector, boolean mappingActive,
-                                         Integer activeVersion, RunSummary lastRun) {
+                                         Integer activeVersion, RunSummary lastRun,
+                                         int fileMappingFields) {
         return new ConnectorDetailView(
                 connector.getId(), connector.getName(), connector.getCode(),
                 connector.getSourceType(), connector.getConnectionStatus(),
@@ -32,7 +39,19 @@ public record ConnectorDetailView(UUID id, String name, String code, SourceType 
                 lastRun == null ? 0 : lastRun.successCount(),
                 lastRun == null ? 0 : lastRun.failedCount(),
                 connector.getBaseAtGranularity() == null
-                        ? BaseAtGranularity.DAY : connector.getBaseAtGranularity());
+                        ? BaseAtGranularity.DAY : connector.getBaseAtGranularity(),
+                fileMappingFields,
+                connector.getFileGuide());
+    }
+
+    /**
+     * 스스로 가져오는 연동인가.
+     *
+     * <p>원래 파일로 받는 연동에게 파일은 <b>정상 경로</b>이지 우회로가 아니다. 그쪽에
+     * 「파일로 채우기」 를 또 두면 같은 일이 두 자리에 있어 어느 쪽이 진짜인지 흐려진다.
+     */
+    public boolean fetchesItself() {
+        return sourceType != SourceType.UPLOAD;
     }
 
     public boolean connected() {

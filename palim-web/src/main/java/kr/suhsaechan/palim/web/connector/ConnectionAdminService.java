@@ -51,6 +51,11 @@ public class ConnectionAdminService {
         String ref = ConnectorSecretService.refOf(code);
         // sourceConfig 에는 비밀값이 없다. credentialRef 는 "어디에 있는지"만 가리킨다.
         connector.configureSource(form.toSourceConfig(), ref);
+        // 파일로 받는 방법 안내 — 아직 비어 있을 때만 심는다. 사람이 고쳐 둔 것을 인증키
+        // 바꿀 때마다 되돌리면, 상대 사이트가 바뀌어 고쳐 둔 내용이 조용히 사라진다.
+        if (!StringUtils.hasText(connector.getFileGuide())) {
+            connector.changeFileGuide(form.getPreset().getFileGuide());
+        }
         // 인증정보는 커넥터 정의가 아니라 별도 저장소로 간다. 정의는 화면이 늘 읽기 때문이다.
         secretService.put(ref, secretNameOf(form), form.getSecret());
         // 검증을 통과했기에 저장까지 온 것이다. 테스트 키면 아직 할 일이 남았다.

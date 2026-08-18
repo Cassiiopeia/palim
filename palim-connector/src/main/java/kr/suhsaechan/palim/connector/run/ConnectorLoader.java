@@ -8,6 +8,7 @@ import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMapRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorMapping;
+import kr.suhsaechan.palim.connector.define.Intake;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
 import kr.suhsaechan.palim.connector.define.MappingStatus;
@@ -54,12 +55,26 @@ public class ConnectorLoader {
      */
     @Transactional(readOnly = true)
     public ConnectorMapping mappingFor(Connector connector, RunMode mode) {
+        return mappingFor(connector, Intake.AUTO, mode);
+    }
+
+    /**
+     * 실행에 쓸 매핑 버전 — <b>들어오는 길에 맞는 것.</b>
+     *
+     * <p>엑셀 열 이름은 API 칸 이름과 다르다. 길을 안 가리면 파일을 올리는 순간 API 용 칸
+     * 맞추기가 걸려 <b>전 행이 실패</b>한다.
+     */
+    @Transactional(readOnly = true)
+    public ConnectorMapping mappingFor(Connector connector, Intake intake, RunMode mode) {
         if (mode == RunMode.LIVE) {
             return mappingRepository
-                    .findByConnectorIdAndStatus(connector.getId(), MappingStatus.ACTIVE)
+                    .findByConnectorIdAndIntakeAndStatus(connector.getId(), intake,
+                            MappingStatus.ACTIVE)
                     .orElseThrow(() -> new BusinessException(ErrorCode.MAPPING_NOT_ACTIVE));
         }
-        return mappingRepository.findFirstByConnectorIdOrderByVersionDesc(connector.getId())
+        return mappingRepository
+                .findByConnectorIdAndIntakeOrderByVersionDesc(connector.getId(), intake).stream()
+                .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.MAPPING_NOT_FOUND));
     }
 
