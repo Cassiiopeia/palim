@@ -82,6 +82,16 @@ public class ReconcileUnitMember extends BaseTimeEntity {
         return confirmedAt != null;
     }
 
+    /**
+     * 다른 묶음으로 옮긴다.
+     *
+     * <p>떼었다 다시 붙이는 것과 결과는 같지만, 옮기는 동안 <b>어느 묶음에도 안 속한 순간</b>이
+     * 없어야 한다 — 그 사이에 대조가 돌면 그 품목의 재고가 통째로 빠진 채로 계산된다.
+     */
+    public void moveTo(UUID unitId) {
+        this.unitId = unitId;
+    }
+
     /** 환산이 잘못됐을 때 고친다. 이미 담긴 과거 결과는 바뀌지 않는다. */
     public void changeFactor(BigDecimal factor) {
         this.factor = factor == null ? BigDecimal.ONE : factor;

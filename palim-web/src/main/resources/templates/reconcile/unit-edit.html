@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<!--/* 묶음 하나를 손으로 고치는 자리.
+
+       여태 묶음을 «통째로만» 다룰 수 있었다 — 통째로 만들고, 통째로 풀었다. 그래서 로트 셋이
+       든 묶음에서 하나만 빼거나, 셋을 셋으로 쪼개거나, 두 묶음을 하나로 보는 일이 아예 불가능
+       했다. 코드가 정해 준 대로만 쓸 수 있는 상태였다.
+
+       여기서는 품목 하나 단위로 손댄다. 목록을 벗어나 «한 묶음에만 집중» 하게 두는 이유는,
+       표 안에서 다 하려면 표가 빽빽해져 정작 견주는 일이 안 되기 때문이다(07-DECISIONS 044).
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 표준값은 11-UI-RULES §0. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <div class="flex flex-wrap items-center gap-2 -mt-4 mb-6">
+        <a th:href="@{/reconcile/units(definitionId=${definition.id},tab='LINKED')} + '#board'"
+           class="btn btn-ghost btn-sm">← 품목 대조표</a>
+    </div>
+
+    <!--/* 이름은 이 묶음의 유일한 손잡이다. 맨 위에 두고 바로 고칠 수 있게 한다. */-->
+    <section class="mb-6">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-3">
+                <form th:action="@{/reconcile/units/{id}/rename(id=${unit.id})}" method="post"
+                      class="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="definitionId" th:value="${definition.id}">
+                    <input type="hidden" name="tab" value="LINKED">
+                    <label class="form-control">
+                        <span class="label-text text-xs">이 묶음을 뭐라 부를지</span>
+                        <input type="text" name="name" required th:value="${unit.name}"
+                               class="input input-bordered input-sm w-72">
+                    </label>
+                    <button type="submit" class="btn btn-sm">저장</button>
+                    <span class="font-mono text-xs text-base-content/40 ml-2"
+                          th:text="${unit.code}">코드</span>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 든 품목. 좌·우 두 칸으로 갈라야 «무엇과 무엇이» 가 보인다. */-->
+    <section class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">이 묶음에 든 품목</h2>
+            <span class="text-xs text-base-content/60">× 를 누르면 그 품목이 「할 일」 로 돌아갑니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+            <div th:each="side : ${ {'L','R'} }"
+                 th:with="source=${side == 'L'} ? ${definition.leftSource} : ${definition.rightSource},
+                          rows=${side == 'L'} ? ${leftMembers} : ${rightMembers}">
+                <div class="card bg-base-100 shadow-sm h-full">
+                    <div class="card-body gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs" th:text="${source}">원천</span>
+                            <span class="text-xs text-base-content/60"
+                                  th:text="${#lists.size(rows)} + '건'">0건</span>
+                        </div>
+
+                        <div th:each="m : ${rows}"
+                             class="flex items-center gap-2 py-1 border-b border-base-200 last:border-0">
+                            <div class="min-w-0">
+                                <div class="text-sm truncate" th:text="${m.displayName}">품명</div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-base-content/60"
+                                          th:text="${m.itemRef}">코드</span>
+                                    <span th:if="${m.hasFactor()}" class="badge badge-ghost badge-sm"
+                                          th:text="'×' + ${m.factor}">×1</span>
+                                    <!--/* 담긴 재고에 없어도 지우지 않는다 — 빼는 자리가 사라진다. */-->
+                                    <span th:unless="${m.inStock}" class="badge badge-ghost badge-sm">
+                                        지금 재고에 없음
+                                    </span>
+                                </div>
+                            </div>
+                            <span class="ml-auto tabular-nums text-sm" th:text="${m.quantityText}">0</span>
+                            <form th:action="@{/reconcile/units/members/{id}/remove(id=${m.memberId})}"
+                                  method="post">
+                                <input type="hidden" name="unitId" th:value="${unit.id}">
+                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                <button type="submit" class="btn btn-ghost btn-sm px-2"
+                                        title="이 묶음에서 빼기">×</button>
+                            </form>
+                        </div>
+
+                        <div th:if="${#lists.isEmpty(rows)}"
+                             class="text-sm text-base-content/60 py-3">
+                            이쪽 품목이 없습니다. 이대로 두면 대조가 매일 전량 차이를 올립니다.
+                        </div>
+
+                        <!--/* 넣기는 누른 «쪽» 에만 목록을 편다. 두 쪽을 다 펴 두면 화면이 늘 길다. */-->
+                        <a th:if="${addSource != source}"
+                           th:href="@{/reconcile/units/{id}/edit(id=${unit.id},definitionId=${definition.id},add=${source})}"
+                           class="btn btn-sm mt-1">+ 품목 넣기</a>
+                        <a th:if="${addSource == source}"
+                           th:href="@{/reconcile/units/{id}/edit(id=${unit.id},definitionId=${definition.id})}"
+                           class="btn btn-ghost btn-sm mt-1">닫기</a>
+
+                        <div th:if="${addSource == source}" class="rounded border border-base-300 p-2 mt-1">
+                            <form th:action="@{/reconcile/units/{id}/edit(id=${unit.id})}" method="get"
+                                  class="flex gap-1 mb-2">
+                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                <input type="hidden" name="add" th:value="${source}">
+                                <input type="text" name="q" th:value="${q}"
+                                       class="input input-bordered input-sm grow"
+                                       placeholder="품목코드·품명으로 찾기">
+                                <button type="submit" class="btn btn-sm">찾기</button>
+                            </form>
+                            <div th:if="${#lists.isEmpty(candidates)}"
+                                 class="text-sm text-base-content/60 py-2">
+                                넣을 수 있는 품목이 없습니다. 이미 다 묶였거나 짝 없음으로 두었습니다.
+                            </div>
+                            <div th:each="c : ${candidates}"
+                                 class="flex items-center gap-2 py-1">
+                                <div class="min-w-0">
+                                    <div class="text-sm truncate" th:text="${c.displayName()}">품명</div>
+                                    <div class="font-mono text-xs text-base-content/60"
+                                         th:text="${c.itemRef}">코드</div>
+                                </div>
+                                <span class="ml-auto tabular-nums text-sm"
+                                      th:text="${c.quantityText()}">0</span>
+                                <form th:action="@{/reconcile/units/{id}/add(id=${unit.id})}"
+                                      method="post">
+                                    <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                    <input type="hidden" name="token" th:value="${c.token()}">
+                                    <button type="submit" class="btn btn-sm">넣기</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!--/* 지금 이 묶음이 대조에서 어떻게 보이는지. 고칠 때마다 이 숫자가 바뀌는 것을
+               보면서 손대야 «무엇을 하고 있는지» 를 안다. */-->
+        <div class="card bg-base-100 shadow-sm mt-4">
+            <div class="card-body flex-row flex-wrap items-center gap-x-8 gap-y-2">
+                <div>
+                    <div class="text-xs text-base-content/60"
+                         th:text="${definition.leftSource} + ' 합계'">좌</div>
+                    <div class="text-xl font-semibold tabular-nums"
+                         th:text="${breakdown.leftTotal()}">0</div>
+                </div>
+                <div>
+                    <div class="text-xs text-base-content/60"
+                         th:text="${definition.rightSource} + ' 합계'">우</div>
+                    <div class="text-xl font-semibold tabular-nums"
+                         th:text="${breakdown.rightTotal()}">0</div>
+                </div>
+                <div>
+                    <div class="text-xs text-base-content/60">지금 이 묶음의 차이</div>
+                    <div class="text-xl font-semibold tabular-nums"
+                         th:with="d=${breakdown.leftTotal().subtract(breakdown.rightTotal())}"
+                         th:classappend="${d.signum() != 0} ? 'text-warning' : 'text-base-content/40'"
+                         th:text="${d.signum() > 0} ? '+' + ${d} : ${d}">0</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 쪼개기 — 통째로 볼지 갈라서 볼지는 회사가 정할 일이다. */-->
+    <section class="mb-6">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">갈라서 여러 묶음으로</h2>
+            <span class="text-xs text-base-content/60">
+                통째로 볼지 갈라서 볼지는 정하기 나름입니다
+            </span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-3">
+                <form th:action="@{/reconcile/units/{id}/edit(id=${unit.id})}" method="get"
+                      class="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="definitionId" th:value="${definition.id}">
+                    <span class="text-sm">무엇으로 갈라서</span>
+                    <select name="axis" class="select select-bordered select-sm">
+                        <option th:each="a : ${axes}" th:value="${a.token()}"
+                                th:selected="${a.token() == axis.token()}"
+                                th:text="${a.label}">기준</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm">이렇게 갈라 보기</button>
+                </form>
+
+                <!--/* 쪼개기는 되돌리기가 번거롭다(다시 합쳐야 한다). 누르기 전에 결과를 못
+                       보면 사람은 안 누르거나, 눌러 놓고 수습한다. */-->
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                        <tr class="text-xs">
+                            <th>갈라지면</th>
+                            <th th:text="${definition.leftSource}">좌</th>
+                            <th th:text="${definition.rightSource}">우</th>
+                            <th class="text-right">차이</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="line : ${breakdown.lines}">
+                            <td class="text-sm font-medium" th:text="${line.label()}">이름</td>
+                            <td class="text-sm">
+                                <span th:if="${line.left != null}" th:text="${line.left.itemRef}">코드</span>
+                                <span th:if="${line.left == null}" class="text-base-content/40">—</span>
+                            </td>
+                            <td class="text-sm">
+                                <span th:if="${line.right != null}" th:text="${line.right.itemRef}">코드</span>
+                                <span th:if="${line.right == null}" class="text-base-content/40">—</span>
+                            </td>
+                            <td class="text-right tabular-nums text-sm"
+                                th:classappend="${line.paired() and line.hasDiff()} ? 'text-warning' : 'text-base-content/60'"
+                                th:text="${line.diffText()}">0</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div th:if="${#lists.size(breakdown.lines) < 2}"
+                     class="text-sm text-base-content/60">
+                    이 기준으로는 하나로 남습니다. 다른 기준을 골라 보세요.
+                </div>
+                <form th:if="${#lists.size(breakdown.lines) >= 2}"
+                      th:action="@{/reconcile/units/{id}/split(id=${unit.id})}" method="post">
+                    <input type="hidden" name="definitionId" th:value="${definition.id}">
+                    <input type="hidden" name="axis" th:value="${axis.token()}">
+                    <button type="submit" class="btn btn-primary btn-sm"
+                            th:text="${#lists.size(breakdown.lines)} + '개 묶음으로 가르기'">
+                        가르기
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 합치기 — 막기만 하고 할 길을 안 주면 그건 그냥 못 하는 일이 된다. */-->
+    <section class="mb-6" th:unless="${#lists.isEmpty(otherUnits)}">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">다른 묶음과 합치기</h2>
+            <span class="text-xs text-base-content/60">고른 묶음의 품목이 이 묶음으로 옮겨 옵니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <form th:action="@{/reconcile/units/{id}/merge(id=${unit.id})}" method="post"
+                      class="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="definitionId" th:value="${definition.id}">
+                    <select name="otherUnitId" class="select select-bordered select-sm max-w-xs">
+                        <option th:each="u : ${otherUnits}" th:value="${u.id}"
+                                th:text="${u.name}">묶음</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm">이 묶음으로 합치기</button>
+                    <span class="text-sm text-base-content/60">
+                        「<span th:text="${unit.name}">이름</span>」 이름이 남습니다
+                    </span>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 통째로 풀기. 위험도가 다른 동작이라 강조를 낮춘다(11-UI-RULES N3). */-->
+    <section>
+        <form th:action="@{/reconcile/units/{id}/unlink(id=${unit.id})}" method="post">
+            <input type="hidden" name="definitionId" th:value="${definition.id}">
+            <input type="hidden" name="tab" value="LINKED">
+            <button type="submit" class="btn btn-ghost btn-sm">묶음 통째로 풀기</button>
+            <span class="text-sm text-base-content/60 ml-2">
+                든 품목이 전부 「할 일」 로 돌아갑니다
+            </span>
+        </form>
+    </section>
+
+</div>
+</body>
+</html>

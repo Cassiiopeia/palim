@@ -88,6 +88,30 @@ public class MatchBoard {
                 .findFirst();
     }
 
+    /** 품목 하나를 지금 담긴 재고에서 찾는다. 편집 화면이 품명·수량을 붙이는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public Optional<Item> findItem(UUID tenantId, String source, String itemRef) {
+        return jdbcClient.sql("""
+                        SELECT s.item_ref                          AS item_ref,
+                               max(coalesce(s.raw_item_name, ''))  AS raw_name,
+                               sum(s.base_quantity)                AS qty
+                          FROM std_stock_snapshot s
+                         WHERE s.tenant_id = :tenantId
+                           AND s.source    = :source
+                           AND s.item_ref  = :itemRef
+                           AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
+                                               WHERE x.tenant_id = :tenantId AND x.source = :source)
+                         GROUP BY s.item_ref
+                        """)
+                .param("tenantId", tenantId)
+                .param("source", source)
+                .param("itemRef", itemRef)
+                .query((rs, rowNum) -> new Item(source, rs.getString("item_ref"),
+                        rs.getString("raw_name"), rs.getBigDecimal("qty"),
+                        BigDecimal.ONE, null, null, null, false))
+                .optional();
+    }
+
     /** 품목 하나가 든 줄. 짝 후보는 줄이 아니라 품목이라 이 길이 필요하다. */
     @Transactional(readOnly = true)
     public Optional<Row> findRowByItem(UUID tenantId, String leftSource, String rightSource,
