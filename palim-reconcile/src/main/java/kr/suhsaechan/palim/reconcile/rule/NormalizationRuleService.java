@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.reconcile.rule;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
@@ -39,15 +40,25 @@ public class NormalizationRuleService {
 
     @Transactional
     public NormalizationRule create(String name, String pattern, String replacement) {
+        return create(name, pattern, replacement, null);
+    }
+
+    /**
+     * @param sourceCode 이 규칙을 걸 원천. 비면 모든 원천에 건다
+     */
+    @Transactional
+    public NormalizationRule create(String name, String pattern, String replacement,
+                                    String sourceCode) {
         preview.validate(pattern);
         int next = rules.findAllByOrderBySortOrder().stream()
                 .mapToInt(NormalizationRule::getSortOrder)
                 .max()
                 .orElse(0) + ORDER_STEP;
         NormalizationRule saved = rules.save(NormalizationRule.of(
-                TenantContext.current(), name, pattern, replacement, next));
+                TenantContext.current(), name, pattern, replacement, next, sourceCode));
         engine.clearCache();
-        log.info("이름 다듬기 규칙 추가 — {}", name);
+        log.info("이름 다듬기 규칙 추가 — {} (원천 {})", name,
+                sourceCode == null ? "전체" : sourceCode);
         return saved;
     }
 
@@ -59,6 +70,59 @@ public class NormalizationRuleService {
         NormalizationRule saved = rules.save(rule);
         engine.clearCache();
         return saved;
+    }
+
+    @Transactional
+    public NormalizationRule update(UUID id, String name, String pattern, String replacement,
+                                    String sourceCode) {
+        preview.validate(pattern);
+        NormalizationRule rule = require(id);
+        rule.update(name, pattern, replacement, rule.getSortOrder(), sourceCode);
+        NormalizationRule saved = rules.save(rule);
+        engine.clearCache();
+        return saved;
+    }
+
+    /**
+     * 끌어서 옮긴 순서를 그대로 저장한다.
+     *
+     * <p>한 칸씩 옮기는 {@link #move} 는 규칙이 다섯 개만 되어도 「맨 아래를 맨 위로」에 네 번을
+     * 눌러야 하고, 누를 때마다 화면이 새로 그려져 어디까지 옮겼는지 놓친다.
+     *
+     * <p><b>넘어온 목록에 없는 규칙은 지우지 않는다.</b> 화면을 열어둔 사이에 다른 사람이 규칙을
+     * 넣었을 수 있고, 그것이 순서 저장 한 번으로 사라지면 원인을 찾을 방법이 없다. 목록에 없는
+     * 것은 뒤로 붙인다.
+     */
+    @Transactional
+    public void reorder(List<UUID> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            return;
+        }
+        List<NormalizationRule> current = rules.findAllByOrderBySortOrder();
+        // 화면이 보낸 순서를 먼저 깔고, 그 사이에 생긴 규칙을 뒤에 붙인다.
+        List<NormalizationRule> ordered = new ArrayList<>();
+        for (UUID id : orderedIds) {
+            current.stream()
+                    .filter(rule -> rule.getId().equals(id))
+                    .findFirst()
+                    .ifPresent(ordered::add);
+        }
+        current.stream().filter(rule -> !ordered.contains(rule)).forEach(ordered::add);
+
+        int order = ORDER_STEP;
+        for (NormalizationRule rule : ordered) {
+            rule.moveTo(order);
+            order += ORDER_STEP;
+        }
+        rules.saveAll(ordered);
+        engine.clearCache();
+        log.info("이름 다듬기 규칙 순서 변경 — {}건", ordered.size());
+    }
+
+    /** 규칙을 걸 수 있는 원천 목록. 지금 담긴 재고에 실제로 들어 있는 것만 보여준다. */
+    @Transactional(readOnly = true)
+    public List<String> availableSources() {
+        return preview.sources();
     }
 
     /**

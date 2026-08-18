@@ -55,8 +55,18 @@ public class NormalizationRule extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean isActive;
 
+    /**
+     * 이 규칙을 걸 원천. 비어 있으면 모든 원천.
+     *
+     * <p>원천마다 표기 습관이 다르다. 한쪽만 밑줄 뒤에 유통기한을 붙인다면 그 규칙은 그쪽에만
+     * 걸어야 한다 — 양쪽에 걸면 지금은 무해해도 같은 기호를 다른 뜻으로 쓰는 원천이 붙는
+     * 순간 조용히 망가진다.
+     */
+    @Column(length = 100)
+    private String sourceCode;
+
     private NormalizationRule(UUID tenantId, String name, String pattern, String replacement,
-                              int sortOrder) {
+                              int sortOrder, String sourceCode) {
         this.id = UuidV7.generate();
         this.tenantId = tenantId;
         this.name = name;
@@ -64,11 +74,17 @@ public class NormalizationRule extends BaseTimeEntity {
         this.replacement = replacement == null ? "" : replacement;
         this.sortOrder = sortOrder;
         this.isActive = true;
+        this.sourceCode = blankToNull(sourceCode);
     }
 
     public static NormalizationRule of(UUID tenantId, String name, String pattern,
                                        String replacement, int sortOrder) {
-        return new NormalizationRule(tenantId, name, pattern, replacement, sortOrder);
+        return new NormalizationRule(tenantId, name, pattern, replacement, sortOrder, null);
+    }
+
+    public static NormalizationRule of(UUID tenantId, String name, String pattern,
+                                       String replacement, int sortOrder, String sourceCode) {
+        return new NormalizationRule(tenantId, name, pattern, replacement, sortOrder, sourceCode);
     }
 
     public void update(String name, String pattern, String replacement, int sortOrder) {
@@ -76,6 +92,32 @@ public class NormalizationRule extends BaseTimeEntity {
         this.pattern = pattern;
         this.replacement = replacement == null ? "" : replacement;
         this.sortOrder = sortOrder;
+    }
+
+    public void update(String name, String pattern, String replacement, int sortOrder,
+                       String sourceCode) {
+        update(name, pattern, replacement, sortOrder);
+        this.sourceCode = blankToNull(sourceCode);
+    }
+
+    /** 순서만 바꾼다. 끌어서 옮길 때는 다른 값이 함께 실려 오지 않는다. */
+    public void moveTo(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    /**
+     * 이 원천에 거는 규칙인가.
+     *
+     * @param source 스냅샷의 {@code source}. {@code null} 이면 원천을 가리지 않는 자리라
+     *               모든 규칙이 걸린다 — 미리보기처럼 원천이 정해지지 않은 화면이 그렇다
+     */
+    public boolean appliesTo(String source) {
+        return sourceCode == null || source == null || sourceCode.equals(source);
+    }
+
+    /** 화면의 빈 칸은 「모든 원천」이다. 빈 문자열로 저장하면 어느 원천에도 안 걸린다. */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public void deactivate() {

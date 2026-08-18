@@ -1,6 +1,8 @@
 package kr.suhsaechan.palim.reconcile.rule;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -47,6 +49,24 @@ public class NormalizationEngine {
     @Transactional(readOnly = true)
     public String normalize(String rawName) {
         return apply(rules.findByIsActiveTrueOrderBySortOrder(), rawName);
+    }
+
+    /**
+     * 그 원천에 거는 규칙만 적용한다.
+     *
+     * @param source 스냅샷의 {@code source}. 원천을 가리지 않는 규칙은 언제나 함께 걸린다
+     */
+    @Transactional(readOnly = true)
+    public String normalize(String rawName, String source) {
+        return apply(activeFor(source), rawName);
+    }
+
+    /** 그 원천에 걸리는 규칙만 골라 준다. 원천을 지정하지 않은 규칙은 어디에나 걸린다. */
+    @Transactional(readOnly = true)
+    public List<NormalizationRule> activeFor(String source) {
+        return rules.findByIsActiveTrueOrderBySortOrder().stream()
+                .filter(rule -> rule.appliesTo(source))
+                .toList();
     }
 
     /**
@@ -106,8 +126,59 @@ public class NormalizationEngine {
                 log.warn("정규화 규칙을 건너뛴다 — {}", rule.getName(), e);
             }
         }
-        // 남은 공백은 지운다. 원천마다 띄어쓰기가 제각각이라 이것만으로도 상당수가 맞는다.
+        return finish(value);
+    }
+
+    /**
+     * 규칙을 다 건 뒤 언제나 하는 마무리.
+     *
+     * <p>남은 공백을 지우고 소문자로 맞춘다. 원천마다 띄어쓰기가 제각각이라 이것만으로도 상당수가
+     * 맞는다. <b>규칙 사이에 끼우지 않는 이유</b>는, 중간에 공백이 사라지면 공백을 포함한 정규식
+     * (예: {@code \s*\(...\)})이 다음 규칙부터 안 걸리기 때문이다.
+     */
+    private static String finish(String value) {
         return value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 규칙을 하나씩 걸며 <b>어느 규칙이 값을 실제로 바꿨는지</b> 함께 돌려준다.
+     *
+     * <p>규칙 화면이 「이 규칙이 몇 개를 바꿨나」 를 세는 데 쓴다. 규칙 하나만 따로 걸어 세면
+     * 실제와 다른 값이 나온다 — 앞 규칙이 이미 바꿔 놓은 이름에 걸리는 규칙이 있기 때문이다.
+     * 그래서 <b>한 번 도는 동안</b> 기록한다.
+     */
+    public Trace trace(List<NormalizationRule> active, String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return new Trace("", List.of());
+        }
+        String value = rawName.length() > MAX_INPUT ? rawName.substring(0, MAX_INPUT) : rawName;
+        List<UUID> changedBy = new ArrayList<>();
+
+        for (NormalizationRule rule : active) {
+            Pattern pattern = patternOf(rule);
+            if (pattern == null) {
+                continue;
+            }
+            try {
+                String next = pattern.matcher(value).replaceAll(rule.getReplacement());
+                if (!next.equals(value)) {
+                    changedBy.add(rule.getId());
+                }
+                value = next;
+            } catch (RuntimeException e) {
+                log.warn("정규화 규칙을 건너뛴다 — {}", rule.getName(), e);
+            }
+        }
+        return new Trace(finish(value), changedBy);
+    }
+
+    /**
+     * 한 이름을 다듬은 결과와 그 과정.
+     *
+     * @param result    다듬은 이름
+     * @param changedBy 이 이름을 실제로 바꾼 규칙들. 순서는 적용 순서
+     */
+    public record Trace(String result, List<UUID> changedBy) {
     }
 
     /** 여러 이름을 한 번에. 규칙 조회는 한 번만 한다. */

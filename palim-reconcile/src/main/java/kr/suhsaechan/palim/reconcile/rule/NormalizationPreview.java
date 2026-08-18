@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -96,14 +97,37 @@ public class NormalizationPreview {
         return jdbcClient.sql("""
                         SELECT DISTINCT coalesce(s.raw_item_name, '') AS raw_name
                           FROM std_stock_snapshot s
-                         WHERE coalesce(s.raw_item_name, '') <> ''
+                         WHERE s.tenant_id = :tenantId
+                           AND coalesce(s.raw_item_name, '') <> ''
                            AND s.base_at = (SELECT max(x.base_at) FROM std_stock_snapshot x
                                              WHERE x.tenant_id = s.tenant_id
                                                AND x.source    = s.source)
                          ORDER BY raw_name
                          LIMIT :limit
                         """)
+                .param("tenantId", TenantContext.current())
                 .param("limit", SAMPLE_SIZE)
+                .query(String.class)
+                .list();
+    }
+
+    /**
+     * 지금 담긴 재고에 실제로 들어 있는 원천 목록.
+     *
+     * <p>규칙을 어느 원천에 걸지 고르는 자리가 쓴다. 커넥터 목록이 아니라 <b>담긴 자료</b>에서
+     * 뽑는다 — 만들다 만 커넥터까지 나오면 고를 수는 있는데 아무 자료에도 안 걸리는 값이
+     * 섞이고, 규칙이 왜 동작하지 않는지 알 방법이 없어진다.
+     */
+    @Transactional(readOnly = true)
+    public List<String> sources() {
+        return jdbcClient.sql("""
+                        SELECT DISTINCT source
+                          FROM std_stock_snapshot
+                         WHERE tenant_id = :tenantId
+                           AND coalesce(source, '') <> ''
+                         ORDER BY source
+                        """)
+                .param("tenantId", TenantContext.current())
                 .query(String.class)
                 .list();
     }
