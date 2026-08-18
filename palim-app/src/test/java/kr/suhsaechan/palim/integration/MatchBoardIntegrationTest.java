@@ -140,10 +140,10 @@ class MatchBoardIntegrationTest extends IntegrationTest {
     /**
      * 이미 이어 둔 품목이 <b>할 일에 다시 나타나면</b> 사람이 「또 해야 하나」 하고 헷갈린다.
      *
-     * <p>그렇다고 화면에서 지우면 안 된다 — 되돌릴 자리가 사라진다. 「이어 둔 것」 갈래에 남긴다.
+     * <p>그렇다고 화면에서 지우면 안 된다 — 되돌릴 자리가 사라진다. 「묶어 둔 것」 갈래에 남긴다.
      */
     @Test
-    @DisplayName("이어 둔 품목은 할 일에서 빠지고 「이어 둔 것」 에 남는다")
+    @DisplayName("이어 둔 품목은 할 일에서 빠지고 「묶어 둔 것」 에 남는다")
     void 이어_둔_것은_갈래가_다르다() {
         bracketRule();
         snapshot(erp, "E-DONE", "이미 연결된 제품");
@@ -155,7 +155,7 @@ class MatchBoardIntegrationTest extends IntegrationTest {
                 unit.getId(), erp, "E-DONE", BigDecimal.ONE).getId());
 
         assertThat(load(MatchBoard.Tab.TODO).rows())
-                .as("이어 둔 것이 할 일에 다시 오르면 사람이 또 해야 하나 헷갈린다")
+                .as("묶어 둔 것이 할 일에 다시 오르면 사람이 또 해야 하나 헷갈린다")
                 .noneSatisfy(row -> assertThat(row.items())
                         .anyMatch(item -> item.itemRef().equals("E-DONE")));
 

@@ -302,7 +302,7 @@ class ManualLinkIntegrationTest extends IntegrationTest {
      */
     @Test
     @WithMockUser
-    @DisplayName("이어 둔 것을 풀면 다시 할 일로 돌아온다")
+    @DisplayName("묶어 둔 것을 풀면 다시 할 일로 돌아온다")
     void 풀면_돌아온다() throws Exception {
         pair(erp, "A0001", wms, "SKU-77");
         UUID unitId = members.findBySourceAndItemRef(erp, "A0001").orElseThrow().getUnitId();
@@ -391,6 +391,6 @@ class ManualLinkIntegrationTest extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(Matchers.containsString("+12")))
-                .andExpect(content().string(Matchers.containsString("이 둘 잇기")));
+                .andExpect(content().string(Matchers.containsString("이 둘 묶기")));
     }
 }

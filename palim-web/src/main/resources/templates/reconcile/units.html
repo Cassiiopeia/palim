@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<!--/* 품목 잇기 — 대조표 한 장.
+<!--/* 품목 묶기 — 대조표 한 장.
 
-       예전에는 화면이 셋으로 쪼개져 있었다. 「이을 만한 것」 은 좌·우를 한 칸에 세로로 쌓아
-       무엇이 무엇과 짝인지 안 보였고, 「직접 골라서 잇기」 는 좌·우 목록이 서로 무관하게
+       예전에는 화면이 셋으로 쪼개져 있었다. 「묶을 만한 것」 은 좌·우를 한 칸에 세로로 쌓아
+       무엇이 무엇과 짝인지 안 보였고, 「직접 골라서 묶기」 는 좌·우 목록이 서로 무관하게
        놓여 견줄 수가 없었으며, 「정해 둔 품목」 은 코드와 이름만 보여줘 방금 무슨 일이
        일어났는지 알 수 없었다. 대조를 하러 온 사람에게 대조할 수 없는 화면을 준 것이다.
 
-       이제 한 줄이 물건 하나다. 왼쪽 칸·오른쪽 칸·수량 차이가 나란히 있어 «잇기 전에» 그
+       이제 한 줄이 묶음 하나다. 왼쪽 칸·오른쪽 칸·수량 차이가 나란히 있어 «잇기 전에» 그
        줄에서 판단이 선다.
 
        화면 안에 코드를 넣을 수 없다(CSP 가 인라인 스크립트를 조용히 막는다 —
@@ -21,9 +21,16 @@
 <div th:fragment="content" th:remove="tag">
 
     <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). */-->
-    <p class="text-sm text-base-content/60 -mt-4 mb-6">
-        두 시스템이 같은 물건을 다르게 부릅니다. 무엇과 무엇이 같은지 여기서 정합니다.
+    <p class="text-sm text-base-content/60 -mt-4 mb-3">
+        두 시스템이 같은 물건을 다르게 부르고, 줄도 다르게 쪼갭니다.
+        같은 것끼리 묶어 두면 맞춰 볼 때 <b>묶음 안의 수량을 시스템별로 더해서</b> 견줍니다.
     </p>
+    <!--/* 안내를 본문에 길게 적지 않고 길만 낸다 — 매번 읽을 글이 화면 위를 차지하면
+           익숙해진 뒤에는 그것부터 잡음이 된다(11-UI-RULES B8). */-->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <a th:href="@{/reconcile/guide}" class="btn btn-ghost btn-sm">이 화면이 무슨 일을 하나</a>
+        <a th:href="@{/reconcile/method}" class="btn btn-ghost btn-sm">맞추는 방식</a>
+    </div>
 
     <!--/* 대조가 여럿이면 «어느 두 곳에서» 찾을지 사람이 고른다. 코드가 하나를 집으면
            정의 이름만 바꿔도 목록이 통째로 달라지는데 화면 어디에도 그 이유가 없다. */-->
@@ -35,8 +42,8 @@
         <div class="card bg-base-100 shadow-sm">
             <div class="card-body gap-3">
                 <p class="text-sm text-base-content/70">
-                    어느 두 곳에서 이을 품목을 찾을지 고르세요.
-                    <b>이어 둔 것은 모든 대조가 함께 씁니다</b> — 여기서 고르는 것은 찾아볼
+                    어느 두 곳에서 묶을 품목을 찾을지 고르세요.
+                    <b>묶어 둔 것은 모든 대조가 함께 씁니다</b> — 여기서 고르는 것은 찾아볼
                     범위일 뿐입니다.
                 </p>
                 <div class="flex flex-wrap gap-2">
@@ -56,7 +63,7 @@
             <div class="card-body items-center text-center py-12 gap-2">
                 <p class="text-base-content/70">아직 무엇과 무엇을 견줄지 정하지 않았습니다.</p>
                 <p class="text-sm text-base-content/60">
-                    대조할 두 곳을 먼저 정해야 이을 품목을 찾아올 수 있습니다.
+                    대조할 두 곳을 먼저 정해야 묶을 품목을 찾아올 수 있습니다.
                 </p>
                 <a th:href="@{/reconcile}" class="btn btn-sm mt-2">대조 결과로</a>
             </div>
@@ -89,7 +96,7 @@
                              th:text="${board.counts.todo()}">0</div>
                     </div>
                     <div>
-                        <div class="text-xs text-base-content/60">이어 둔 것</div>
+                        <div class="text-xs text-base-content/60">묶어 둔 것</div>
                         <div class="text-xl font-semibold tabular-nums"
                              th:text="${board.counts.linked}">0</div>
                     </div>
@@ -100,8 +107,8 @@
                     </div>
                     <div class="flex-1"></div>
                     <!--/* 화면의 유일한 btn-primary(11-UI-RULES N2). 남은 일이 남아 있으면
-                           아래 「고른 것 잇기」 가 그 자리를 가져간다 — 둘은 동시에 뜰 수
-                           없다(남은 일 0이면 이을 줄 자체가 없다). */-->
+                           아래 「고른 것 묶기」 가 그 자리를 가져간다 — 둘은 동시에 뜰 수
+                           없다(남은 일 0이면 묶을 줄 자체가 없다). */-->
                     <a th:if="${board.counts.done()}"
                        th:href="@{/reconcile/{id}(id=${definition.id})}"
                        class="btn btn-primary btn-sm">다 이었습니다 — 대조 돌리기</a>
@@ -144,8 +151,8 @@
 
         <!--/* 담긴 품명과 어긋나는 이름들.
 
-               예전에는 첫 품목의 이름을 그대로 물건 이름으로 썼다. 그래서 로트 넷을 묶은
-               물건이 「클래식 850g (27.03.16)」 이 되었다 — 특정 로트 날짜가 전체를 대표하게
+               예전에는 첫 품목의 이름을 그대로 묶음 이름으로 썼다. 그래서 로트 넷을 묶은
+               묶음이 「클래식 850g (27.03.16)」 이 되었다 — 특정 로트 날짜가 전체를 대표하게
                된 것이다. 규칙을 고쳐도 이미 만들어진 것은 옛 이름을 그대로 달고 있다.
 
                다 고치면 이 구역은 사라진다(11-UI-RULES B8). 그리고 «일괄로 덮지 않는다» —
@@ -203,7 +210,7 @@
                 <h2 class="text-base font-semibold">품목 대조표</h2>
                 <span class="text-xs text-base-content/60" th:text="${tab.hint}">설명</span>
                 <div class="flex-1 h-px bg-base-300"></div>
-                <a th:href="@{/reconcile/rules}" class="link text-sm">이름 다듬기 규칙</a>
+                <a th:href="@{/reconcile/method}" class="link text-sm">맞추는 방식</a>
             </div>
 
             <!--/* 갈래. 개수는 «거르기 전» 전체를 센 값이라 지금 보는 목록에 따라 변하지 않는다. */-->
@@ -231,7 +238,7 @@
                 <input type="hidden" name="tab" th:value="${tab.name()}">
                 <input type="text" name="q" th:value="${q}"
                        class="input input-bordered input-sm grow max-w-md"
-                       placeholder="품목코드·품명·물건 이름으로 찾기">
+                       placeholder="품목코드·품명·묶음 이름으로 찾기">
                 <button type="submit" class="btn btn-sm">찾기</button>
                 <a th:if="${not #strings.isEmpty(q)}"
                    th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()})} + '#board'"
@@ -253,13 +260,13 @@
                             <span th:case="'TODO'">할 일이 없습니다. 다 정하셨습니다.</span>
                             <span th:case="'PAIRED'">이름이 닮은 짝을 더 찾지 못했습니다.</span>
                             <span th:case="'ONE_SIDED'">한쪽에만 있는 품목이 없습니다.</span>
-                            <span th:case="'LINKED'">아직 이어 둔 것이 없습니다.</span>
+                            <span th:case="'LINKED'">아직 묶어 둔 것이 없습니다.</span>
                             <span th:case="'SET_ASIDE'">짝 없음으로 둔 품목이 없습니다.</span>
                             <span th:case="*">보여줄 줄이 없습니다.</span>
                         </p>
                         <p class="text-sm text-base-content/60" th:switch="${tab.name()}">
                             <span th:case="'PAIRED'">
-                                이름이 서로 다른 품목은 「짝을 못 찾은 것」 에서 직접 이을 수 있습니다.
+                                이름이 서로 다른 품목은 「묶을 짝이 없는 것」 에서 직접 이을 수 있습니다.
                             </span>
                             <span th:case="'LINKED'">
                                 위 갈래에서 짝을 골라 이으면 여기에 쌓입니다.
@@ -277,7 +284,7 @@
                             <thead>
                             <tr class="text-xs">
                                 <th class="w-8"></th>
-                                <th>물건</th>
+                                <th>묶음</th>
                                 <th th:text="${definition.leftSource}">좌</th>
                                 <th th:text="${definition.rightSource}">우</th>
                                 <th class="text-right">차이</th>
@@ -296,7 +303,7 @@
                                                th:disabled="${row.kind.name() == 'LINKED'}">
                                     </td>
 
-                                    <!--/* 이 줄이 «무슨 물건인지». 이 칸이 없어서 사람이 잇고
+                                    <!--/* 이 줄이 «무슨 묶음인지». 이 칸이 없어서 사람이 잇고
                                            나서도 방금 무엇이 만들어졌는지 알 수 없었다 — 목록에
                                            코드만 뜨고 그 안에 무엇이 들었는지는 어디에도 없었다.
 
@@ -420,13 +427,13 @@
                                                 <input type="hidden" name="tab" th:value="${tab.name()}">
                                                 <input type="hidden" name="q" th:value="${q}">
                                                 <input type="hidden" name="page" th:value="${board.page}">
-                                                <button type="submit" class="btn btn-sm">이 둘 잇기</button>
+                                                <button type="submit" class="btn btn-sm">이 둘 묶기</button>
                                             </form>
 
                                             <!--/* 한쪽에만 있는 줄 — 반대쪽에서 짝을 찾아야 한다.
                                                    줄 «안» 에서 고르게 하려고 링크로 편다.
 
-                                                   이어 둔 줄에는 「더 잇기」 로 같은 자리가 열린다.
+                                                   이어 둔 줄에는 「이 묶음에 넣기」 로 같은 자리가 열린다.
                                                    「전산의 세트 1개 = 물류의 낱개 셋」 처럼 한쪽이
                                                    여럿인 경우가 이 길로 풀린다. */-->
                                             <a th:if="${(row.kind.name() == 'LEFT_ONLY' or row.kind.name() == 'RIGHT_ONLY'
@@ -434,13 +441,13 @@
                                                         and expandKey != row.key}"
                                                th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page},expand=${row.key})} + '#row-' + ${row.key}"
                                                class="btn btn-sm"
-                                               th:text="${row.kind.name() == 'LINKED'} ? '더 잇기' : '짝 찾기'">짝 찾기</a>
+                                               th:text="${row.kind.name() == 'LINKED'} ? '이 묶음에 넣기' : '짝 찾기'">짝 찾기</a>
                                             <a th:if="${expandKey == row.key}"
                                                th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page})} + '#row-' + ${row.key}"
                                                class="btn btn-ghost btn-sm">닫기</a>
 
                                             <!--/* 이어 둔 줄 — 되돌릴 길이 없으면 잘못 이은 것이
-                                                   영영 남는다. 한 품목은 한 물건에만 속하므로
+                                                   영영 남는다. 한 품목은 한 묶음에만 속하므로
                                                    그 품목을 다시 이을 수도 없다. */-->
                                             <form th:if="${row.kind.name() == 'LINKED' and not row.confirmed}"
                                                   th:action="@{/reconcile/units/{id}/confirm(id=${row.unitId})}" method="post">
@@ -483,7 +490,7 @@
                                             <b th:text="${row.displayName()}">품명</b>
                                             <span th:if="${row.kind.name() == 'LINKED'}">
                                                 에 <span class="font-mono text-xs" th:text="${expandSource}">양쪽</span>
-                                                에서 품목을 더 담습니다. 담은 것은 이 물건의 수량에 더해집니다.
+                                                에서 품목을 더 담습니다. 담은 것은 이 묶음의 수량에 더해집니다.
                                             </span>
                                             <span th:unless="${row.kind.name() == 'LINKED'}">
                                                 의 짝을
@@ -531,7 +538,7 @@
                                                         <input type="hidden" name="tab" th:value="${tab.name()}">
                                                         <input type="hidden" name="q" th:value="${q}">
                                                         <input type="hidden" name="page" th:value="${board.page}">
-                                                        <button type="submit" class="btn btn-sm">이 둘 잇기</button>
+                                                        <button type="submit" class="btn btn-sm">이 둘 묶기</button>
                                                     </form>
                                                 </td>
                                             </tr>
@@ -561,10 +568,10 @@
 
                 <span class="text-sm text-base-content/60">고른 줄에 대해</span>
 
-                <!--/* 이을 줄이 있는 갈래에서만 이 버튼이 화면의 주 동작이다(11-UI-RULES N2).
+                <!--/* 묶을 줄이 있는 갈래에서만 이 버튼이 화면의 주 동작이다(11-UI-RULES N2).
                        남은 일이 0이면 이 갈래에 줄이 없어 위 「대조 돌리기」 와 겹치지 않는다. */-->
                 <button th:if="${tab.name() == 'TODO' or tab.name() == 'PAIRED'}"
-                        type="submit" class="btn btn-primary btn-sm">고른 것 잇기</button>
+                        type="submit" class="btn btn-primary btn-sm">고른 것 묶기</button>
 
                 <th:block th:if="${tab.name() != 'LINKED' and tab.name() != 'SET_ASIDE'}">
                     <select name="reason" class="select select-bordered select-sm">

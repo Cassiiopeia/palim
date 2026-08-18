@@ -104,8 +104,8 @@ public class SetupService {
     /**
      * 품목 맞추기가 어디까지 왔나 — <b>대조표의 실제 남은 일</b>로 센다.
      *
-     * <p>예전에는 「확인 대기 0건 + 이어 둔 것 1건」 이면 완료라고 했다. 스물세 품목 중 하나만
-     * 이어 두어도 완료였다는 뜻이다. 홈이 완료라고 하는데 품목 잇기 화면에는 할 일이 스물두
+     * <p>예전에는 「확인 대기 0건 + 묶어 둔 것 1건」 이면 완료라고 했다. 스물세 품목 중 하나만
+     * 이어 두어도 완료였다는 뜻이다. 홈이 완료라고 하는데 품목 묶기 화면에는 할 일이 스물두
      * 건 남아 있으면, 두 화면이 같은 사실에 대해 반대로 말하는 셈이다.
      */
     private SetupStep matchingStep(List<Connector> collecting) {
@@ -138,14 +138,14 @@ public class SetupService {
         if (todo > 0) {
             return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
                     "아직 짝을 정하지 않은 것 %d 건".formatted(todo),
-                    "같은 물건끼리 이어 주세요", "/reconcile/units");
+                    "같은 묶음끼리 이어 주세요", "/reconcile/units");
         }
         if (linked == 0) {
             // 「할 일이 없다」 와 「이을 자료가 없다」 는 다르다. 하나도 안 이었는데 완료라고
             // 하면 대조가 0건을 견주게 된다.
             return new SetupStep(2, "품목 맞추기", SetupStep.State.ATTENTION,
                     "이어 둔 품목이 없습니다",
-                    "같은 물건끼리 이어 주세요", "/reconcile/units");
+                    "같은 묶음끼리 이어 주세요", "/reconcile/units");
         }
         return new SetupStep(2, "품목 맞추기", SetupStep.State.DONE,
                 "이어 둔 품목 %d 건 — 남은 일 없음".formatted(linked),

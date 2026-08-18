@@ -203,7 +203,7 @@ public class ReconcileController {
      * 「물류가 오래된 로트 3종을 이미 털었고 최신 로트는 맞는다」 를 구분할 수 없는데, 둘은
      * 전혀 다른 이야기이고 할 일도 다르다(07-DECISIONS 038).
      *
-     * @param expand 뜯어볼 물건. 없으면 접힌 채로 그린다
+     * @param expand 뜯어볼 묶음. 없으면 접힌 채로 그린다
      */
     @GetMapping("/reconcile/runs/{runId}")
     public String runDetail(@PathVariable UUID runId,
@@ -215,7 +215,7 @@ public class ReconcileController {
         UUID tenantId = TenantContext.current();
 
         List<ReconcileDiff> all = diffs.findByRunIdOrderByStateAscUnitCodeAsc(runId);
-        // 물건 이름과 «든 품목 수» 를 한 번에 받아 붙인다. 줄마다 조회하면 줄 수만큼 늘어난다.
+        // 묶음 이름과 «든 품목 수» 를 한 번에 받아 붙인다. 줄마다 조회하면 줄 수만큼 늘어난다.
         var headers = breakdowns.headers(tenantId,
                 all.stream().map(ReconcileDiff::getUnitId).filter(java.util.Objects::nonNull)
                         .distinct().toList(),

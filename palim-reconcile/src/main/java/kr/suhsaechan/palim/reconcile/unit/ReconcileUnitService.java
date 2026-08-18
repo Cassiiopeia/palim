@@ -27,7 +27,7 @@ public class ReconcileUnitService {
     @Transactional
     public ReconcileUnit create(String code, String name, String baseUnit) {
         units.findByCode(code).ifPresent(existing -> {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 쓰는 단위 코드입니다: " + code);
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 쓰는 묶음 코드입니다: " + code);
         });
         return units.save(ReconcileUnit.of(TenantContext.current(), code, name, baseUnit));
     }
@@ -42,11 +42,11 @@ public class ReconcileUnitService {
     public ReconcileUnitMember propose(UUID unitId, String source, String itemRef,
                                        BigDecimal factor) {
         units.findById(unitId).orElseThrow(() ->
-                new BusinessException(ErrorCode.INVALID_INPUT, "없는 정합 단위입니다."));
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
 
         members.findBySourceAndItemRef(source, itemRef).ifPresent(existing -> {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "이 품목은 이미 다른 단위에 연결되어 있습니다: " + source + " · " + itemRef);
+                    "이 품목은 이미 다른 묶음에 들어 있습니다: " + source + " · " + itemRef);
         });
 
         return members.save(ReconcileUnitMember.of(
@@ -54,24 +54,24 @@ public class ReconcileUnitService {
     }
 
     /**
-     * 고른 품목들을 <b>한 물건으로 잇는다</b> — 한 트랜잭션에서.
+     * 고른 품목들을 <b>한 묶음으로 잇는다</b> — 한 트랜잭션에서.
      *
      * <p>사람이 좌·우 목록에서 담고 미리보기를 본 뒤 누르는 길이다. 담은 것을 눈으로 확인한
      * 뒤이므로 <b>바로 확정</b>한다. 자동 후보에서 한꺼번에 묶는 길과 다른 점이 이것이다 —
      * 저쪽은 표를 훑기만 한 것이라 확인 단계를 한 번 더 거친다.
      *
-     * <p><b>이미 어느 물건에 속한 품목이 섞여 있으면 그 물건에 나머지를 붙인다.</b> 그것이
+     * <p><b>이미 어느 묶음에 속한 품목이 섞여 있으면 그 묶음에 나머지를 붙인다.</b> 그것이
      * 곧 「합치기」 다 — 「전산의 세트 1개 = 물류의 낱개 3개」 처럼 한쪽이 여럿인 경우가
      * 이 길로 풀린다. 새 표도 새 개념도 필요 없다.
      *
-     * <p>서로 <b>다른</b> 두 물건에 속한 품목이 함께 담기면 막는다. 그것은 「두 물건을
+     * <p>서로 <b>다른</b> 두 묶음에 속한 품목이 함께 담기면 막는다. 그것은 「두 묶음을
      * 합치는」 일인데, 어느 이름을 남길지·수량을 어떻게 볼지가 사람의 판단이라 조용히
      * 정해 버리면 안 된다.
      *
      * @param picks   담은 품목들. (원천, 품목코드, 계수)
-     * @param newCode 새로 만들 때 쓸 코드. 기존 물건에 붙는 경우엔 쓰이지 않는다
+     * @param newCode 새로 만들 때 쓸 코드. 기존 묶음에 붙는 경우엔 쓰이지 않는다
      * @param newName 새로 만들 때 쓸 이름
-     * @return 이어 붙인 물건
+     * @return 이어 붙인 묶음
      */
     @Transactional
     public ReconcileUnit link(List<Pick> picks, String newCode, String newName, String baseUnit) {
@@ -79,7 +79,7 @@ public class ReconcileUnitService {
             throw new BusinessException(ErrorCode.RECONCILE_LINK_EMPTY);
         }
 
-        // 이미 어느 물건에 속해 있는가. 담긴 것 기준으로 본다.
+        // 이미 어느 묶음에 속해 있는가. 담긴 것 기준으로 본다.
         List<UUID> existingUnits = picks.stream()
                 .map(pick -> members.findBySourceAndItemRef(pick.source(), pick.itemRef()))
                 .flatMap(java.util.Optional::stream)
@@ -94,10 +94,10 @@ public class ReconcileUnitService {
         ReconcileUnit unit = existingUnits.isEmpty()
                 ? create(newCode, newName, baseUnit)
                 : units.findById(existingUnits.getFirst()).orElseThrow(() ->
-                        new BusinessException(ErrorCode.INVALID_INPUT, "없는 정합 단위입니다."));
+                        new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
 
         for (Pick pick : picks) {
-            // 이미 그 물건에 붙어 있는 것은 건너뛴다 — 「더 담기」 는 나머지만 붙이는 일이다.
+            // 이미 그 묶음에 붙어 있는 것은 건너뛴다 — 「더 담기」 는 나머지만 붙이는 일이다.
             if (members.findBySourceAndItemRef(pick.source(), pick.itemRef()).isPresent()) {
                 continue;
             }
@@ -122,10 +122,10 @@ public class ReconcileUnitService {
     }
 
     /**
-     * 물건 이름을 고친다.
+     * 묶음 이름을 고친다.
      *
      * <p>이름은 <b>사람이 보는 유일한 손잡이</b>다. 대조 결과에 「U-6668d23b · +11」 이라고만
-     * 뜨면 그것이 무슨 물건인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
+     * 뜨면 그것이 무슨 묶음인지 알 수 없고, 알 수 없는 줄은 손대지 않게 된다.
      *
      * <p>코드는 안 바꾼다 — 코드는 시스템이 쓰는 값이고, 겹치면 저장이 막힌다.
      */
@@ -135,7 +135,7 @@ public class ReconcileUnitService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 비울 수 없습니다.");
         }
         ReconcileUnit unit = units.findById(unitId).orElseThrow(() ->
-                new BusinessException(ErrorCode.INVALID_INPUT, "없는 정합 단위입니다."));
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 묶음입니다."));
         unit.rename(name.trim());
         return units.save(unit);
     }
@@ -144,7 +144,7 @@ public class ReconcileUnitService {
     @Transactional
     public ReconcileUnitMember changeFactor(UUID memberId, BigDecimal factor) {
         ReconcileUnitMember member = members.findById(memberId).orElseThrow(() ->
-                new BusinessException(ErrorCode.INVALID_INPUT, "없는 연결입니다."));
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 품목 연결입니다."));
         member.changeFactor(factor);
         return members.save(member);
     }
@@ -161,7 +161,7 @@ public class ReconcileUnitService {
     @Transactional
     public ReconcileUnitMember confirm(UUID memberId) {
         ReconcileUnitMember member = members.findById(memberId).orElseThrow(() ->
-                new BusinessException(ErrorCode.INVALID_INPUT, "없는 연결입니다."));
+                new BusinessException(ErrorCode.INVALID_INPUT, "없는 품목 연결입니다."));
         member.confirm();
         return members.save(member);
     }
@@ -176,7 +176,7 @@ public class ReconcileUnitService {
      * <p><b>사람은 그것을 매칭 문제가 아니라 재고 사고로 읽는다.</b> 「잘 이어 놨는데 왜 매일
      * 차이가 나지」 로 만나고, 원인이 여기 있다는 것을 알 방법이 없다.
      *
-     * <p>확인의 뜻은 「이 묶음이 같은 물건임을 사람이 봤다」 이지 「이 한 줄을 봤다」 가 아니다.
+     * <p>확인의 뜻은 「이 묶음이 같은 묶음임을 사람이 봤다」 이지 「이 한 줄을 봤다」 가 아니다.
      * 그래서 단위 단위로 확정한다.
      *
      * @return 이번에 확정된 멤버들. 이미 다 확정돼 있었으면 빈 목록
@@ -189,16 +189,16 @@ public class ReconcileUnitService {
     }
 
     /**
-     * 확인 대기 중인 물건을 <b>통째로 물린다.</b>
+     * 확인 대기 중인 묶음을 <b>통째로 물린다.</b>
      *
-     * <p>확인 큐의 한 줄은 물건 하나이므로 「아닙니다」 도 그 단위로 움직여야 한다. 한 줄만
+     * <p>확인 큐의 한 줄은 묶음 하나이므로 「아닙니다」 도 그 단위로 움직여야 한다. 한 줄만
      * 떼면 반쪽이 남아 무엇을 물린 것인지 알 수 없게 된다.
      *
      * <p><b>확정된 멤버는 건드리지 않는다.</b> 이미 사람이 확인한 것까지 지우면, 나중에 붙인
-     * 제안 하나를 물렸다가 멀쩡히 돌던 연결이 함께 사라진다. 그러면 대조에서 그 물건의 재고가
+     * 제안 하나를 물렸다가 멀쩡히 돌던 연결이 함께 사라진다. 그러면 대조에서 그 묶음의 재고가
      * 통째로 증발한다.
      *
-     * <p>남은 멤버가 없으면 물건도 함께 접는다 — 빈 물건이 목록에 쌓이면 무엇이 진짜인지
+     * <p>남은 멤버가 없으면 묶음도 함께 접는다 — 빈 묶음이 목록에 쌓이면 무엇이 진짜인지
      * 흐려진다.
      */
     @Transactional
@@ -224,13 +224,13 @@ public class ReconcileUnitService {
     }
 
     /**
-     * 이 물건을 <b>통째로 푼다</b> — 든 품목을 전부 떼고 물건을 접는다.
+     * 이 묶음을 <b>통째로 푼다</b> — 든 품목을 전부 떼고 묶음을 접는다.
      *
-     * <p>표의 한 줄이 물건 하나이므로 「되돌리기」 도 줄 단위여야 한다. 한 품목만 떼면 나머지가
+     * <p>표의 한 줄이 묶음 하나이므로 「되돌리기」 도 줄 단위여야 한다. 한 품목만 떼면 나머지가
      * 반쪽으로 남아 대조가 매일 유령 차이를 올리는데, 사람은 그것을 되돌리다 만 흔적이 아니라
      * <b>재고 사고로 읽는다.</b>
      *
-     * <p>떼어 낸 품목들은 다시 「이을 수 있는 것」 으로 돌아온다.
+     * <p>떼어 낸 품목들은 다시 「묶을 수 있는 것」 으로 돌아온다.
      */
     @Transactional
     public void unlinkUnit(UUID unitId) {

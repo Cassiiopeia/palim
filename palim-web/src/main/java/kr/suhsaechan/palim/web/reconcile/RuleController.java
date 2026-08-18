@@ -22,7 +22,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *
  * <p>이 화면이 없어서 <b>규칙이 DB 에만 있었다.</b> 그러면 이 프로그램은 한 회사에서만 돈다 —
  * 표기 습관은 회사마다 다른데, 자기 습관에 맞는 규칙을 넣을 자리가 없으면 다른 곳에 가져다
- * 놓는 순간 「이을 수 있는 것」 이 늘 비어 있게 되고, 품목을 전부 손으로 이어야 한다.
+ * 놓는 순간 「묶을 수 있는 것」 이 늘 비어 있게 되고, 품목을 전부 손으로 이어야 한다.
  *
  * <p><b>저장 전에 걸어 볼 수 있다.</b> 규칙을 잘못 고쳤을 때 눈에 보이는 것은 「이을 수 있는
  * 것이 줄었다」 뿐이고 왜인지는 어디에도 안 나온다. 지금 담긴 실제 품명이 어떻게 바뀌는지
@@ -83,7 +83,7 @@ public class RuleController {
         try {
             ruleService.create(name, pattern, replacement == null ? "" : replacement);
             redirect.addFlashAttribute("flashSuccess",
-                    "「%s」 규칙을 넣었습니다. 품목 잇기 화면에서 결과를 확인하세요.".formatted(name));
+                    "「%s」 규칙을 넣었습니다. 품목 묶기 화면에서 결과를 확인하세요.".formatted(name));
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));

@@ -29,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *
  * <p>하나뿐이면 고를 것이 없으므로 그냥 쓴다 — 그건 짐작이 아니다. <b>여럿이면 묻는다.</b>
  *
- * <p>이어 둔 것 자체는 대조마다 갈리지 않는다({@code (tenant, source, item_ref)} 로 온 시스템이
+ * <p>묶어 둔 것 자체는 대조마다 갈리지 않는다({@code (tenant, source, item_ref)} 로 온 시스템이
  * 공유한다). 그래서 어느 대조를 골라 이었든 결과는 모든 대조에 함께 쓰인다 — 여기서 고르는
  * 것은 «찾아볼 범위» 일 뿐이고, 화면이 그 사실을 말해야 사람이 안심하고 고른다.
  */
@@ -100,7 +100,7 @@ class UnitCandidateScopeIntegrationTest extends IntegrationTest {
                 .andExpect(content().string(Matchers.containsString("어느 대조에서 찾을까요")))
                 // 고르면 무엇이 달라지는지 말해야 안심하고 고른다
                 .andExpect(content().string(
-                        Matchers.containsString("이어 둔 것은 모든 대조가 함께 씁니다")))
+                        Matchers.containsString("묶어 둔 것은 모든 대조가 함께 씁니다")))
                 .andExpect(content().string(Matchers.containsString("전산 대 쇼핑몰")));
     }
 

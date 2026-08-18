@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<!--/* 이 화면이 무슨 일을 하는지.
+
+       화면이 「이걸 하면 무엇이 어떻게 되는지」 를 한 번도 말하지 않아서, 버튼 이름만 늘어날
+       뿐 사람은 무엇을 하는 중인지 몰랐다. 「묶기」·「이 묶음에 넣기」·「1↔2건」 이 전부 뜻 없는
+       글자로 보인 이유가 그것이다.
+
+       그래서 «자기 자료의 모양» 으로 설명한다 — 지어낸 예시는 「그런가 보다」 로 끝나고,
+       실제로 자기 화면에 있는 줄이 나와야 비로소 이어진다(07-DECISIONS 041).
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 표준값은 11-UI-RULES §0. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<div th:fragment="content" th:remove="tag">
+
+    <p class="text-sm text-base-content/60 -mt-4 mb-6">
+        두 시스템의 재고를 맞춰 보려면 먼저 «무엇과 무엇이 같은지» 를 정해야 합니다.
+        그 일이 무엇인지 여기서 설명합니다.
+    </p>
+
+    <a th:href="@{/reconcile/units}" class="btn btn-ghost btn-sm mb-6">← 품목 묶기</a>
+
+    <!--/* 1. 왜 그냥은 못 맞추나 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">왜 그냥은 못 맞추나</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-3">
+                <p class="text-sm text-base-content/70">
+                    두 시스템은 같은 물건을 <b>다른 이름으로 부르고, 줄도 다르게 쪼갭니다.</b>
+                    한쪽이 유통기한마다 한 줄이면 다른 쪽은 창고마다 한 줄인 식입니다.
+                    그래서 품목코드끼리 곧바로 견줄 수가 없습니다.
+                </p>
+                <p class="text-sm text-base-content/70" th:if="${sample == null}">
+                    재고를 한 번 담으면 여기에 실제 자료로 보여 드립니다.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 2. 실제 자료로 보여주기 — 이 부분이 이 화면의 핵심이다 */-->
+    <section class="mb-8" th:if="${sample != null}">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">지금 자료로 보면</h2>
+            <span class="text-xs text-base-content/60">실제로 담겨 있는 줄입니다</span>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-4">
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                        <div class="text-xs text-base-content/60 mb-1">
+                            <span th:text="${definition.leftSource}">좌</span> 는 이렇게 가지고 있고
+                        </div>
+                        <table class="table table-sm">
+                            <tbody>
+                            <tr th:each="i : ${sample.left}">
+                                <td class="text-sm" th:text="${i.displayName()}">품명</td>
+                                <td class="font-mono text-xs text-base-content/60"
+                                    th:text="${i.itemRef}">코드</td>
+                                <td class="text-right tabular-nums text-sm"
+                                    th:text="${i.quantityText()}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/60 mb-1">
+                            <span th:text="${definition.rightSource}">우</span> 는 이렇게 가지고 있습니다
+                        </div>
+                        <table class="table table-sm">
+                            <tbody>
+                            <tr th:each="i : ${sample.right}">
+                                <td class="text-sm" th:text="${i.displayName()}">품명</td>
+                                <td class="font-mono text-xs text-base-content/60"
+                                    th:text="${i.itemRef}">코드</td>
+                                <td class="text-right tabular-nums text-sm"
+                                    th:text="${i.quantityText()}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!--/* 묶으면 무엇이 되는가 — 이 한 줄이 이 화면의 존재 이유다. */-->
+                <div class="rounded border border-base-300 p-4">
+                    <div class="text-sm mb-2">
+                        이것들을 <b>한 묶음으로 정해 두면</b>, 맞춰 볼 때
+                        <b>묶음 안의 수량을 시스템별로 각각 더해서</b> 그 두 합계를 견줍니다.
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-8 gap-y-2">
+                        <div>
+                            <div class="text-xs text-base-content/60"
+                                 th:text="${definition.leftSource} + ' 합계'">좌 합계</div>
+                            <div class="text-xl font-semibold tabular-nums"
+                                 th:text="${sample.leftTotalText()}">0</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-base-content/60"
+                                 th:text="${definition.rightSource} + ' 합계'">우 합계</div>
+                            <div class="text-xl font-semibold tabular-nums"
+                                 th:text="${sample.rightTotalText()}">0</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-base-content/60">차이</div>
+                            <div class="text-xl font-semibold tabular-nums"
+                                 th:classappend="${sample.hasDiff()} ? 'text-warning' : 'text-base-content/40'"
+                                 th:text="${sample.diffText()}">0</div>
+                        </div>
+                        <div class="text-sm text-base-content/70">
+                            → 「<span th:text="${sample.displayName()}">이름</span>」 한 줄로 봅니다
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 3. 그래서 화면에서 무엇을 하나 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">그래서 무엇을 하면 되나</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-0">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                        <tr>
+                            <td class="w-40 font-medium">묶기</td>
+                            <td class="text-sm text-base-content/70">
+                                양쪽에서 같은 물건을 골라 <b>한 묶음으로 정합니다.</b>
+                                정하는 순간부터 맞춰 볼 때 합산에 들어갑니다.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">이 묶음에 넣기</td>
+                            <td class="text-sm text-base-content/70">
+                                이미 정해 둔 묶음에 <b>품목을 하나 더 넣습니다.</b>
+                                로트가 새로 생겼거나 한쪽이 여러 줄로 쪼개져 있을 때 씁니다.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">묶음 풀기</td>
+                            <td class="text-sm text-base-content/70">
+                                묶음을 <b>해체합니다.</b> 안에 든 품목이 「할 일」 로 돌아가
+                                다시 묶을 수 있게 됩니다. 잘못 묶었을 때 쓰는 되돌리기입니다.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">짝 없음으로 두기</td>
+                            <td class="text-sm text-base-content/70">
+                                상대 쪽에 <b>애초에 없는 물건</b>임을 정해 둡니다.
+                                단종됐거나 한쪽만 관리하는 부자재가 여기 해당합니다.
+                                이것이 있어야 「할 일」 이 0에 도달합니다.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">4↔4건</td>
+                            <td class="text-sm text-base-content/70">
+                                그 묶음에 <b>왼쪽 4줄·오른쪽 4줄</b>이 들어 있다는 뜻입니다.
+                                <b>1↔2건</b> 처럼 개수가 어긋나면 한쪽에 하나 더 붙어 있다는
+                                뜻이고, 대개 잘못 묶은 것입니다.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">뜯어보기</td>
+                            <td class="text-sm text-base-content/70">
+                                맞춰 본 결과에서 차이가 난 묶음을 <b>품목 하나하나로 갈라</b> 봅니다.
+                                「11개 빈다」 와 「오래된 로트가 한쪽에만 남았다」 는 다른 이야기이고,
+                                합계만으로는 구분할 수 없습니다.
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* 4. 순서 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold">순서</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-2">
+                <p class="text-sm text-base-content/70">
+                    <b>①</b> 양쪽 재고를 담습니다 · <b>②</b> 같은 것끼리 묶습니다 ·
+                    <b>③</b> 짝이 없는 것은 「짝 없음」 으로 둡니다 ·
+                    <b>④</b> 할 일이 0이 되면 맞춰 봅니다
+                </p>
+                <p class="text-sm text-base-content/60">
+                    ②에서 이름이 서로 달라 자동으로 안 잡히면
+                    「이름 다듬기 규칙」 을 손보거나 줄 안에서 직접 짝을 고르면 됩니다.
+                </p>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <a th:href="@{/reconcile/units}" class="btn btn-sm">품목 묶기로</a>
+                    <a th:href="@{/reconcile/method}" class="btn btn-ghost btn-sm">맞추는 방식 보기</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+</body>
+</html>
