@@ -166,13 +166,31 @@
 
                 <div class="rounded border border-base-300 p-3 mb-3">
                     <div class="text-sm font-medium mb-1">어디서 받나</div>
-                    <p th:if="${#strings.isEmpty(view.fileGuide)}"
-                       class="text-sm text-base-content/60">
-                        받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
-                    </p>
+                    <!--/* 안내는 연결을 저장할 때 심는다. 그 전에 만든 연동은 비어 있으므로
+                           지금 넣을 길을 준다 — 오래 쓴 연동일수록 비어 있는 셈이다. */-->
+                    <div th:if="${#strings.isEmpty(view.fileGuide)}"
+                         class="flex flex-wrap items-center gap-2">
+                        <p class="text-sm text-base-content/60">
+                            받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
+                        </p>
+                        <form th:action="@{/connectors/{id}/file-guide/seed(id=${view.id})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm">기본 안내 넣기</button>
+                        </form>
+                    </div>
                     <pre th:unless="${#strings.isEmpty(view.fileGuide)}"
                          class="text-sm whitespace-pre-wrap font-sans"
                          th:text="${view.fileGuide}">안내</pre>
+                    <!--/* 코드에 적어 두면 상대가 메뉴를 바꾼 날 거짓말이 된다. 물어보면 바뀐
+                           뒤에도 다시 물어 맞출 수 있다. 계정은 서버 밖으로 나가지 않는다. */-->
+                    <form th:action="@{/connectors/{id}/file-guide/probe(id=${view.id})}"
+                          method="post" class="mt-2">
+                        <button type="submit" class="btn btn-sm">지금 로그인해서 메뉴 경로 찾기</button>
+                        <span class="text-sm text-base-content/60 ml-2">
+                            수집이 쓰는 계정으로 들어가 메뉴 이름만 읽어 옵니다
+                        </span>
+                    </form>
+
                     <form th:action="@{/connectors/{id}/file-guide(id=${view.id})}" method="post"
                           class="flex flex-wrap items-end gap-2 mt-2">
                         <label class="form-control grow">
