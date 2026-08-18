@@ -1,116 +1,33 @@
 <!DOCTYPE html>
-<!--/* 품목 잇기.
+<!--/* 품목 잇기 — 대조표 한 장.
 
-       대조 로직을 다 만들어 놓고 «품목이 붙지 않아 못 쓰는 것» 이 이런 과제의 전형적 실패다.
-       그래서 이 화면이 결과 화면만큼 중요하다.
+       예전에는 화면이 셋으로 쪼개져 있었다. 「이을 만한 것」 은 좌·우를 한 칸에 세로로 쌓아
+       무엇이 무엇과 짝인지 안 보였고, 「직접 골라서 잇기」 는 좌·우 목록이 서로 무관하게
+       놓여 견줄 수가 없었으며, 「정해 둔 품목」 은 코드와 이름만 보여줘 방금 무슨 일이
+       일어났는지 알 수 없었다. 대조를 하러 온 사람에게 대조할 수 없는 화면을 준 것이다.
 
-       확인 전과 후를 «분명히» 가른다. 제안 상태를 확정처럼 보이게 하면 아무도 확인하지 않고,
-       그러면 확인 단계를 둔 의미가 없어진다.
+       이제 한 줄이 물건 하나다. 왼쪽 칸·오른쪽 칸·수량 차이가 나란히 있어 «잇기 전에» 그
+       줄에서 판단이 선다.
 
-       그 구분은 «색» 이 아니라 구역·순서·라벨로 짓는다. 제안에 초록을 칠하면 다른 화면의
-       «성공» 과 같은 색이 되어 오히려 확정으로 읽힌다 — 확인을 건너뛰게 만드는 것이 바로
-       그 초록이다(11-UI-RULES C7).
+       화면 안에 코드를 넣을 수 없다(CSP 가 인라인 스크립트를 조용히 막는다 —
+       07-DECISIONS 031). 그래서 여러 줄 고르기는 HTML5 의 form 속성으로 푼다: 체크상자는
+       표 안에 있고 폼은 표 밖에 있다. 그래야 줄 안에 또 다른 폼(짝 찾기)을 둘 수 있다 —
+       폼은 폼 안에 못 들어간다.
 
-       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). */-->
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 표준값은 11-UI-RULES §0. */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${title}, ~{::content})}">
 <body>
 <div th:fragment="content" th:remove="tag">
 
-    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). 여기서 다시 그리면 같은 제목이
-           두 줄로, 같은 flash 가 두 박스로 겹친다. */-->
+    <!--/* 제목과 flash 는 layout 이 그린다(11-UI-RULES T1·B1). */-->
     <p class="text-sm text-base-content/60 -mt-4 mb-6">
         두 시스템이 같은 물건을 다르게 부릅니다. 무엇과 무엇이 같은지 여기서 정합니다.
     </p>
 
-    <!--/* 확인을 기다리는 것. 여기 남아 있으면 아직 대조에 들어가지 않는다. */-->
-    <section class="mb-8" th:unless="${#lists.isEmpty(pending)}">
-        <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-base font-semibold">확인해 주세요</h2>
-            <span class="text-xs text-base-content/60">
-                <b th:text="${#lists.size(pending)}">0</b>건 — 확인해야 대조에 들어갑니다
-            </span>
-            <div class="flex-1 h-px bg-base-300"></div>
-        </div>
-
-        <!--/* 아직 아무 일도 일어나지 않았으므로 경고색을 쓰지 않는다(11-UI-RULES B4).
-               읽어야 할 내용이라 박스는 두되 색 없는 alert 로 둔다. */-->
-        <div class="alert mb-3">
-            <div class="text-sm">
-                시스템이 <b>이름이 비슷해서</b> 묶어 둔 것입니다. 맞는지 눈으로 보고 확인해 주세요 —
-                틀린 채로 두면 엉뚱한 재고를 합쳐 놓고 «맞는다» 고 보고하게 됩니다.
-            </div>
-        </div>
-
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-body p-0">
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                        <tr class="text-xs">
-                            <th>물건</th>
-                            <th>이 물건에 든 품목</th>
-                            <th></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="u : ${pending}">
-                            <td class="align-top">
-                                <div class="font-medium" th:text="${u.unitName}">이름</div>
-                                <!--/* 한쪽에서만 온 묶음은 짝이 없다는 뜻이다. 상태가 아니라
-                                       분류라 색을 쓰지 않는다(11-UI-RULES). */-->
-                                <span th:if="${u.oneSided()}"
-                                      class="badge badge-ghost badge-sm mt-1">한쪽에만 있음</span>
-                            </td>
-                            <td class="align-top">
-                                <!--/* 품명과 수량이 있어야 맞다/아니다를 판단할 수 있다.
-                                       예전에는 「erp · A0001 · 1」 만 보여줬다. */-->
-                                <div th:each="v : ${u.members}"
-                                     class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                                    <span class="text-xs text-base-content/60 w-24 shrink-0"
-                                          th:text="${v.source}">어디</span>
-                                    <span class="text-sm" th:text="${v.label()}">품명</span>
-                                    <span class="font-mono text-xs text-base-content/60"
-                                          th:text="${v.itemRef}">코드</span>
-                                    <span th:if="${v.inStock}" class="text-sm tabular-nums ml-auto"
-                                          th:text="${v.quantity}">0</span>
-                                    <!--/* 담긴 재고에 없다. 지우지 않고 그 사실을 말한다 —
-                                           지우면 확인도 물리기도 못 하는 상태가 된다. */-->
-                                    <span th:unless="${v.inStock}"
-                                          class="text-xs text-base-content/60 ml-auto">지금 담긴 재고에 없음</span>
-                                </div>
-                            </td>
-                            <td class="text-right align-top">
-                                <div class="flex gap-1 justify-end">
-                                    <!--/* 이 화면의 주 동작. «물건 통째로» 확정한다 — 한 줄씩
-                                           확정하면 반쪽짜리가 되어 대조가 매일 유령 차이를
-                                           올린다. */-->
-                                    <form th:action="@{/reconcile/units/{id}/confirm(id=${u.unitId},definitionId=${definition?.id})}"
-                                          method="post">
-                                        <button type="submit" class="btn btn-primary btn-sm">맞습니다</button>
-                                    </form>
-                                    <form th:action="@{/reconcile/units/{id}/discard(id=${u.unitId},definitionId=${definition?.id})}"
-                                          method="post">
-                                        <button type="submit" class="btn btn-ghost btn-sm">아닙니다</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!--/* 이름이 비슷해 묶인 후보. 양쪽에서 하나씩 온 것이 바로 이을 수 있는 짝이다.
-
-           후보마다 카드를 쌓으면 카드 안에 표와 폼이 또 들어가 박스가 3겹이 된다 —
-           표 하나로 편다(11-UI-RULES B7). */-->
-    <!--/* 대조가 여럿이면 «어느 두 곳에서» 찾을지 사람이 고른다. 예전에는 코드가 코드순
-           첫 번째를 집었는데, 그러면 정의 이름만 바꿔도 후보가 통째로 달라지면서 화면
-           어디에도 그 이유가 없었다. */-->
-    <section class="mb-8" th:if="${mustPickDefinition}">
+    <!--/* 대조가 여럿이면 «어느 두 곳에서» 찾을지 사람이 고른다. 코드가 하나를 집으면
+           정의 이름만 바꿔도 목록이 통째로 달라지는데 화면 어디에도 그 이유가 없다. */-->
+    <section th:if="${mustPickDefinition}">
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">어느 대조에서 찾을까요</h2>
             <div class="flex-1 h-px bg-base-300"></div>
@@ -133,341 +50,472 @@
         </div>
     </section>
 
-    <!--/* 「이을 만한 것」 구역. «어느 대조에서 찾았는지» 와 «다른 대조로 가는 길» 은 후보가
-           0건이어도 남아야 한다 — 표 안에 두면 0건일 때 통째로 사라져, 화면이 무엇을 골랐는지
-           말하지도 않고 되돌아갈 길도 없는 상태가 된다(11-UI-RULES E5). */-->
-    <section class="mb-8" th:if="${definition != null}">
-        <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-base font-semibold">이을 만한 것</h2>
-            <span class="text-xs text-base-content/60">이름이 비슷한 것끼리 묶어 봤습니다</span>
-            <div class="flex-1 h-px bg-base-300"></div>
-        </div>
-
-        <p class="text-sm text-base-content/60 mb-2">
-            <span th:text="${definition.leftSource}">좌</span>
-            <span class="mx-1 text-base-content/40">↔</span>
-            <span th:text="${definition.rightSource}">우</span>
-            <span class="ml-1">에서 찾았습니다.</span>
-            <a th:if="${definitions != null and #lists.size(definitions) > 1}"
-               th:href="@{/reconcile/units}" class="link ml-1">다른 대조에서 찾기</a>
-        </p>
-
-        <!--/* 0건도 결과다. 그런데 «자료가 없어서» 와 «다 이어서» 는 정반대 사정이고 할 일도
-               반대다. 예전에는 한 문장에 뭉뚱그려서, 실제로 한 줄도 안 담긴 상태에서도
-               「이미 다 이어 두었을 수 있습니다」 라고 말했다. 담긴 시각은 스냅샷에 실제로
-               있는 값이라 짐작이 아니다. */-->
-        <div th:if="${candidates == null or #lists.isEmpty(candidates)}"
-             class="card bg-base-100 shadow-sm">
-            <div class="card-body items-center text-center py-10 gap-2">
-                <!-- 양쪽 다 안 담김 -->
-                <th:block th:if="${leftLoadedAt == null and rightLoadedAt == null}">
-                    <p class="text-base-content/70">아직 어느 쪽도 재고를 담지 않았습니다.</p>
-                    <p class="text-sm text-base-content/60">
-                        시험 실행만으로는 담기지 않습니다. 「확정하고 담기」 를 눌러야 합니다.
-                    </p>
-                    <a th:href="@{/connectors}" class="btn btn-sm mt-2">재고 가져오는 곳으로</a>
-                </th:block>
-                <!-- 한쪽만 담김 — 이 사고가 더 흔한데 지금은 안 보인다 -->
-                <th:block th:if="${leftLoadedAt == null and rightLoadedAt != null}">
-                    <p class="text-base-content/70">
-                        <span th:text="${definition.leftSource}">좌</span> 쪽 재고가 아직 없습니다.
-                    </p>
-                    <p class="text-sm text-base-content/60">한쪽만으로는 이을 짝을 찾을 수 없습니다.</p>
-                    <a th:href="@{/connectors}" class="btn btn-sm mt-2">재고 가져오는 곳으로</a>
-                </th:block>
-                <th:block th:if="${leftLoadedAt != null and rightLoadedAt == null}">
-                    <p class="text-base-content/70">
-                        <span th:text="${definition.rightSource}">우</span> 쪽 재고가 아직 없습니다.
-                    </p>
-                    <p class="text-sm text-base-content/60">한쪽만으로는 이을 짝을 찾을 수 없습니다.</p>
-                    <a th:href="@{/connectors}" class="btn btn-sm mt-2">재고 가져오는 곳으로</a>
-                </th:block>
-                <!-- 양쪽 다 담김 — 이때만 「다 이었다」 가 참일 수 있다 -->
-                <th:block th:if="${leftLoadedAt != null and rightLoadedAt != null}">
-                    <p class="text-base-content/70">이름이 닮은 짝을 더 찾지 못했습니다.</p>
-                    <p class="text-sm text-base-content/60">
-                        이름이 서로 다른 품목은 아래에서 <b>직접 골라</b> 이을 수 있습니다.
-                    </p>
-                </th:block>
-            </div>
-        </div>
-
-        <th:block th:if="${candidates != null and not #lists.isEmpty(candidates)}">
+    <!--/* 대조 정의가 아예 없다. 여기서 할 수 있는 일이 없으므로 만들러 가는 길을 준다. */-->
+    <section th:if="${definition == null and not mustPickDefinition}">
         <div class="card bg-base-100 shadow-sm">
-            <div class="card-body p-0">
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                        <tr class="text-xs">
-                            <th>묶음</th>
-                            <th>담긴 품목</th>
-                            <th>새 품목으로 묶기</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="c : ${candidates}">
-                            <td class="align-top">
-                                <!--/* 양쪽·한쪽은 상태가 아니라 분류다 — 색을 쓰지 않는다. */-->
-                                <span class="badge badge-ghost badge-sm"
-                                      th:text="${c.hasBothSides()} ? '양쪽에 있음' : '한쪽에만 있음'">
-                                    양쪽에 있음
-                                </span>
-                                <div class="font-mono text-xs text-base-content/60 mt-1"
-                                     th:text="${c.normalizedName}">이름</div>
-                            </td>
-                            <td class="align-top">
-                                <div th:each="i : ${c.items}"
-                                     class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                                    <span class="text-xs text-base-content/60 w-24 shrink-0"
-                                          th:text="${i.source}">원천</span>
-                                    <span class="font-mono text-xs w-28 shrink-0"
-                                          th:text="${i.itemRef}">코드</span>
-                                    <span class="text-sm flex-1" th:text="${i.rawName}">품명</span>
-                                    <span class="font-mono text-xs tabular-nums text-base-content/60"
-                                          th:text="${i.quantity}">0</span>
-                                </div>
-                            </td>
-                            <td class="align-top">
-                                <form th:action="@{/reconcile/units/from-candidate(definitionId=${definition?.id})}" method="post"
-                                      class="flex flex-wrap gap-2 items-end">
-                                    <input type="hidden" name="sources" th:each="i : ${c.items}"
-                                           th:value="${i.source}">
-                                    <input type="hidden" name="itemRefs" th:each="i : ${c.items}"
-                                           th:value="${i.itemRef}">
-                                    <label class="form-control">
-                                        <div class="label">
-                                            <span class="label-text font-medium">부를 이름</span>
-                                        </div>
-                                        <input type="text" name="name" required
-                                               th:value="${c.items[0].rawName}"
-                                               class="input input-bordered input-sm w-48">
-                                    </label>
-                                    <label class="form-control">
-                                        <div class="label">
-                                            <span class="label-text font-medium">코드</span>
-                                        </div>
-                                        <input type="text" name="code" required
-                                               th:value="'U-' + ${c.normalizedName}"
-                                               class="input input-bordered input-sm w-40 font-mono">
-                                    </label>
-                                    <button type="submit" class="btn btn-outline btn-sm">이대로 묶기</button>
-                                </form>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body items-center text-center py-12 gap-2">
+                <p class="text-base-content/70">아직 무엇과 무엇을 견줄지 정하지 않았습니다.</p>
+                <p class="text-sm text-base-content/60">
+                    대조할 두 곳을 먼저 정해야 이을 품목을 찾아올 수 있습니다.
+                </p>
+                <a th:href="@{/reconcile}" class="btn btn-sm mt-2">대조 결과로</a>
             </div>
         </div>
-        </th:block>
     </section>
 
-    <!--/* 이미 정한 것들. 확인을 통과했다는 사실은 «이 구역에 있다» 는 것으로 말한다. */-->
-    <!--/* 손으로 골라 잇는 자리.
+    <th:block th:if="${definition != null}">
 
-           이 구역이 없어서 «이름이 다른 품목은 이을 방법이 아예 없었다» — 자동 후보에 안
-           뜨면 화면 어디에도 그 품목이 나타나지 않으므로, 사람이 「저 둘이 같은 거야」 라고
-           알고 있어도 손댈 곳이 없다. 막다른 길이었다.
+        <!--/* 지금 어느 두 곳을 보고 있는가. 예전에는 「…에서 찾았습니다」 라고만 적어, 시스템이
+               스스로 찾아낸 것처럼 읽혔다. 사실은 대조 정의에 적힌 두 곳이다. */-->
+        <p class="text-sm text-base-content/70 mb-4">
+            대조
+            <b th:text="${definition.name}">대조</b>
+            에 적힌 두 곳을 봅니다 —
+            <span class="font-mono text-xs" th:text="${definition.leftSource}">좌</span>
+            <span class="mx-1 text-base-content/40">↔</span>
+            <span class="font-mono text-xs" th:text="${definition.rightSource}">우</span>
+            <a th:if="${definitions != null and #lists.size(definitions) > 1}"
+               th:href="@{/reconcile/units}" class="link ml-2">다른 대조 보기</a>
+        </p>
 
-           좌·우 목록과 담아 둔 것이 «하나의 POST 폼» 안에 있다. 화면 안에 코드를 넣을 수
-           없어서(CSP) 담아 둔 것을 브라우저가 들고 있을 방법이 없는데, GET 폼은 제출할 때
-           기존 쿼리 문자열을 통째로 버리므로 주소에 담는 길도 막힌다. 한 폼에 다 넣으면
-           검색·쪽 넘김·담기가 전부 같은 제출이라 무엇을 눌러도 나머지가 함께 실려 간다.
-           자바스크립트 0줄이다. */-->
-    <section class="mb-8" th:if="${definition != null and form != null}">
-        <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-base font-semibold">직접 골라서 잇기</h2>
-            <span class="text-xs text-base-content/60">이름이 서로 달라도 여기서 이을 수 있습니다</span>
-            <div class="flex-1 h-px bg-base-300"></div>
-        </div>
-
-        <form th:action="@{/reconcile/units}" method="post" class="card bg-base-100 shadow-sm">
-            <input type="hidden" name="definitionId" th:value="${definition.id}">
-
-            <div class="card-body gap-4">
-                <!--/* 담은 것이 담긴 재고에 없다. 담은 것 상자 «밖» 에 둔다 — 담은 것이 전부
-                       없는 품목이면 그 상자 자체가 안 그려져 경고까지 사라진다. 조용히 빠지면
-                       「담았는데 왜 없지」 가 된다. */-->
-                <div th:if="${not #lists.isEmpty(missingPicks)}" class="alert alert-warning"
-                     role="alert">
-                    <span class="text-sm">
-                        <span th:each="m,it : ${missingPicks}">
-                            <b th:text="${m}">코드</b><span th:if="${!it.last}">, </span>
-                        </span>
-                        는 지금 담긴 재고에 없습니다. 재고를 다시 가져왔거나 품목코드가 바뀌었을 수 있습니다.
+        <!--/* 진척. 「남은 일」 이 0이 되면 대조를 돌릴 준비가 끝난 것이고, 그때만 다음 걸음이
+               나타난다. 끝났다는 신호가 없으면 사람은 언제까지 해야 하는지 알 수 없다. */-->
+        <section class="mb-6">
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body flex-row flex-wrap items-center gap-x-10 gap-y-4">
+                    <div>
+                        <div class="text-xs text-base-content/60">남은 일</div>
+                        <div class="text-xl font-semibold tabular-nums"
+                             th:text="${board.counts.todo()}">0</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/60">이어 둔 것</div>
+                        <div class="text-xl font-semibold tabular-nums"
+                             th:text="${board.counts.linked}">0</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/60">짝 없음으로 둔 것</div>
+                        <div class="text-xl font-semibold tabular-nums"
+                             th:text="${board.counts.setAside}">0</div>
+                    </div>
+                    <div class="flex-1"></div>
+                    <!--/* 화면의 유일한 btn-primary(11-UI-RULES N2). 남은 일이 남아 있으면
+                           아래 「고른 것 잇기」 가 그 자리를 가져간다 — 둘은 동시에 뜰 수
+                           없다(남은 일 0이면 이을 줄 자체가 없다). */-->
+                    <a th:if="${board.counts.done()}"
+                       th:href="@{/reconcile/{id}(id=${definition.id})}"
+                       class="btn btn-primary btn-sm">다 이었습니다 — 대조 돌리기</a>
+                    <span th:unless="${board.counts.done()}" class="text-sm text-base-content/60">
+                        남은 일이 0이 되면 대조를 돌릴 수 있습니다.
                     </span>
                 </div>
+            </div>
+        </section>
 
-                <!--/* 담아 둔 것. 값은 «담긴 자료에서 다시 읽은» 것이라 화면이 지어내지 않는다. */-->
-                <div th:if="${not #lists.isEmpty(picked)}" class="rounded border border-base-300 p-3">
-                    <div class="text-sm font-medium mb-2">담아 둔 것</div>
+        <!--/* 아직 한쪽도 안 담겼으면 여기서 할 수 있는 일이 없다. 「자료가 없다」 와 「다
+               이었다」 는 정반대 사정이므로 한 문장으로 뭉뚱그리지 않는다. */-->
+        <section th:if="${leftLoadedAt == null or rightLoadedAt == null}" class="mb-6">
+            <div class="card bg-base-100 shadow-sm">
+                <div class="card-body items-center text-center py-10 gap-2">
+                    <th:block th:if="${leftLoadedAt == null and rightLoadedAt == null}">
+                        <p class="text-base-content/70">아직 어느 쪽도 재고를 담지 않았습니다.</p>
+                        <p class="text-sm text-base-content/60">
+                            시험 실행만으로는 담기지 않습니다. 「지금 가져와서 담기」 를 눌러야 합니다.
+                        </p>
+                    </th:block>
+                    <th:block th:if="${leftLoadedAt == null and rightLoadedAt != null}">
+                        <p class="text-base-content/70">
+                            <span class="font-mono text-sm" th:text="${definition.leftSource}">좌</span>
+                            쪽 재고가 아직 없습니다.
+                        </p>
+                        <p class="text-sm text-base-content/60">한쪽만으로는 이을 짝을 찾을 수 없습니다.</p>
+                    </th:block>
+                    <th:block th:if="${leftLoadedAt != null and rightLoadedAt == null}">
+                        <p class="text-base-content/70">
+                            <span class="font-mono text-sm" th:text="${definition.rightSource}">우</span>
+                            쪽 재고가 아직 없습니다.
+                        </p>
+                        <p class="text-sm text-base-content/60">한쪽만으로는 이을 짝을 찾을 수 없습니다.</p>
+                    </th:block>
+                    <a th:href="@{/connectors}" class="btn btn-sm mt-2">재고 가져오는 곳으로</a>
+                </div>
+            </div>
+        </section>
+
+        <!--/* 표 자리. 검색·쪽 넘김·잇기가 끝난 뒤 여기로 돌아온다 — 없으면 매번 화면 맨
+               위로 올라가 방금 무엇을 눌렀는지 놓친다. */-->
+        <section id="board">
+            <div class="flex items-center gap-3 mb-3">
+                <h2 class="text-base font-semibold">품목 대조표</h2>
+                <span class="text-xs text-base-content/60" th:text="${tab.hint}">설명</span>
+                <div class="flex-1 h-px bg-base-300"></div>
+                <a th:href="@{/reconcile/rules}" class="link text-sm">이름 다듬기 규칙</a>
+            </div>
+
+            <!--/* 갈래. 개수는 «거르기 전» 전체를 센 값이라 지금 보는 목록에 따라 변하지 않는다. */-->
+            <div role="tablist" class="tabs tabs-bordered mb-3">
+                <a th:each="t : ${tabs}" th:if="${t.name() != 'ALL'}" role="tab"
+                   th:classappend="${t.name() == tab.name()} ? 'tab-active' : ''"
+                   class="tab"
+                   th:href="@{/reconcile/units(definitionId=${definition.id},tab=${t.name()},q=${q})} + '#board'">
+                    <span th:text="${t.label}">갈래</span>
+                    <span class="badge badge-ghost badge-sm ml-2 tabular-nums"
+                          th:with="n=${t.name() == 'TODO' ? board.counts.todo()
+                                     : (t.name() == 'PAIRED' ? board.counts.paired
+                                     : (t.name() == 'ONE_SIDED' ? board.counts.oneSided
+                                     : (t.name() == 'LINKED' ? board.counts.linked
+                                     : board.counts.setAside)))}"
+                          th:text="${n}">0</span>
+                </a>
+            </div>
+
+            <!--/* 찾기. GET 이라 뒤로 가기가 통하고, 주소에 남아 새로 고쳐도 그대로다.
+                   기존 조건은 숨은 칸으로 함께 보낸다 — GET 폼은 제출할 때 기존 쿼리
+                   문자열을 통째로 버리기 때문이다. */-->
+            <form th:action="@{/reconcile/units}" method="get" class="flex flex-wrap gap-2 mb-3">
+                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                <input type="hidden" name="tab" th:value="${tab.name()}">
+                <input type="text" name="q" th:value="${q}"
+                       class="input input-bordered input-sm grow max-w-md"
+                       placeholder="품목코드·품명·물건 이름으로 찾기">
+                <button type="submit" class="btn btn-sm">찾기</button>
+                <a th:if="${not #strings.isEmpty(q)}"
+                   th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()})} + '#board'"
+                   class="btn btn-ghost btn-sm">지우기</a>
+            </form>
+
+            <!--/* 빈 상태는 카드형 하나로(11-UI-RULES E1). 갈래마다 할 말이 다르다. */-->
+            <div th:if="${#lists.isEmpty(board.rows)}" class="card bg-base-100 shadow-sm">
+                <div class="card-body items-center text-center py-12 gap-2">
+                    <th:block th:if="${not #strings.isEmpty(q)}">
+                        <p class="text-base-content/70">찾는 조건에 맞는 줄이 없습니다.</p>
+                        <p class="text-sm text-base-content/60">
+                            다른 갈래에 있을 수 있습니다 — 위 갈래를 바꿔 보세요.
+                        </p>
+                    </th:block>
+                    <th:block th:if="${#strings.isEmpty(q)}">
+                        <p class="text-base-content/70"
+                           th:switch="${tab.name()}">
+                            <span th:case="'TODO'">할 일이 없습니다. 다 정하셨습니다.</span>
+                            <span th:case="'PAIRED'">이름이 닮은 짝을 더 찾지 못했습니다.</span>
+                            <span th:case="'ONE_SIDED'">한쪽에만 있는 품목이 없습니다.</span>
+                            <span th:case="'LINKED'">아직 이어 둔 것이 없습니다.</span>
+                            <span th:case="'SET_ASIDE'">짝 없음으로 둔 품목이 없습니다.</span>
+                            <span th:case="*">보여줄 줄이 없습니다.</span>
+                        </p>
+                        <p class="text-sm text-base-content/60" th:switch="${tab.name()}">
+                            <span th:case="'PAIRED'">
+                                이름이 서로 다른 품목은 「짝을 못 찾은 것」 에서 직접 이을 수 있습니다.
+                            </span>
+                            <span th:case="'LINKED'">
+                                위 갈래에서 짝을 골라 이으면 여기에 쌓입니다.
+                            </span>
+                            <span th:case="*"></span>
+                        </p>
+                    </th:block>
+                </div>
+            </div>
+
+            <div th:unless="${#lists.isEmpty(board.rows)}" class="card bg-base-100 shadow-sm">
+                <div class="card-body p-0">
                     <div class="overflow-x-auto">
                         <table class="table table-sm">
                             <thead>
                             <tr class="text-xs">
-                                <th>어디</th><th>품목</th><th class="text-right">담긴 수량</th>
-                                <th>몇 개로 셀지</th><th class="text-right">대조에 더할 수량</th><th></th>
+                                <th class="w-8"></th>
+                                <th>물건</th>
+                                <th th:text="${definition.leftSource}">좌</th>
+                                <th th:text="${definition.rightSource}">우</th>
+                                <th class="text-right">차이</th>
+                                <th class="text-right">동작</th>
                             </tr>
                             </thead>
                             <tbody>
-                            <tr th:each="v : ${picked}">
-                                <!--/* 담아 둔 것이 다음 제출에 함께 실려 가게 하는 자리.
-                                       계수 입력이 바로 아래 나란히 있어 순서가 어긋나지 않는다. */-->
-                                <input type="hidden" name="pick"
-                                       th:value="${v.item.source} + '|' + ${v.item.itemRef}">
-                                <td class="text-xs text-base-content/60" th:text="${v.item.source}">어디</td>
-                                <td>
-                                    <div th:text="${v.item.displayName()}">품명</div>
-                                    <div class="font-mono text-xs text-base-content/60"
-                                         th:text="${v.item.itemRef}">코드</div>
-                                    <div th:if="${v.item.linked()}"
-                                         class="text-xs text-base-content/60 mt-0.5">
-                                        이미 「<span th:text="${v.item.unitName}">물건</span>」 에 속해 있습니다
-                                    </div>
-                                </td>
-                                <td class="text-right tabular-nums" th:text="${v.item.quantity}">0</td>
-                                <td>
-                                    <input type="number" step="any" min="0" name="pickFactor"
-                                           class="input input-bordered input-sm w-24"
-                                           th:value="${v.factor}">
-                                </td>
-                                <td class="text-right tabular-nums" th:text="${v.effectiveQuantity()}">0</td>
-                                <td>
-                                    <!--/* 담은 것을 빼는 길. 폼 안이므로 이 항목만 빼고 다시 제출한다. */-->
-                                    <button type="submit" name="drop" class="btn btn-ghost btn-xs"
-                                            th:value="${v.item.source} + '|' + ${v.item.itemRef}">빼기</button>
-                                </td>
-                            </tr>
+                            <th:block th:each="row : ${board.rows}">
+                                <tr th:id="'row-' + ${row.key}">
+                                    <!--/* 체크상자는 표 «안» 에, 폼은 표 «밖» 에 있다. form 속성이
+                                           둘을 잇는다 — 그래야 줄 안에 짝 찾기 폼을 또 둘 수 있다. */-->
+                                    <td class="align-top">
+                                        <input type="checkbox" name="rows" form="bulk"
+                                               class="checkbox checkbox-sm"
+                                               th:value="${row.key}"
+                                               th:disabled="${row.kind.name() == 'LINKED'}">
+                                    </td>
+
+                                    <!--/* 이 줄이 «무슨 물건인지». 이 칸이 없어서 사람이 잇고
+                                           나서도 방금 무엇이 만들어졌는지 알 수 없었다 — 목록에
+                                           코드만 뜨고 그 안에 무엇이 들었는지는 어디에도 없었다.
+
+                                           이어 둔 줄은 사람이 정한 이름, 아직 안 이은 줄은 첫
+                                           품목의 품명이다. 지어낸 값이 아니라 둘 다 담긴 자료에
+                                           실제로 있는 이름이다. */-->
+                                    <td class="align-top">
+                                        <div class="font-medium text-sm"
+                                             th:text="${row.displayName()}">이름</div>
+                                        <div th:if="${row.kind.name() == 'LINKED'}"
+                                             class="text-xs text-base-content/60 mt-0.5"
+                                             th:text="${#lists.size(row.left) + #lists.size(row.right)} + '개 품목'">
+                                            2개 품목
+                                        </div>
+                                    </td>
+
+                                    <!--/* 왼쪽 시스템의 품목들. 로트가 갈려 여러 줄일 수 있다. */-->
+                                    <td class="align-top">
+                                        <div th:if="${#lists.isEmpty(row.left)}"
+                                             class="text-base-content/40">—</div>
+                                        <div th:each="i : ${row.left}" class="flex items-baseline gap-2">
+                                            <span class="text-sm" th:text="${i.displayName()}">품명</span>
+                                            <span class="font-mono text-xs text-base-content/60"
+                                                  th:text="${i.itemRef}">코드</span>
+                                            <span th:if="${i.hasFactor()}"
+                                                  class="badge badge-ghost badge-sm"
+                                                  th:text="'×' + ${i.factor}">×1</span>
+                                            <span class="ml-auto text-sm tabular-nums"
+                                                  th:classappend="${i.inStock()} ? '' : 'text-base-content/40'"
+                                                  th:text="${i.quantityText()}">0</span>
+                                        </div>
+                                        <div th:if="${#lists.size(row.left) > 1}"
+                                             class="text-xs text-base-content/60 mt-1 flex justify-between">
+                                            <span th:text="${#lists.size(row.left)} + '건 합계'">합계</span>
+                                            <span class="tabular-nums font-medium"
+                                                  th:text="${row.leftTotalText()}">0</span>
+                                        </div>
+                                    </td>
+
+                                    <td class="align-top">
+                                        <div th:if="${#lists.isEmpty(row.right)}"
+                                             class="text-base-content/40">—</div>
+                                        <div th:each="i : ${row.right}" class="flex items-baseline gap-2">
+                                            <span class="text-sm" th:text="${i.displayName()}">품명</span>
+                                            <span class="font-mono text-xs text-base-content/60"
+                                                  th:text="${i.itemRef}">코드</span>
+                                            <span th:if="${i.hasFactor()}"
+                                                  class="badge badge-ghost badge-sm"
+                                                  th:text="'×' + ${i.factor}">×1</span>
+                                            <span class="ml-auto text-sm tabular-nums"
+                                                  th:classappend="${i.inStock()} ? '' : 'text-base-content/40'"
+                                                  th:text="${i.quantityText()}">0</span>
+                                        </div>
+                                        <div th:if="${#lists.size(row.right) > 1}"
+                                             class="text-xs text-base-content/60 mt-1 flex justify-between">
+                                            <span th:text="${#lists.size(row.right)} + '건 합계'">합계</span>
+                                            <span class="tabular-nums font-medium"
+                                                  th:text="${row.rightTotalText()}">0</span>
+                                        </div>
+                                    </td>
+
+                                    <!--/* 이 숫자가 잇기 버튼 «바로 옆» 에 있어야 한다. 없으면 사람이
+                                           여러 줄을 눈으로 더해야 하고, 결국 잇고 나서 대조를 돌려야
+                                           처음 보인다 — 그때는 이미 늦다.
+                                           차이는 「확인이 필요한 사실」 이라 색을 켠다(11-UI-RULES C1). */-->
+                                    <td class="text-right align-top whitespace-nowrap">
+                                        <th:block th:if="${row.bothSides()}">
+                                            <div class="tabular-nums text-sm"
+                                                 th:classappend="${row.hasDiff()} ? 'text-warning font-medium' : 'text-base-content/60'"
+                                                 th:text="${row.hasDiff()} ? ${row.diffText()} : '맞음'">0</div>
+                                            <div th:if="${row.hasDiff()}"
+                                                 class="text-xs text-base-content/60 tabular-nums"
+                                                 th:text="${row.diffPercent()} + '%'">0%</div>
+                                        </th:block>
+                                        <span th:unless="${row.bothSides()}"
+                                              class="text-base-content/40">—</span>
+                                    </td>
+
+                                    <td class="text-right align-top">
+                                        <div class="flex flex-col items-end gap-1">
+                                            <!--/* 상태는 분류가 아니라 사실이므로 그대로 적는다.
+                                                   색은 확인이 필요한 것에만 켠다(C7). */-->
+                                            <span th:if="${row.kind.name() == 'LINKED' and not row.confirmed}"
+                                                  class="badge badge-warning badge-sm">확인 대기</span>
+                                            <span th:if="${row.kind.name() == 'SET_ASIDE'}"
+                                                  class="badge badge-ghost badge-sm"
+                                                  th:text="${row.unpairedReason()?.label}">이유</span>
+                                            <span th:if="${row.hasMissing()}"
+                                                  class="badge badge-ghost badge-sm">담긴 재고에 없음</span>
+
+                                            <!--/* 짝이 있는 줄 — 이 줄만 이으면 된다. */-->
+                                            <form th:if="${row.kind.name() == 'PAIRED'}"
+                                                  th:action="@{/reconcile/units/link}" method="post">
+                                                <input type="hidden" name="row" th:value="${row.key}">
+                                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                                <input type="hidden" name="tab" th:value="${tab.name()}">
+                                                <input type="hidden" name="q" th:value="${q}">
+                                                <input type="hidden" name="page" th:value="${board.page}">
+                                                <button type="submit" class="btn btn-sm">이 둘 잇기</button>
+                                            </form>
+
+                                            <!--/* 한쪽에만 있는 줄 — 반대쪽에서 짝을 찾아야 한다.
+                                                   줄 «안» 에서 고르게 하려고 링크로 편다.
+
+                                                   이어 둔 줄에는 「더 잇기」 로 같은 자리가 열린다.
+                                                   「전산의 세트 1개 = 물류의 낱개 셋」 처럼 한쪽이
+                                                   여럿인 경우가 이 길로 풀린다. */-->
+                                            <a th:if="${(row.kind.name() == 'LEFT_ONLY' or row.kind.name() == 'RIGHT_ONLY'
+                                                         or row.kind.name() == 'LINKED')
+                                                        and expandKey != row.key}"
+                                               th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page},expand=${row.key})} + '#row-' + ${row.key}"
+                                               class="btn btn-sm"
+                                               th:text="${row.kind.name() == 'LINKED'} ? '더 잇기' : '짝 찾기'">짝 찾기</a>
+                                            <a th:if="${expandKey == row.key}"
+                                               th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page})} + '#row-' + ${row.key}"
+                                               class="btn btn-ghost btn-sm">닫기</a>
+
+                                            <!--/* 이어 둔 줄 — 되돌릴 길이 없으면 잘못 이은 것이
+                                                   영영 남는다. 한 품목은 한 물건에만 속하므로
+                                                   그 품목을 다시 이을 수도 없다. */-->
+                                            <form th:if="${row.kind.name() == 'LINKED' and not row.confirmed}"
+                                                  th:action="@{/reconcile/units/{id}/confirm(id=${row.unitId})}" method="post">
+                                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                                <input type="hidden" name="tab" th:value="${tab.name()}">
+                                                <input type="hidden" name="q" th:value="${q}">
+                                                <input type="hidden" name="page" th:value="${board.page}">
+                                                <button type="submit" class="btn btn-sm">맞습니다</button>
+                                            </form>
+                                            <form th:if="${row.kind.name() == 'LINKED'}"
+                                                  th:action="@{/reconcile/units/{id}/unlink(id=${row.unitId})}" method="post">
+                                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                                <input type="hidden" name="tab" th:value="${tab.name()}">
+                                                <input type="hidden" name="q" th:value="${q}">
+                                                <input type="hidden" name="page" th:value="${board.page}">
+                                                <button type="submit" class="btn btn-ghost btn-sm">풀기</button>
+                                            </form>
+
+                                            <form th:if="${row.kind.name() == 'SET_ASIDE'}"
+                                                  th:action="@{/reconcile/units/restore}" method="post">
+                                                <input type="hidden" name="row" th:value="${row.key}">
+                                                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                                <input type="hidden" name="tab" th:value="${tab.name()}">
+                                                <input type="hidden" name="q" th:value="${q}">
+                                                <input type="hidden" name="page" th:value="${board.page}">
+                                                <button type="submit" class="btn btn-sm">할 일로 되돌리기</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!--/* 펼친 줄 — 반대쪽 후보를 «이 자리» 에서 고른다. 화면을 옮기면
+                                       무엇을 짝지으려 했는지 사람이 머리로 들고 다녀야 한다.
+
+                                       후보는 «이름이 닮은 순서» 다. 자동 후보는 다듬은 이름이 정확히
+                                       같아야 잡히므로 「초콜릿」 과 「초콜렛」 은 영영 못 만난다. */-->
+                                <tr th:if="${expandKey == row.key}">
+                                    <td colspan="6" class="bg-base-200/40">
+                                        <div class="text-sm mb-2">
+                                            <b th:text="${row.displayName()}">품명</b>
+                                            <span th:if="${row.kind.name() == 'LINKED'}">
+                                                에 <span class="font-mono text-xs" th:text="${expandSource}">양쪽</span>
+                                                에서 품목을 더 담습니다. 담은 것은 이 물건의 수량에 더해집니다.
+                                            </span>
+                                            <span th:unless="${row.kind.name() == 'LINKED'}">
+                                                의 짝을
+                                                <span class="font-mono text-xs" th:text="${expandSource}">반대쪽</span>
+                                                에서 고르세요. 이름이 닮은 순서로 놓았습니다.
+                                            </span>
+                                        </div>
+
+                                        <form th:action="@{/reconcile/units}" method="get"
+                                              class="flex flex-wrap gap-2 mb-2">
+                                            <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                            <input type="hidden" name="tab" th:value="${tab.name()}">
+                                            <input type="hidden" name="q" th:value="${q}">
+                                            <input type="hidden" name="page" th:value="${board.page}">
+                                            <input type="hidden" name="expand" th:value="${row.key}">
+                                            <input type="text" name="eq" th:value="${eq}"
+                                                   class="input input-bordered input-sm grow max-w-sm"
+                                                   placeholder="반대쪽에서 품목코드·품명으로 찾기">
+                                            <button type="submit" class="btn btn-sm">찾기</button>
+                                        </form>
+
+                                        <div th:if="${#lists.isEmpty(mates)}"
+                                             class="text-sm text-base-content/60 py-3">
+                                            고를 수 있는 반대쪽 품목이 없습니다. 이미 다 이었거나 짝 없음으로 두었습니다.
+                                        </div>
+
+                                        <table th:unless="${#lists.isEmpty(mates)}" class="table table-sm">
+                                            <tbody>
+                                            <tr th:each="m : ${mates}">
+                                                <td>
+                                                    <div class="text-sm" th:text="${m.displayName()}">품명</div>
+                                                    <div class="font-mono text-xs text-base-content/60"
+                                                         th:text="${m.itemRef}">코드</div>
+                                                </td>
+                                                <td class="text-right tabular-nums text-sm"
+                                                    th:text="${m.quantityText()}">0</td>
+                                                <!--/* 고르면 그 자리에서 이어진다. 미리보기 화면을 한
+                                                       단계 더 두지 않는 이유는, 왼쪽 품목·수량과
+                                                       후보·수량이 이미 같은 자리에 있기 때문이다. */-->
+                                                <td class="text-right w-28">
+                                                    <form th:action="@{/reconcile/units/pair}" method="post">
+                                                        <input type="hidden" name="rowKey" th:value="${row.key}">
+                                                        <input type="hidden" name="mate" th:value="${m.token()}">
+                                                        <input type="hidden" name="definitionId" th:value="${definition.id}">
+                                                        <input type="hidden" name="tab" th:value="${tab.name()}">
+                                                        <input type="hidden" name="q" th:value="${q}">
+                                                        <input type="hidden" name="page" th:value="${board.page}">
+                                                        <button type="submit" class="btn btn-sm">이 둘 잇기</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </th:block>
                             </tbody>
                         </table>
                     </div>
-
-                    <div class="flex flex-wrap items-end gap-2 mt-3">
-                        <!--/* 계수를 고치면 «대조에 더할 수량» 이 달라진다. 누르기 전에 그
-                               숫자를 볼 수 있어야 잘못 넣은 것을 알아챈다. */-->
-                        <button type="submit" class="btn btn-sm btn-outline">수량 다시 계산</button>
-                        <label class="form-control">
-                            <span class="label-text text-xs">부를 이름</span>
-                            <input type="text" name="newName" th:value="${form.newName}"
-                                   th:placeholder="${picked[0].item.displayName()}"
-                                   class="input input-bordered input-sm w-64">
-                        </label>
-                        <!--/* 이미 어느 물건에 속한 것이 섞이면 «합치기» 다. 버튼이 그 사실을
-                               말해야 새로 만드는 줄 알고 눌렀다가 남의 물건에 붙지 않는다. */-->
-                        <button type="submit" formaction="/reconcile/units/link"
-                                class="btn btn-primary btn-sm"
-                                th:text="${#lists.isEmpty(mergeInto)}
-                                         ? '이대로 잇기 — 바로 대조에 들어갑니다'
-                                         : '「' + ${mergeInto[0]} + '」 에 더 담기'">이대로 잇기</button>
-                    </div>
-                </div>
-
-                <p th:if="${#lists.isEmpty(picked)}" class="text-sm text-base-content/60">
-                    아래 양쪽 목록에서 같은 물건을 하나씩 골라 담으세요. 담은 것은 검색하거나
-                    쪽을 넘겨도 그대로 있습니다.
-                </p>
-
-                <!--/* 좌·우 목록 */-->
-                <div class="grid gap-4 lg:grid-cols-2">
-                    <div th:each="side : ${ {'L','R'} }">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="font-medium text-sm"
-                                  th:text="${side == 'L'} ? ${definition.leftSource} : ${definition.rightSource}">원천</span>
-                            <span class="text-xs text-base-content/60"
-                                  th:text="'총 ' + (${side == 'L'} ? ${leftTotal} : ${rightTotal}) + '건'">0건</span>
-                        </div>
-                        <div class="flex gap-1 mb-2">
-                            <input type="text" class="input input-bordered input-sm grow"
-                                   th:name="${side == 'L'} ? 'lq' : 'rq'"
-                                   th:value="${side == 'L'} ? ${form.lq} : ${form.rq}"
-                                   placeholder="품목코드나 품명으로 찾기">
-                            <button type="submit" class="btn btn-sm">찾기</button>
-                        </div>
-                        <div class="overflow-x-auto rounded border border-base-300">
-                            <table class="table table-sm">
-                                <tbody>
-                                <tr th:each="i : ${side == 'L'} ? ${leftItems} : ${rightItems}">
-                                    <td>
-                                        <div th:text="${i.displayName()}">품명</div>
-                                        <div class="font-mono text-xs text-base-content/60"
-                                             th:text="${i.itemRef}">코드</div>
-                                        <div th:if="${i.linked()}" class="text-xs text-base-content/60"
-                                             th:text="'「' + ${i.unitName} + '」'">물건</div>
-                                    </td>
-                                    <td class="text-right tabular-nums text-sm" th:text="${i.quantity}">0</td>
-                                    <td class="w-16">
-                                        <button type="submit" name="add" class="btn btn-outline btn-xs"
-                                                th:value="${i.source} + '|' + ${i.itemRef}">담기</button>
-                                    </td>
-                                </tr>
-                                <tr th:if="${#lists.isEmpty(side == 'L' ? leftItems : rightItems)}">
-                                    <td class="text-center text-sm text-base-content/60 py-6">
-                                        찾는 조건에 맞는 품목이 없습니다.
-                                    </td>
-                                </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <!--/* 쪽 넘김도 같은 폼의 제출이라 담은 것이 유지된다. */-->
-                        <div class="flex items-center justify-between mt-2">
-                            <button type="submit" class="btn btn-ghost btn-xs"
-                                    th:name="${side == 'L'} ? 'lp' : 'rp'"
-                                    th:value="${side == 'L'} ? ${form.lp - 1} : ${form.rp - 1}"
-                                    th:disabled="${side == 'L'} ? ${form.lp <= 0} : ${form.rp <= 0}">← 이전</button>
-                            <span class="text-xs text-base-content/60"
-                                  th:text="((${side == 'L'} ? ${form.lp} : ${form.rp}) + 1) + '쪽'">1쪽</span>
-                            <button type="submit" class="btn btn-ghost btn-xs"
-                                    th:name="${side == 'L'} ? 'lp' : 'rp'"
-                                    th:value="${side == 'L'} ? ${form.lp + 1} : ${form.rp + 1}"
-                                    th:disabled="${side == 'L'}
-                                        ? ${(form.lp + 1) * pageSize >= leftTotal}
-                                        : ${(form.rp + 1) * pageSize >= rightTotal}">다음 →</button>
-                        </div>
-                    </div>
                 </div>
             </div>
-        </form>
-    </section>
 
-    <section>
-        <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-base font-semibold">정해 둔 품목</h2>
-            <span class="text-xs text-base-content/60">
-                <b th:text="${#lists.size(units)}">0</b>개
-            </span>
-            <div class="flex-1 h-px bg-base-300"></div>
-        </div>
+            <!--/* 여러 줄을 한꺼번에. 품목이 수십 개일 때 한 줄씩 스무 번 누르는 것과 고르고
+                   한 번 누르는 것은 다른 일이다.
 
-        <div th:if="${#lists.isEmpty(units)}" class="card bg-base-100 shadow-sm">
-            <div class="card-body items-center text-center py-12">
-                <p class="text-base-content/70">아직 정한 것이 없습니다.</p>
-                <p class="text-sm text-base-content/60">위에서 이을 만한 것을 묶어 보세요.</p>
+                   폼이 표 «밖» 에 있고 체크상자가 form 속성으로 이 폼을 가리킨다 — 폼은 폼
+                   안에 못 들어가는데, 줄 안에 짝 찾기 폼이 있어야 하기 때문이다. */-->
+            <form id="bulk" th:action="@{/reconcile/units/link}" method="post"
+                  th:unless="${#lists.isEmpty(board.rows)}"
+                  class="flex flex-wrap items-center gap-2 mt-3">
+                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                <input type="hidden" name="tab" th:value="${tab.name()}">
+                <input type="hidden" name="q" th:value="${q}">
+                <input type="hidden" name="page" th:value="${board.page}">
+
+                <span class="text-sm text-base-content/60">고른 줄에 대해</span>
+
+                <!--/* 이을 줄이 있는 갈래에서만 이 버튼이 화면의 주 동작이다(11-UI-RULES N2).
+                       남은 일이 0이면 이 갈래에 줄이 없어 위 「대조 돌리기」 와 겹치지 않는다. */-->
+                <button th:if="${tab.name() == 'TODO' or tab.name() == 'PAIRED'}"
+                        type="submit" class="btn btn-primary btn-sm">고른 것 잇기</button>
+
+                <th:block th:if="${tab.name() != 'LINKED' and tab.name() != 'SET_ASIDE'}">
+                    <select name="reason" class="select select-bordered select-sm">
+                        <option th:each="r : ${reasons}" th:value="${r.name()}"
+                                th:text="${r.label}">이유</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm"
+                            th:formaction="@{/reconcile/units/set-aside}">짝 없음으로 두기</button>
+                </th:block>
+
+                <button th:if="${tab.name() == 'SET_ASIDE'}" type="submit" class="btn btn-sm"
+                        th:formaction="@{/reconcile/units/restore}">할 일로 되돌리기</button>
+            </form>
+
+            <!--/* 쪽 넘김. 링크라 뒤로 가기가 통하고 주소에 남는다. */-->
+            <div th:unless="${#lists.isEmpty(board.rows)}"
+                 class="flex items-center justify-between mt-3">
+                <a th:if="${board.hasPrev()}"
+                   th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page - 1})} + '#board'"
+                   class="btn btn-ghost btn-sm">← 이전</a>
+                <span th:unless="${board.hasPrev()}"></span>
+                <span class="text-xs text-base-content/60 tabular-nums"
+                      th:text="${board.totalRows} + '건 중 ' + (${board.page} + 1) + ' / ' + ${board.pageCount()} + '쪽'">1쪽</span>
+                <a th:if="${board.hasNext()}"
+                   th:href="@{/reconcile/units(definitionId=${definition.id},tab=${tab.name()},q=${q},page=${board.page + 1})} + '#board'"
+                   class="btn btn-ghost btn-sm">다음 →</a>
+                <span th:unless="${board.hasNext()}"></span>
             </div>
-        </div>
-
-        <div th:unless="${#lists.isEmpty(units)}" class="card bg-base-100 shadow-sm">
-            <div class="card-body p-0">
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                        <tr class="text-xs">
-                            <th>코드</th>
-                            <th>이름</th>
-                            <th>세는 단위</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="u : ${units}">
-                            <td class="font-mono text-xs" th:text="${u.code}">코드</td>
-                            <td class="font-medium" th:text="${u.name}">이름</td>
-                            <td class="text-sm text-base-content/60" th:text="${u.baseUnit}">EA</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
+    </th:block>
 
 </div>
 </body>

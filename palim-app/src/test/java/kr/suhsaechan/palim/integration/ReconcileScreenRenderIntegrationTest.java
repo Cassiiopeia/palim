@@ -159,25 +159,46 @@ class ReconcileScreenRenderIntegrationTest extends IntegrationTest {
     }
 
     /**
-     * 확인 전과 후를 «분명히» 갈라야 한다. 제안 상태를 확정처럼 보이게 하면 아무도 확인하지
-     * 않고, 그러면 확인 단계를 둔 의미가 없어진다.
+     * 품목 잇기 화면이 <b>한 줄에 좌·우와 차이를</b> 놓는가.
+     *
+     * <p>예전 화면은 좌·우를 한 칸에 세로로 쌓아 무엇이 무엇과 짝인지 볼 수 없었고, 잇기 전에
+     * 양쪽 수량을 견줄 수도 없었다. 대조를 하러 온 사람에게 대조할 수 없는 화면을 준 것이다.
+     *
+     * <p>아직 확인하지 않은 물건은 그 사실이 보여야 한다 — 확인 안 된 것이 확인된 것처럼
+     * 보이면 아무도 확인하지 않는다.
      */
     @Test
     @WithMockUser
-    @DisplayName("품목 잇기 화면이 확인 대기와 정해 둔 것을 갈라 보여준다")
+    @DisplayName("품목 잇기 화면이 좌·우와 차이를 한 줄에 놓고, 확인 대기를 드러낸다")
     void 품목_잇기_화면이_그려진다() throws Exception {
+        String erpItem = "E-" + UUID.randomUUID().toString().substring(0, 6);
+        String wmsItem = "W-" + UUID.randomUUID().toString().substring(0, 6);
+        snapshot(erp, erpItem, "120");
+        snapshot(wms, wmsItem, "100");
+
+        ReconcileDefinition definition = definitions.save(ReconcileDefinition.of(TENANT,
+                "DEF-" + UUID.randomUUID().toString().substring(0, 8), "전산 대 물류",
+                erp, wms, "base_quantity", BigDecimal.ZERO, null));
+
         ReconcileUnit unit = unitService.create(
                 "UNIT-" + UUID.randomUUID().toString().substring(0, 8), "제품B 100g", "EA");
-        // 제안만 하고 확정하지 않는다 — 화면이 이것을 «확인해 주세요» 로 보여줘야 한다.
-        unitService.propose(unit.getId(), erp, "E-PENDING", BigDecimal.ONE);
+        // 확인하지 않은 채로 둔다 — 화면이 이것을 «확인 대기» 로 드러내야 한다.
+        unitService.propose(unit.getId(), erp, erpItem, BigDecimal.ONE);
+        unitService.propose(unit.getId(), wms, wmsItem, BigDecimal.ONE);
 
-        mockMvc.perform(get("/reconcile/units"))
+        mockMvc.perform(get("/reconcile/units")
+                        .param("definitionId", definition.getId().toString())
+                        .param("tab", "LINKED"))
                 .andExpect(status().isOk())
                 .andExpect(RenderAssertions.fullyRendered())
-                .andExpect(content().string(containsString("확인해 주세요")))
-                .andExpect(content().string(containsString("정해 둔 품목")))
-                // 틀린 채로 두면 어떻게 되는지 말해 줘야 사람이 실제로 확인한다
-                .andExpect(content().string(containsString("엉뚱한 재고를 합쳐")));
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(content().string(containsString("품목 대조표")))
+                .andExpect(content().string(containsString("제품B 100g")))
+                // 차이가 그 줄에 있어야 사람이 잇기 전에 판단한다
+                .andExpect(content().string(containsString("+20")))
+                .andExpect(content().string(containsString("확인 대기")))
+                // 되돌릴 길이 없으면 잘못 이은 것이 영영 남는다
+                .andExpect(content().string(containsString("풀기")));
     }
 
     /**

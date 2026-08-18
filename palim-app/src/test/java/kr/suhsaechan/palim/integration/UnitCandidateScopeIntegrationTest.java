@@ -81,7 +81,7 @@ class UnitCandidateScopeIntegrationTest extends IntegrationTest {
                 // 하나뿐이어도 «어디에서 찾았는지» 는 밝힌다 — 나중에 늘어날 때 화면이
                 // 말없이 달라지지 않게
                 .andExpect(content().string(Matchers.containsString(first.getLeftSource())))
-                .andExpect(content().string(Matchers.containsString("에서 찾았습니다")));
+                .andExpect(content().string(Matchers.containsString("에 적힌 두 곳을 봅니다")));
     }
 
     /**
@@ -115,9 +115,9 @@ class UnitCandidateScopeIntegrationTest extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(RenderAssertions.fullyRendered())
                 .andExpect(content().string(Matchers.containsString(second.getLeftSource())))
-                .andExpect(content().string(Matchers.containsString("에서 찾았습니다")))
+                .andExpect(content().string(Matchers.containsString("에 적힌 두 곳을 봅니다")))
                 // 되돌아갈 길이 있어야 막다른 길이 아니다
-                .andExpect(content().string(Matchers.containsString("다른 대조에서 찾기")));
+                .andExpect(content().string(Matchers.containsString("다른 대조 보기")));
     }
 
     /**

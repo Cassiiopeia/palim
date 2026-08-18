@@ -81,4 +81,9 @@ public class NormalizationRule extends BaseTimeEntity {
     public void deactivate() {
         this.isActive = false;
     }
+
+    /** 다시 켠다. 껐다 켜 보며 매칭 개수가 어떻게 변하는지 확인하는 것이 흔한 작업이다. */
+    public void activate() {
+        this.isActive = true;
+    }
 }

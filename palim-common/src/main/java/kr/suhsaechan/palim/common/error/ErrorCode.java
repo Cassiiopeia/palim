@@ -382,7 +382,29 @@ public enum ErrorCode {
      * <p>그것은 「두 물건을 합치는」 일이다. 어느 이름을 남길지·수량을 어떻게 볼지가 사람의
      * 판단이라 조용히 정해 버리면 안 된다.
      */
-    RECONCILE_LINK_TWO_UNITS("R004", HttpStatus.CONFLICT, LogLevel.DEBUG);
+    RECONCILE_LINK_TWO_UNITS("R004", HttpStatus.CONFLICT, LogLevel.DEBUG),
+
+    /**
+     * 한쪽에만 있는 줄을 그대로 이으려 했다.
+     *
+     * <p>막는 이유가 있다. 한쪽 품목만 든 물건은 합산이 「좌 120 · 우 0」 이 되어 <b>대조가
+     * 매일 전량 차이를 올린다.</b> 사람은 그것을 매칭 문제가 아니라 재고 사고로 읽고, 원인이
+     * 여기 있다는 것을 알 방법이 없다.
+     *
+     * <p>짝이 정말 없는 품목은 「짝 없음으로 두기」 가 제 자리다.
+     */
+    RECONCILE_LINK_ONE_SIDED("R005", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /** 정규식이 잘못됐다. 저장하면 그 규칙이 조용히 건너뛰어져 매칭이 이유 없이 줄어든다. */
+    NORMALIZATION_RULE_INVALID("R006", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /**
+     * 미리보기가 제한 시간을 넘겼다.
+     *
+     * <p>사람이 정규식을 직접 넣는 화면이라 <b>되돌아가는 패턴</b>이 들어올 수 있다.
+     * {@code (a+)+$} 같은 것 하나로 요청 스레드가 영원히 돌 수 있으므로 시간을 끊는다.
+     */
+    NORMALIZATION_PREVIEW_TIMEOUT("R007", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;
