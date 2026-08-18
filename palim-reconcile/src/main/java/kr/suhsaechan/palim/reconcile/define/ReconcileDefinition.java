@@ -83,6 +83,10 @@ public class ReconcileDefinition extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean isActive;
 
+    /** 합계를 뜯어볼 기준. 「NAME」·「NONE」·「FIELD:칸이름」. 기본은 품명이 닮은 것끼리. */
+    @Column(nullable = false, length = 100)
+    private String breakdownAxis = "NAME";
+
     private ReconcileDefinition(UUID tenantId, String code, String name, String leftSource,
                                 String rightSource, String compareField, BigDecimal tolerance,
                                 BigDecimal alertThreshold) {
@@ -124,6 +128,18 @@ public class ReconcileDefinition extends BaseTimeEntity {
     /** 예전에 만든 정의는 이 값이 비어 있을 수 있다 — 그때의 동작인 하루로 본다. */
     public BaseAtGranularity granularityOrDay() {
         return baseAtGranularity == null ? BaseAtGranularity.DAY : baseAtGranularity;
+    }
+
+    /**
+     * 합계를 무엇을 기준으로 뜯어볼지.
+     *
+     * <p>자료 구조가 회사마다 다르므로 기준도 다르다 — 로트가 품명에 섞여 오는 곳, 별도 칸으로
+     * 오는 곳, 창고별로 봐야 하는 곳. 코드에 박아 두면 그런 곳에서는 고칠 방법이 없다
+     * (07-DECISIONS 040).
+     */
+    public void changeBreakdownAxis(String breakdownAxis) {
+        this.breakdownAxis = breakdownAxis == null || breakdownAxis.isBlank()
+                ? "NAME" : breakdownAxis;
     }
 
     public void deactivate() {

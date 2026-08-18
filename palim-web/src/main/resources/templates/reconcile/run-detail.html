@@ -228,16 +228,51 @@
 <!--/* 뜯어본 내역 — 「지금 볼 것」 과 「지켜볼 것」 이 같은 모양을 쓴다. 두 벌로 두면 한쪽만
        고쳐져 같은 사실이 화면마다 다르게 보인다. */-->
 <div th:fragment="breakdown" th:remove="tag">
+                <!--/* 무엇을 기준으로 뜯어볼지. 자료 구조가 회사마다 다르므로 기준도 다르다 —
+                       로트가 품명에 섞여 오는 곳, 별도 칸으로 오는 곳, 창고별로 봐야 하는 곳.
+                       고를 수 있는 값은 표준 모델의 «칸 목록» 에서 나오므로, 칸이 늘면 고를 것도
+                       저절로 는다 — 새 기준을 넣으려고 화면을 고칠 일이 없다. */-->
+                <form th:action="@{/reconcile/runs/{id}(id=${run.id})}" method="get"
+                      class="flex flex-wrap items-center gap-2 mb-3">
+                    <input type="hidden" name="expand" th:value="${expandUnitId}">
+                    <span class="text-sm font-medium">뜯어보기 기준</span>
+                    <select name="axis" class="select select-bordered select-sm">
+                        <option th:each="a : ${axes}" th:value="${a.token()}"
+                                th:selected="${a.token() == axis.token()}"
+                                th:text="${a.label}">기준</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm">이 기준으로 보기</button>
+                    <!--/* 즉석으로 바꿔 보는 것과 「우리는 늘 이 기준으로 본다」 는 다른 이야기다.
+                           매번 골라야 하면 결국 기본값만 쓰게 된다. */-->
+                    <button type="submit" class="btn btn-ghost btn-sm"
+                            th:formaction="@{/reconcile/{id}/breakdown-axis(id=${definition.id},runId=${run.id},expand=${expandUnitId})}"
+                            formmethod="post">이 기준을 기본으로</button>
+                </form>
+
+                <!--/* 고른 기준이 이 자료에 없다. 조용히 「전부 짝 없음」 을 보여주면 사람은 자료가
+                       잘못된 줄 알지, 기준을 잘못 골랐다고는 생각하지 못한다. */-->
+                <div th:if="${breakdown.axisUnusable()}" class="alert alert-warning mb-2" role="alert">
+                    <span class="text-sm">
+                        <span th:if="${breakdown.leftAxisMissing}" th:text="${definition.leftSource}">좌</span>
+                        <span th:if="${breakdown.leftAxisMissing and breakdown.rightAxisMissing}">·</span>
+                        <span th:if="${breakdown.rightAxisMissing}" th:text="${definition.rightSource}">우</span>
+                        쪽에 이 칸의 값이 없어 이 기준으로는 짝을 지을 수 없습니다. 다른 기준을 골라 보세요.
+                    </span>
+                </div>
+
                 <div class="flex flex-wrap items-baseline gap-3 mb-2">
                     <span class="text-sm font-medium">품목별로 뜯어보기</span>
-                    <span class="text-xs text-base-content/60"
+                    <span th:if="${breakdown.axis.pairs()}" class="text-xs text-base-content/60"
                           th:text="'짝 지은 것 중 ' + ${breakdown.differing()} + '건이 어긋납니다'">
                         0건 어긋남
                     </span>
-                    <span th:if="${breakdown.orphans() > 0}"
+                    <span th:if="${breakdown.axis.pairs() and breakdown.orphans() > 0}"
                           class="badge badge-warning badge-sm"
                           th:text="'짝 없는 품목 ' + ${breakdown.orphans()} + '건'">
                         짝 없음
+                    </span>
+                    <span th:unless="${breakdown.axis.pairs()}" class="text-xs text-base-content/60">
+                        짝짓지 않고 양쪽을 그대로 늘어놓았습니다
                     </span>
                 </div>
 
@@ -289,16 +324,21 @@
                                       class="text-base-content/40">—</span>
                             </td>
                             <td class="text-right align-top whitespace-nowrap">
+                                <!--/* 이 줄이 «어떤 값으로» 묶였는지. 기준이 칸일 때만 뜻이 있다. */-->
+                                <div th:if="${breakdown.axis.kind.name() == 'FIELD' and not #strings.isEmpty(line.axisKey())}"
+                                     class="text-xs text-base-content/60 mb-0.5"
+                                     th:text="${line.axisKey()}">묶인 값</div>
                                 <span th:if="${line.paired()}"
                                       class="tabular-nums text-sm"
                                       th:classappend="${line.hasDiff()} ? 'text-warning font-medium' : 'text-base-content/40'"
                                       th:text="${line.diffText()}">0</span>
-                                <!--/* 한쪽에만 있는 품목. 잘못 이어 둔 것을
-                                       찾는 자리가 바로 여기다. */-->
-                                <span th:unless="${line.paired()}"
-                                      class="badge badge-warning badge-sm">
+                                <!--/* 한쪽에만 있는 품목. 잘못 이어 둔 것을 찾는 자리가 바로 여기다.
+                                       짝짓지 않기로 한 기준에서는 경고가 아니다 — 원래 안 맺는 것이다. */-->
+                                <span th:unless="${line.paired()}" class="badge badge-sm"
+                                      th:classappend="${breakdown.axis.pairs()} ? 'badge-warning' : 'badge-ghost'">
                                     <span th:text="${line.orphanSource()}">어디</span>
-                                    에만 있음
+                                    <span th:if="${breakdown.axis.pairs()}">에만 있음</span>
+                                    <span th:unless="${breakdown.axis.pairs()}">쪽</span>
                                 </span>
                             </td>
                         </tr>
