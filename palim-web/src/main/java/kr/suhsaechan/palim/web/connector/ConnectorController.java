@@ -1,6 +1,7 @@
 package kr.suhsaechan.palim.web.connector;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +30,7 @@ import kr.suhsaechan.palim.connector.source.SourceSchema;
 import kr.suhsaechan.palim.connector.transform.TransformType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -329,7 +331,9 @@ public class ConnectorController {
                 forms);
         // 파일 길을 맞추는 중이면 그 파일로 시험 실행해야 한다 — API 로 돌리면 방금 맞춘 칸이
         // 아니라 다른 칸으로 도는 셈이라 결과를 믿을 수 없다.
-        return run(id, file, headerRow, RunMode.TEST, false, redirect);
+        // 시험 실행은 스테이징에만 닿으므로 기준일을 물어보지 않는다 — 여기서 정하는 것은
+        // «칸이 맞는가» 뿐이고, 날짜는 실제로 담을 때 고른다.
+        return run(id, file, headerRow, RunMode.TEST, false, null, redirect);
     }
 
     /**
@@ -344,6 +348,11 @@ public class ConnectorController {
                       @RequestParam(defaultValue = "1") int headerRow,
                       @RequestParam RunMode mode,
                       @RequestParam(defaultValue = "false") boolean skipPostScripts,
+                      // 파일로 대신 채울 때 «며칟날» 기준인지. 비우면 오늘로 본다.
+                      // 이 값이 없으면 어제 받아 온 표가 오늘 자료인 척 담기고, 대조는
+                      // 없는 차이를 있다고 말한다.
+                      @RequestParam(required = false)
+                      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate baseDate,
                       RedirectAttributes redirect) {
         Path temp = null;
         try {
@@ -353,7 +362,7 @@ public class ConnectorController {
                 temp = adminService.saveTemporary(file);
             }
             ConnectorRun run = runner.run(new RunRequest(id, mode, RunTrigger.MANUAL, temp,
-                    headerRow, skipPostScripts));
+                    headerRow, skipPostScripts, baseDate));
 
             redirect.addFlashAttribute("flashSuccess",
                     "%s 실행 완료 — 총 %d건 중 성공 %d건, 실패 %d건".formatted(
@@ -407,16 +416,6 @@ public class ConnectorController {
         return "redirect:/connectors/" + id;
     }
 
-    /** 프리셋이 아는 기본 안내를 지금 넣는다. 연결을 저장하기 전에 만든 연동은 비어 있다. */
-    @PostMapping("/connectors/{id}/file-guide/seed")
-    public String seedFileGuide(@PathVariable UUID id, RedirectAttributes redirect) {
-        String guide = adminService.seedFileGuide(id);
-        redirect.addFlashAttribute(guide.isBlank() ? "flashError" : "flashSuccess",
-                guide.isBlank()
-                        ? "넣을 기본 안내가 없습니다. 직접 적어 주세요."
-                        : "기본 안내를 넣었습니다. 실제 메뉴 이름을 확인해 고쳐 두세요.");
-        return "redirect:/connectors/" + id;
-    }
 
     @PostMapping("/connectors/{id}/file-guide")
     public String changeFileGuide(@PathVariable UUID id,

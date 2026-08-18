@@ -1,5 +1,7 @@
 package kr.suhsaechan.palim.web.connector;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +36,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequiredArgsConstructor
 public class ConnectorDetailController {
 
+    /** 기준일은 «업무 기준» 으로 본다. 서버가 어느 시간대에 있든 사장님의 오늘이 오늘이다. */
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+
     private final ConnectorRepository connectorRepository;
     private final ConnectorAdminService adminService;
     private final ConnectorQueryService queryService;
@@ -58,9 +63,13 @@ public class ConnectorDetailController {
                 active.map(ConnectorMapping::getVersion).orElse(null),
                 runs.isEmpty() ? null : runs.get(0),
                 // 파일 길의 칸이 없으면 올려도 전 행이 실패한다. 올리기 «전에» 말해야 한다.
-                adminService.activeFieldCount(id, Intake.FILE)));
+                adminService.activeFieldCount(id, Intake.FILE),
+                // 안내는 «항상» 있어야 한다 — 버튼을 눌러야 생기는 안내는 급할 때 비어 있다.
+                adminService.fileGuideOf(connector)));
         // 고를 수 있는 눈금은 «코드가» 안다. 화면이 enum 을 직접 부르면 그 판단이 템플릿으로 샌다.
         model.addAttribute("granularities", BaseAtGranularity.values());
+        // 파일 올리기의 기준일 기본값. 화면이 «오늘» 을 스스로 계산하면 서버 시간대와 어긋난다.
+        model.addAttribute("today", LocalDate.now(BUSINESS_ZONE));
         return "connector/detail";
     }
 

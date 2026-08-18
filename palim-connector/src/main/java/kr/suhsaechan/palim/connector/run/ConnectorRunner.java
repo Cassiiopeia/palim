@@ -149,7 +149,7 @@ public class ConnectorRunner {
         RecordWriter writer = writerSelector.of(run.getRunMode());
         log.debug("적재기 선택 — 실행id={} 모드={} 적재기={}",
                 run.getId(), run.getRunMode(), writer.getClass().getSimpleName());
-        Map<String, Object> systemValues = systemValues(connector);
+        Map<String, Object> systemValues = systemValues(connector, request);
         log.debug("시스템이 채우는 값 — 실행id={} {}", run.getId(), systemValues);
 
         List<MappedRow> buffer = new ArrayList<>(CHUNK_SIZE);
@@ -268,11 +268,11 @@ public class ConnectorRunner {
      * 같은 날 다시 수집하면 덮어쓰는데, 그것이 맞다 — 나중 답이 그 사이 입출고까지 반영한
      * 더 정확한 값이다.
      */
-    private Map<String, Object> systemValues(Connector connector) {
+    private Map<String, Object> systemValues(Connector connector, RunRequest request) {
         Map<String, Object> values = new LinkedHashMap<>();
         // 대조 정의가 원천을 이 이름으로 가리킨다. 커넥터 코드가 곧 «어디서 온 자료인지» 다.
         values.put("source", connector.getCode());
-        values.put("base_at", baseInstant(connector));
+        values.put("base_at", baseInstant(connector, request));
         values.put("collected_at", Instant.now());
         return values;
     }
@@ -283,8 +283,16 @@ public class ConnectorRunner {
      * <p>기준일이 정해져 있지 않으면 오늘이다 — 매일 도는 수집은 「오늘 재고」를 받는 것이
      * 정상이다. 형식이 깨져 있어도 <b>수집 전체를 멈추지 않는다.</b> 이 값 하나 때문에 그날
      * 자료를 통째로 못 받는 것보다, 오늘로 보고 받아 두는 편이 낫다.
+     *
+     * <p><b>사람이 고른 기준일이 가장 세다.</b> 자동 수집은 지금 물어보니 오늘 것이 맞지만,
+     * 사람이 받아 올리는 파일은 어제 것일 수 있다 — 자동 수집이 어제 멈췄다면 어제 기준으로
+     * 받는 것이 정상이다. 그때 오늘로 담으면 <b>어제 재고가 오늘 재고인 척</b> 들어가고,
+     * 대조는 없는 차이를 있다고 말한다. 사람은 그것이 날짜 탓인 줄 모르고 창고를 뒤진다.
      */
-    private Instant baseInstant(Connector connector) {
+    private Instant baseInstant(Connector connector, RunRequest request) {
+        if (request.baseDate() != null) {
+            return request.baseDate().atStartOfDay(BUSINESS_ZONE).toInstant();
+        }
         Map<String, Object> config = connector.getSourceConfig();
         Object raw = config == null ? null : config.get("baseDate");
         String text = raw == null ? null : String.valueOf(raw).trim();

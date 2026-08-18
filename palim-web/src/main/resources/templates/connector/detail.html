@@ -166,47 +166,59 @@
 
                 <div class="rounded border border-base-300 p-3 mb-3">
                     <div class="text-sm font-medium mb-1">어디서 받나</div>
-                    <!--/* 안내는 연결을 저장할 때 심는다. 그 전에 만든 연동은 비어 있으므로
-                           지금 넣을 길을 준다 — 오래 쓴 연동일수록 비어 있는 셈이다. */-->
-                    <div th:if="${#strings.isEmpty(view.fileGuide)}"
-                         class="flex flex-wrap items-center gap-2">
-                        <p class="text-sm text-base-content/60">
-                            받는 방법을 적어 두면 급할 때 찾아다니지 않습니다.
-                        </p>
-                        <form th:action="@{/connectors/{id}/file-guide/seed(id=${view.id})}"
-                              method="post">
-                            <button type="submit" class="btn btn-sm">기본 안내 넣기</button>
-                        </form>
-                    </div>
-                    <pre th:unless="${#strings.isEmpty(view.fileGuide)}"
-                         class="text-sm whitespace-pre-wrap font-sans"
+                    <!--/* 안내는 «항상» 있다. 사람이 고쳐 둔 것이 있으면 그것, 없으면 프리셋이
+                           아는 실제 경로다 — 단추를 눌러야 생기는 안내는 급할 때 비어 있다. */-->
+                    <pre class="text-sm whitespace-pre-wrap font-sans leading-relaxed"
                          th:text="${view.fileGuide}">안내</pre>
-                    <!--/* 코드에 적어 두면 상대가 메뉴를 바꾼 날 거짓말이 된다. 물어보면 바뀐
-                           뒤에도 다시 물어 맞출 수 있다. 계정은 서버 밖으로 나가지 않는다. */-->
-                    <form th:action="@{/connectors/{id}/file-guide/probe(id=${view.id})}"
-                          method="post" class="mt-2">
-                        <button type="submit" class="btn btn-sm">지금 로그인해서 메뉴 경로 찾기</button>
-                        <span class="text-sm text-base-content/60 ml-2">
-                            수집이 쓰는 계정으로 들어가 메뉴 이름만 읽어 옵니다
-                        </span>
-                    </form>
 
-                    <form th:action="@{/connectors/{id}/file-guide(id=${view.id})}" method="post"
-                          class="flex flex-wrap items-end gap-2 mt-2">
-                        <label class="form-control grow">
-                            <span class="label-text text-xs">받는 방법 고치기 — 상대 사이트는 언젠가 바뀝니다</span>
-                            <textarea name="guide" rows="4"
-                                      class="textarea textarea-bordered textarea-sm w-full"
-                                      th:text="${view.fileGuide}"></textarea>
-                        </label>
-                        <button type="submit" class="btn btn-sm">안내 저장</button>
-                    </form>
+                    <!--/* 메뉴 «이름» 은 상대가 바꾼다. 코드에 박아 두면 그날 거짓말이 되므로,
+                           화면을 읽어 올 수 있는 연동은 상대에게 직접 물어 이 자리를 갱신한다.
+                           계정은 서버 밖으로 나가지 않는다. */-->
+                    <div class="flex flex-wrap items-center gap-2 mt-3">
+                        <form th:action="@{/connectors/{id}/file-guide/probe(id=${view.id})}"
+                              method="post">
+                            <button type="submit" class="btn btn-sm">메뉴 경로 확인</button>
+                        </form>
+                        <span class="text-sm text-base-content/60">
+                            수집이 쓰는 계정으로 들어가 그 계정에 실제로 보이는 메뉴 이름을 읽어 옵니다
+                        </span>
+                    </div>
+
+                    <!--/* 고치기는 접어 둔다. 여는 사람은 「메뉴가 바뀌었다」 를 이미 아는
+                           사람이고, 그렇지 않은 사람에게는 빈 칸이 숙제로 보인다. */-->
+                    <details class="mt-2">
+                        <summary class="text-sm cursor-pointer text-base-content/60">
+                            메뉴가 바뀌었나요? — 안내 직접 고치기
+                        </summary>
+                        <form th:action="@{/connectors/{id}/file-guide(id=${view.id})}" method="post"
+                              class="flex flex-wrap items-end gap-2 mt-2">
+                            <label class="form-control grow">
+                                <textarea name="guide" rows="6"
+                                          class="textarea textarea-bordered textarea-sm w-full"
+                                          th:text="${view.fileGuide}"></textarea>
+                            </label>
+                            <button type="submit" class="btn btn-sm">안내 저장</button>
+                        </form>
+                    </details>
                 </div>
 
-                <!--/* 칸을 안 맞춰 두면 올려도 전 행이 실패한다. 올리기 전에 말한다. */-->
-                <div th:if="${view.fileMappingFields == 0}" class="text-sm text-base-content/60 mb-2">
-                    파일용 칸을 아직 안 맞췄습니다. 위 「파일용 칸 · 맞추러 가기」 에서 파일을
-                    한 번 올려 칸을 맞춘 뒤에 담을 수 있습니다.
+                <!--/* 칸을 안 맞춰 두면 올려도 전 행이 실패한다. 그런데 이건 «올리기 전에 알려
+                       주면» 되는 문제가 아니다 — 자동 수집이 멈춘 날에 처음 설정하게 되어 있으면
+                       그날 엑셀도 받고 칸도 맞춰야 한다. 우회로가 우회로가 아니다.
+                       그래서 미리 해 두라고 «지금» 말한다. */-->
+                <div th:if="${view.fileMappingFields == 0}" class="alert alert-warning mb-3"
+                     role="alert">
+                    <div class="text-sm">
+                        <div class="font-medium">아직 파일로 채울 준비가 안 됐습니다.</div>
+                        <div class="mt-1">
+                            자동 수집이 멈춘 날엔 엑셀을 받는 동시에 칸까지 맞출 시간이 없습니다.
+                            <b>지금 한 번 해 두세요</b> — 위 안내대로 엑셀을 한 번 받아
+                            「파일용 칸 · 맞추러 가기」 에서 올리면, 다음부터는 파일만 올리면 됩니다.
+                        </div>
+                    </div>
+                </div>
+                <div th:if="${view.fileMappingFields > 0}" class="text-sm text-success mb-2">
+                    파일로 채울 준비가 돼 있습니다 — 칸 <span th:text="${view.fileMappingFields}">0</span>개.
                 </div>
                 <form th:if="${view.fileMappingFields > 0}"
                       th:action="@{/connectors/{id}/run(id=${view.id})}" method="post"
@@ -222,7 +234,21 @@
                         <input type="number" name="headerRow" value="1" min="1"
                                class="input input-bordered input-sm w-20">
                     </label>
+                    <!--/* 며칟날 기준으로 «조회해서» 받은 표인가.
+                           자동 수집은 지금 물어보니 오늘 것이 맞지만, 사람이 받아 오는 파일은
+                           어제 것일 수 있다 — 자동 수집이 어제 멈췄다면 어제로 조회하는 것이
+                           정상이다. 이 칸이 없으면 그 표가 «오늘 자료인 척» 담기고, 대조는
+                           어제 재고와 오늘 재고를 견주어 없는 차이를 있다고 말한다. */-->
+                    <label class="form-control">
+                        <span class="label-text text-xs">며칟날 기준</span>
+                        <input type="date" name="baseDate" th:value="${today}"
+                               class="input input-bordered input-sm">
+                    </label>
                     <button type="submit" class="btn btn-sm">올려서 담기</button>
+                    <p class="basis-full text-sm text-base-content/60">
+                        엑셀을 받을 때 <b>조회한 날짜</b>를 그대로 고르세요. 다른 날짜로 담으면
+                        대조가 어제 재고와 오늘 재고를 견주어 «없는 차이» 를 말합니다.
+                    </p>
                 </form>
             </div>
 
