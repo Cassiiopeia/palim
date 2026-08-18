@@ -283,7 +283,13 @@
                         <table class="table table-sm">
                             <thead>
                             <tr class="text-xs">
-                                <th class="w-8"></th>
+                                <!--/* 열두 줄을 묶으려고 열두 번 누르게 두지 않는다. 화면 안에
+                                       코드를 넣을 수 없어(CSP) 「전체 고르기」 도 폼 제출이다 —
+                                       이 쪽에 보이는 줄을 전부 골라 다시 그린다. */-->
+                                <th class="w-8">
+                                    <button type="submit" form="selectAll"
+                                            class="btn btn-ghost btn-sm px-1" title="이 쪽 전부 고르기">☑</button>
+                                </th>
                                 <th>묶음</th>
                                 <th th:text="${definition.leftSource}">좌</th>
                                 <th th:text="${definition.rightSource}">우</th>
@@ -300,6 +306,7 @@
                                         <input type="checkbox" name="rows" form="bulk"
                                                class="checkbox checkbox-sm"
                                                th:value="${row.key}"
+                                               th:checked="${allSelected and row.kind.name() != 'LINKED'}"
                                                th:disabled="${row.kind.name() == 'LINKED'}">
                                     </td>
 
@@ -527,6 +534,16 @@
                                                 </td>
                                                 <td class="text-right tabular-nums text-sm"
                                                     th:text="${m.quantityText()}">0</td>
+                                                <!--/* 고르는 진짜 기준은 수량이 아니라 «묶으면
+                                                       차이가 얼마가 되는가» 다. 이게 없으면
+                                                       후보 열 개를 머리로 열 번 빼야 한다. */-->
+                                                <td class="text-right whitespace-nowrap">
+                                                    <div class="tabular-nums text-sm"
+                                                         th:with="mine=${row.left.isEmpty()} ? ${row.rightTotal()} : ${row.leftTotal()}"
+                                                         th:classappend="${m.differsFrom(mine)} ? 'text-warning font-medium' : 'text-base-content/60'"
+                                                         th:text="${m.diffTextAgainst(mine)}">맞음</div>
+                                                    <div class="text-xs text-base-content/40">묶으면 차이</div>
+                                                </td>
                                                 <!--/* 고르면 그 자리에서 이어진다. 미리보기 화면을 한
                                                        단계 더 두지 않는 이유는, 왼쪽 품목·수량과
                                                        후보·수량이 이미 같은 자리에 있기 때문이다. */-->
@@ -567,6 +584,8 @@
                 <input type="hidden" name="page" th:value="${board.page}">
 
                 <span class="text-sm text-base-content/60">고른 줄에 대해</span>
+                <span th:if="${allSelected}" class="badge badge-ghost badge-sm"
+                      th:text="'이 쪽 ' + ${#lists.size(board.rows)} + '줄 전부 고름'">전부 고름</span>
 
                 <!--/* 묶을 줄이 있는 갈래에서만 이 버튼이 화면의 주 동작이다(11-UI-RULES N2).
                        남은 일이 0이면 이 갈래에 줄이 없어 위 「대조 돌리기」 와 겹치지 않는다. */-->
@@ -584,6 +603,17 @@
 
                 <button th:if="${tab.name() == 'SET_ASIDE'}" type="submit" class="btn btn-sm"
                         th:formaction="@{/reconcile/units/restore}">할 일로 되돌리기</button>
+            </form>
+
+            <!--/* 「전체 고르기」 전용 폼. 표 밖에 두는 이유는 위 체크상자와 같다 —
+                   폼은 폼 안에 못 들어간다. */-->
+            <form id="selectAll" th:action="@{/reconcile/units}" method="get"
+                  th:unless="${#lists.isEmpty(board.rows)}">
+                <input type="hidden" name="definitionId" th:value="${definition.id}">
+                <input type="hidden" name="tab" th:value="${tab.name()}">
+                <input type="hidden" name="q" th:value="${q}">
+                <input type="hidden" name="page" th:value="${board.page}">
+                <input type="hidden" name="all" th:value="${allSelected} ? 'false' : 'true'">
             </form>
 
             <!--/* 쪽 넘김. 링크라 뒤로 가기가 통하고 주소에 남는다. */-->

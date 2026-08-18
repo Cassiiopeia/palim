@@ -66,6 +66,7 @@ public class UnitController {
                         @RequestParam(defaultValue = "0") int page,
                         @RequestParam(required = false) String expand,
                         @RequestParam(required = false) String eq,
+                        @RequestParam(defaultValue = "false") boolean all,
                         Model model) {
         model.addAttribute("title", "품목 묶기");
         model.addAttribute("tabs", MatchBoard.Tab.values());
@@ -91,6 +92,8 @@ public class UnitController {
         model.addAttribute("tab", current);
         model.addAttribute("q", q == null ? "" : q);
         model.addAttribute("reasons", UnpairedItem.Reason.values());
+        // 「이 쪽 전부 고르기」. 열두 줄을 묶으려고 열두 번 누르게 두지 않는다.
+        model.addAttribute("allSelected", all);
         // 「자료가 없다」 와 「다 이었다」 는 정반대 사정이고 할 일도 반대다. 어느 쪽이 담겼는지
         // 사실을 그대로 넘겨 화면이 구분해 말하게 한다.
         model.addAttribute("leftLoadedAt",
@@ -181,6 +184,8 @@ public class UnitController {
 
         UUID tenantId = TenantContext.current();
         int linked = 0;
+        UUID lastUnitId = null;
+        String lastName = "";
         List<String> refused = new ArrayList<>();
         for (String key : targets) {
             MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
@@ -196,7 +201,9 @@ public class UnitController {
                 continue;
             }
             try {
-                unitService.link(picksOf(found), newCode(), nameOf(definition, found), "EA");
+                var unit = unitService.link(picksOf(found), newCode(), nameOf(definition, found), "EA");
+                lastUnitId = unit.getId();
+                lastName = unit.getName();
                 linked++;
             } catch (BusinessException e) {
                 redirect.addFlashAttribute("flashError",
@@ -206,8 +213,18 @@ public class UnitController {
         }
 
         if (linked > 0) {
-            redirect.addFlashAttribute("flashSuccess",
-                    "%d개를 이었습니다. 바로 대조에 들어갑니다.".formatted(linked));
+            // 묶고 나면 그 줄이 이 갈래에서 «사라진다» — 「묶어 둔 것」 으로 옮겨 가기 때문이다.
+            // 어디로 갔는지 말하지 않으면 사람은 방금 무슨 일이 일어났는지 모른다.
+            redirect.addFlashAttribute("flashSuccess", linked == 1
+                    ? "「%s」 로 묶었습니다. 이제 맞춰 볼 때 합산에 들어갑니다.".formatted(lastName)
+                    : "%d개를 묶었습니다. 이제 맞춰 볼 때 합산에 들어갑니다.".formatted(linked));
+            redirect.addFlashAttribute("flashLink", listUrl(definitionId, "LINKED"));
+            redirect.addFlashAttribute("flashLinkLabel", "묶어 둔 것 보기");
+            // 되돌리기는 «하나만 묶었을 때» 준다. 여럿을 한꺼번에 되돌리면 무엇이 풀렸는지
+            // 알 수 없어 되돌리기가 또 다른 사고가 된다.
+            if (linked == 1 && lastUnitId != null) {
+                redirect.addFlashAttribute("flashUndo", undoUrl(lastUnitId, definitionId, tab));
+            }
         }
         if (!refused.isEmpty()) {
             redirect.addFlashAttribute("flashError", "%s — %s".formatted(
@@ -252,7 +269,11 @@ public class UnitController {
         try {
             var unit = unitService.link(picks, newCode(), nameOf(definition, row), "EA");
             redirect.addFlashAttribute("flashSuccess",
-                    "「%s」 로 이었습니다. 바로 대조에 들어갑니다.".formatted(unit.getName()));
+                    "「%s」 로 묶었습니다. 이제 맞춰 볼 때 합산에 들어갑니다."
+                            .formatted(unit.getName()));
+            redirect.addFlashAttribute("flashUndo", undoUrl(unit.getId(), definitionId, tab));
+            redirect.addFlashAttribute("flashLink", listUrl(definitionId, "LINKED"));
+            redirect.addFlashAttribute("flashLinkLabel", "묶어 둔 것 보기");
         } catch (BusinessException e) {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
@@ -339,8 +360,10 @@ public class UnitController {
             }
         }
         redirect.addFlashAttribute("flashSuccess",
-                "%d개 품목을 짝 없음으로 두었습니다. 「짝 없음으로 둔 것」 에서 되돌릴 수 있습니다."
-                        .formatted(marked));
+                "%d개 품목을 짝 없음으로 두었습니다.".formatted(marked));
+        redirect.addFlashAttribute("flashLink",
+                "/reconcile/units?definitionId=" + definitionId + "&tab=SET_ASIDE#board");
+        redirect.addFlashAttribute("flashLinkLabel", "짝 없음으로 둔 것 보기");
         return back(definitionId, tab, q, page);
     }
 
@@ -486,6 +509,24 @@ public class UnitController {
             return List.of(single);
         }
         return selected == null ? List.of() : selected;
+    }
+
+    /** 방금 만든 묶음을 그 자리에서 풀 수 있는 길. */
+    private String undoUrl(UUID unitId, UUID definitionId, String tab) {
+        return UriComponentsBuilder.fromPath("/reconcile/units/{unitId}/unlink")
+                .queryParam("definitionId", definitionId)
+                .queryParamIfPresent("tab", java.util.Optional.ofNullable(
+                        tab == null || tab.isBlank() ? null : tab))
+                .buildAndExpand(unitId).encode().toUriString();
+    }
+
+    /** 방금 한 것이 «어느 갈래로 갔는지» 보러 가는 길. */
+    private String listUrl(UUID definitionId, String tab) {
+        return UriComponentsBuilder.fromPath("/reconcile/units")
+                .queryParam("definitionId", definitionId)
+                .queryParam("tab", tab)
+                .fragment("board")
+                .build().encode().toUriString();
     }
 
     private List<ReconcileUnitService.Pick> picksOf(MatchBoard.Row row) {

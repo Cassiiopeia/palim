@@ -529,6 +529,25 @@ public class MatchBoard {
             return quantity == null ? "—" : amount(effectiveQuantity());
         }
 
+        /**
+         * 이 품목을 저쪽과 묶으면 차이가 얼마가 되나.
+         *
+         * <p>짝 후보를 고르는 <b>진짜 기준</b>이다. 수량만 늘어놓으면 사람이 머리로 빼야 하고,
+         * 후보가 열 개면 열 번 빼다가 결국 대충 고른다.
+         */
+        public String diffTextAgainst(BigDecimal other) {
+            BigDecimal value = (other == null ? BigDecimal.ZERO : other)
+                    .subtract(effectiveQuantity());
+            return value.signum() == 0 ? "맞음"
+                    : (value.signum() > 0 ? "+" : "") + amount(value);
+        }
+
+        /** 차이가 있나. 없는 줄에는 색을 켜지 않는다. */
+        public boolean differsFrom(BigDecimal other) {
+            return (other == null ? BigDecimal.ZERO : other)
+                    .compareTo(effectiveQuantity()) != 0;
+        }
+
         /** 계수가 1이 아니다. 그럴 때만 화면이 계수를 말한다 — 늘 보이면 잡음이다. */
         public boolean hasFactor() {
             return factor != null && factor.compareTo(BigDecimal.ONE) != 0;
