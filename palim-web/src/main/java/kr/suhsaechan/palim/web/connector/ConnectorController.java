@@ -200,9 +200,12 @@ public class ConnectorController {
     private void addMappingView(Model model, UUID id, Connector connector, SourceSchema schema) {
         String modelCode = adminService.targetModelCode(connector);
         Map<String, ConnectorFieldMap> existing = existingByTarget(id);
-        model.addAttribute("groups", assembler.assemble(
-                adminService.targetFields(id), existing, schema, modelCode));
-        model.addAttribute("leftovers", assembler.leftovers(schema, existing));
+        List<MappingGroupView> groups = assembler.assemble(
+                adminService.targetFields(id), existing, schema, modelCode);
+        model.addAttribute("groups", groups);
+        // 화면에 그려진 줄을 그대로 넘긴다. 저장된 것만 보면 추천으로 채워진 칸이
+        // 「연결됨」 과 「자리 없음」 에 동시에 나온다.
+        model.addAttribute("leftovers", assembler.leftovers(schema, groups));
     }
 
     /**
