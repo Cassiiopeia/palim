@@ -284,9 +284,13 @@ public class ReconcileController {
             model.addAttribute("expandUnitId", expand);
             model.addAttribute("axis", using);
             model.addAttribute("axes", breakdowns.axes(tenantId));
+            // «오늘의 정의» 가 아니라 «그 회차가 본 범위» 로 뜯어본다. 정의로 다시 계산하면
+            // 창고 설정을 바꾼 뒤 저장된 합계와 이 상세가 어긋나고, 회차마다 맞기도 하고
+            // 틀리기도 해서 원인을 찾기 어렵다.
             model.addAttribute("breakdown", breakdowns.of(tenantId, expand,
-                    definition.getLeftSource(), definition.getRightSource(),
-                    run.getLeftBaseAt(), run.getRightBaseAt(), run.getStartedAt(), using));
+                    run.scopeOf(definition.getLeftSource(), definition.getRightSource()),
+                    UnitBreakdown.At.of(run.getLeftBaseAt(), run.getRightBaseAt(),
+                            run.getStartedAt()), using));
         }
 
         model.addAttribute("title", definition.getName() + " · 결과");

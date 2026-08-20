@@ -13,6 +13,7 @@ import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
@@ -102,6 +103,9 @@ public class ReconcileEngine {
         // 어느 시각의 자료를 봤는지 남긴다. 이것이 없으면 나중에 「이 차이가 어느 품목에서
         // 나왔나」 를 되짚을 때 그 회차가 본 자료를 다시 불러올 수 없다.
         run.recordSourceTimes(aligned.left(), aligned.right());
+        // 이 회차가 «무엇을 견줬는지» 를 남긴다. 나중에 정의를 보고 다시 계산하면, 설정을 바꾼
+        // 뒤 지난 회차를 열 때 저장된 합계와 화면의 상세가 어긋난다.
+        run.recordScope(Pairing.of(definition));
         run = runs.save(run);
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);

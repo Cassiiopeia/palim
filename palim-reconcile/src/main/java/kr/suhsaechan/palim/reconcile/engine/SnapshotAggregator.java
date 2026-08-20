@@ -6,8 +6,8 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.CompareField;
 import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -26,17 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 public class SnapshotAggregator {
-
-    /**
-     * 비교할 수 있는 수치 칸.
-     *
-     * <p>칸 이름이 SQL 에 그대로 들어가는 자리라 <b>허용 목록으로 거른다.</b> 정의 화면이
-     * 막더라도 여기서 한 번 더 막는다 — 뚫리면 조회 범위가 통째로 열린다.
-     */
-    private static final Set<String> ALLOWED_FIELDS = Set.of(
-            "base_quantity", "quantity", "available_quantity", "reserved_quantity", "amount");
-
-    private static final String DEFAULT_FIELD = "base_quantity";
 
     private final JdbcClient jdbcClient;
 
@@ -58,10 +47,11 @@ public class SnapshotAggregator {
     @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> sumByUnit(UUID tenantId, String source, Instant baseAt,
                                            String compareField, WarehouseScope scope) {
-        String column = ALLOWED_FIELDS.contains(compareField) ? compareField : DEFAULT_FIELD;
+        // 허용 목록은 define/CompareField 한 곳에만 둔다 — 두 벌이 되면 한쪽만 늘어난다.
+        String column = CompareField.sanitize(compareField);
 
         List<Map.Entry<UUID, BigDecimal>> rows = jdbcClient.sql("""
-                        SELECT m.unit_id AS unit_id, sum(s.%s * m.factor) AS qty
+                        SELECT m.unit_id AS unit_id, coalesce(sum(s.%s * m.factor), 0) AS qty
                           FROM std_stock_snapshot s
                           JOIN reconcile_unit_member m
                             ON m.tenant_id = s.tenant_id
@@ -107,12 +97,13 @@ public class SnapshotAggregator {
     @Transactional(readOnly = true)
     public List<UnmatchedItem> unmatched(UUID tenantId, String source, Instant baseAt,
                                          String compareField, WarehouseScope scope) {
-        String column = ALLOWED_FIELDS.contains(compareField) ? compareField : DEFAULT_FIELD;
+        // 허용 목록은 define/CompareField 한 곳에만 둔다 — 두 벌이 되면 한쪽만 늘어난다.
+        String column = CompareField.sanitize(compareField);
 
         return jdbcClient.sql("""
                         SELECT s.item_ref AS item_ref,
                                max(coalesce(s.raw_item_name, '')) AS raw_name,
-                               sum(s.%s) AS qty
+                               coalesce(sum(s.%s), 0) AS qty
                           FROM std_stock_snapshot s
                           LEFT JOIN reconcile_unit_member m
                             ON m.tenant_id = s.tenant_id

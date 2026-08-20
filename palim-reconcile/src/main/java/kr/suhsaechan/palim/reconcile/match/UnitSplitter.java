@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnit;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnitService;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,11 +40,10 @@ public class UnitSplitter {
      * 안 누르거나, 눌러 놓고 수습한다.
      */
     @Transactional(readOnly = true)
-    public List<UnitBreakdown.Line> preview(UUID tenantId, UUID unitId,
-                                            String leftSource, String rightSource,
-                                            BreakdownAxis axis) {
-        return breakdowns.of(tenantId, unitId, leftSource, rightSource, null, null,
-                java.time.Instant.now(), axis).lines();
+    protected List<UnitBreakdown.Line> preview(UUID tenantId, UUID unitId, Pairing pairing,
+                                               BreakdownAxis axis) {
+        // 지금 담긴 자료로 본다. 쪼개기는 «현재» 를 기준으로 하므로 옛 회차를 되짚지 않는다.
+        return breakdowns.of(tenantId, unitId, pairing, UnitBreakdown.At.now(), axis).lines();
     }
 
     /**
@@ -63,7 +63,6 @@ public class UnitSplitter {
      */
     @Transactional
     public List<ReconcileUnit> linkSeparately(UUID tenantId, MatchBoard.Row row,
-                                              String leftSource, String rightSource,
                                               BreakdownAxis axis) {
         List<ReconcileUnit> created = new ArrayList<>();
         for (Group group : groupsOf(row, axis)) {
@@ -136,10 +135,11 @@ public class UnitSplitter {
      * @return 새로 생긴 묶음들. 가를 것이 하나뿐이면 빈 목록
      */
     @Transactional
-    public List<ReconcileUnit> split(UUID tenantId, UUID unitId,
-                                     String leftSource, String rightSource,
+    public List<ReconcileUnit> split(UUID tenantId, UUID unitId, Pairing pairing,
                                      BreakdownAxis axis) {
-        List<UnitBreakdown.Line> lines = preview(tenantId, unitId, leftSource, rightSource, axis);
+        // 가르는 기준은 «뜯어보기와 같은 것» 을 쓴다. 정의가 안 보기로 한 창고 값으로 가르면
+        // 화면에 없던 이유로 묶음이 갈라지고, 쪼개기는 되돌리기가 번거롭다.
+        List<UnitBreakdown.Line> lines = preview(tenantId, unitId, pairing, axis);
         if (lines.size() < 2) {
             // 가를 것이 없다. 오류가 아니라 «이 기준으로는 하나로 남는다» 는 사실이다.
             return List.of();

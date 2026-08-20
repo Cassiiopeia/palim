@@ -339,6 +339,41 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
                 .isNull();
     }
 
+    /**
+     * 회차는 <b>자기가 무엇을 견줬는지</b> 남긴다.
+     *
+     * <p>남기지 않으면 지난 회차의 상세를 열 때 「오늘의 정의」 로 다시 계산된다. 창고 설정을
+     * 바꾼 뒤에는 저장된 합계와 화면의 상세가 어긋나고, <b>회차마다 맞기도 하고 틀리기도</b>
+     * 해서 「늘 틀린다」 보다 원인을 찾기 어렵다.
+     */
+    @Test
+    @DisplayName("회차가 그때 본 창고 범위를 남긴다")
+    void 회차가_범위를_남긴다() {
+        unitAcrossWarehouses("100", "30", "100");
+        ReconcileDefinition definition = definition("0");
+        definition.changeWarehouses(
+                new WarehouseScope(List.of(CONSIGNED)), WarehouseScope.all());
+        definitions.save(definition);
+
+        ReconcileRun run = engine.run(definition.getId());
+
+        var scope = run.scopeOf(definition.getLeftSource(), definition.getRightSource());
+        assertThat(scope.leftScope().codes())
+                .as("나중에 정의가 바뀌어도 이 회차는 그때 본 창고로 다시 계산되어야 한다")
+                .containsExactly(CONSIGNED);
+        assertThat(scope.rightScope().isAll())
+                .as("고르지 않은 쪽은 「전부」 로 남는다")
+                .isTrue();
+
+        // 정의를 바꿔도 회차가 남긴 값은 그대로여야 한다
+        definition.changeWarehouses(WarehouseScope.all(), WarehouseScope.all());
+        definitions.save(definition);
+        assertThat(run.scopeOf(definition.getLeftSource(), definition.getRightSource())
+                .leftScope().codes())
+                .as("정의를 바꾸면 지난 회차 상세가 따라 바뀌는 것이 이 시험이 막는 문제다")
+                .containsExactly(CONSIGNED);
+    }
+
     /** 위탁 창고 코드. 시험 안에서 「어느 창고가 맡긴 곳인지」 를 이름으로 드러낸다. */
     private static final String CONSIGNED = "W-CONSIGN";
 

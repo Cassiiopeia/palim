@@ -103,8 +103,7 @@ public class UnitController {
 
         // 담긴 품명과 어긋나는 이름들. 「다시 짓기」 를 권할 자리이자, 로트 날짜가 박힌
         // 옛 이름이 몇 개 남았는지 사람이 아는 유일한 길이다.
-        model.addAttribute("renameSuggestions", naming.suggestions(tenantId,
-                definition.getLeftSource(), definition.getRightSource()));
+        model.addAttribute("renameSuggestions", naming.suggestions(tenantId, Pairing.of(definition)));
 
         addMateCandidates(tenantId, definition, loaded, expand, eq, model);
         return "reconcile/units";
@@ -452,8 +451,7 @@ public class UnitController {
             } catch (IllegalArgumentException e) {
                 continue;
             }
-            String suggested = naming.suggest(tenantId, unitId,
-                    definition.getLeftSource(), definition.getRightSource());
+            String suggested = naming.suggest(tenantId, unitId, Pairing.of(definition));
             if (suggested.isBlank()) {
                 continue;
             }
