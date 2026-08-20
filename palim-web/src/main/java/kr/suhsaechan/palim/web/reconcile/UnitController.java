@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
@@ -84,8 +85,7 @@ public class UnitController {
 
         UUID tenantId = TenantContext.current();
         MatchBoard.Tab current = MatchBoard.Tab.of(tab);
-        MatchBoard.Board loaded = board.load(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), current, q, page);
+        MatchBoard.Board loaded = board.load(tenantId, Pairing.of(definition), current, q, page);
 
         model.addAttribute("definition", definition);
         model.addAttribute("board", loaded);
@@ -139,8 +139,7 @@ public class UnitController {
         model.addAttribute("expandSource",
                 opposite == null ? "양쪽" : opposite);
         model.addAttribute("eq", eq == null ? "" : eq);
-        model.addAttribute("mates", board.mateCandidates(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), opposite, row.displayName(), eq, MATE_LIMIT));
+        model.addAttribute("mates", board.mateCandidates(tenantId, Pairing.of(definition), opposite, row.displayName(), eq, MATE_LIMIT));
     }
 
     /** 고른 것이 있으면 그것, 하나뿐이면 그것, 여럿인데 안 골랐으면 {@code null}. */
@@ -188,8 +187,7 @@ public class UnitController {
         String lastName = "";
         List<String> refused = new ArrayList<>();
         for (String key : targets) {
-            MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
-                    definition.getRightSource(), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
             if (found == null) {
                 continue;
             }
@@ -253,8 +251,7 @@ public class UnitController {
             return "redirect:/reconcile/units";
         }
         UUID tenantId = TenantContext.current();
-        MatchBoard.Row row = board.findRow(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), rowKey).orElse(null);
+        MatchBoard.Row row = board.findRow(tenantId, Pairing.of(definition), rowKey).orElse(null);
         MatchBoard.Row mateRow = mateRowOf(tenantId, definition, mate);
         if (row == null || mateRow == null) {
             redirect.addFlashAttribute("flashError",
@@ -283,8 +280,7 @@ public class UnitController {
 
     /** 고른 품목이 든 줄. 짝 후보는 줄이 아니라 품목이므로 그 품목이 속한 줄을 되찾는다. */
     private MatchBoard.Row mateRowOf(UUID tenantId, ReconcileDefinition definition, String token) {
-        return board.findRowByItem(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), token).orElse(null);
+        return board.findRowByItem(tenantId, Pairing.of(definition), token).orElse(null);
     }
 
     /**
@@ -349,8 +345,7 @@ public class UnitController {
         UnpairedItem.Reason parsed = reasonOf(reason);
         int marked = 0;
         for (String key : targets) {
-            MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
-                    definition.getRightSource(), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
             if (found == null || found.kind() == MatchBoard.Kind.LINKED) {
                 continue;
             }
@@ -383,8 +378,7 @@ public class UnitController {
         UUID tenantId = TenantContext.current();
         int restored = 0;
         for (String key : targetsOf(row, rows)) {
-            MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
-                    definition.getRightSource(), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
             if (found == null) {
                 continue;
             }

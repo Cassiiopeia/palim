@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.match.MatchBoard;
@@ -84,7 +85,7 @@ class MatchBoardIntegrationTest extends IntegrationTest {
     }
 
     private MatchBoard.Board load(MatchBoard.Tab tab) {
-        return board.load(TENANT, erp, wms, tab, null, 0);
+        return board.load(TENANT, Pairing.ofSources(erp, wms), tab, null, 0);
     }
 
     @Test

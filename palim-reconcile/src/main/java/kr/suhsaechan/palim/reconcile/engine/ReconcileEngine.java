@@ -106,11 +106,14 @@ public class ReconcileEngine {
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);
 
+        // 창고 범위를 정의에서 받아 넘긴다. 비어 있으면 전부 — 지금까지의 동작이다.
+        // 이것을 안 넘기면 위탁하지 않은 창고 물량까지 합산되어, 맞는 품목도 틀린 것으로 나온다.
         Map<UUID, BigDecimal> left = aggregator.sumByUnit(
-                tenantId, definition.getLeftSource(), aligned.left(), definition.getCompareField());
+                tenantId, definition.getLeftSource(), aligned.left(), definition.getCompareField(),
+                definition.leftScope());
         Map<UUID, BigDecimal> right = aggregator.sumByUnit(
                 tenantId, definition.getRightSource(), aligned.right(),
-                definition.getCompareField());
+                definition.getCompareField(), definition.rightScope());
         log.debug("단위 합산 — 실행={} 칸={} 좌원천={}({}) {}단위 우원천={}({}) {}단위",
                 run.getId(), baseAt,
                 definition.getLeftSource(), aligned.left(), left.size(),
@@ -210,8 +213,11 @@ public class ReconcileEngine {
 
     private int addUnmatched(ReconcileRun run, ReconcileDefinition definition, Instant baseAt,
                              String source, DiffType type, List<ReconcileDiff> found) {
+        // 합계와 «같은 범위» 여야 한다. 한쪽만 걸러지면 합계와 상세가 어긋난다.
         var items = aggregator.unmatched(run.getTenantId(), source, baseAt,
-                definition.getCompareField());
+                definition.getCompareField(),
+                source.equals(definition.getLeftSource())
+                        ? definition.leftScope() : definition.rightScope());
 
         if (!items.isEmpty()) {
             // 실패는 아니지만 사람이 연결해 줘야 사라지는 잔여다. 쌓이면 대조 범위가 줄어든다.

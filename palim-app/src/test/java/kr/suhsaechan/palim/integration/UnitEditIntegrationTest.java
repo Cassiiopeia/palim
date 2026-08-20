@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -257,7 +258,7 @@ class UnitEditIntegrationTest extends IntegrationTest {
     @WithMockUser
     @DisplayName("아직 안 묶인 줄을 나눠서 여러 묶음으로 묶는다")
     void 나눠서_묶는다() throws Exception {
-        String key = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
 
         mockMvc.perform(post("/reconcile/units/split-link")
@@ -278,7 +279,7 @@ class UnitEditIntegrationTest extends IntegrationTest {
     @WithMockUser
     @DisplayName("나누기 전에 어떤 묶음들이 되는지 미리 보여준다")
     void 나누기_전에_미리본다() throws Exception {
-        String key = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
 
         mockMvc.perform(get("/reconcile/units/split-preview")

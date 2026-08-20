@@ -45,6 +45,81 @@
         </div>
     </div>
 
+    <!--/* 재고를 맡긴 곳은 «자기가 보관 중인 것만» 안다. 그런데 전산 쪽에는 창고가 여럿이다 —
+           위탁 창고, 사무실, 매장. 전부 더해서 견주면 위탁하지 않은 물량만큼 무조건 어긋나고,
+           그 어긋남은 맞던 품목까지 틀린 것으로 보이게 만든다.
+
+           실측: 전 창고를 더하면 총합 차이 754개 · 일치 3건.
+                 위탁 창고만 견주면 총합 차이 1개 · 일치 11건. */-->
+    <div class="card bg-base-100 shadow-sm mb-6">
+        <div class="card-body p-4 flex-row items-start gap-4 flex-wrap">
+            <div class="w-28 font-medium text-sm">견줄 창고</div>
+            <div class="grow text-sm">
+
+                <!--/* 창고가 여럿인데 전부 더하고 있으면 «조용히 틀린 답» 이 나온다. 지금 이
+                       화면에서 확인이 필요한 상태이므로 경고색이 맞다(11-UI-RULES C7). */-->
+                <div th:if="${(#lists.size(leftWarehouses) > 1 and leftScope.isAll())
+                              or (#lists.size(rightWarehouses) > 1 and rightScope.isAll())}"
+                     class="alert alert-warning mb-3" role="alert">
+                    <div>
+                        <p class="font-medium">창고를 나누지 않고 전부 더해서 견주고 있습니다.</p>
+                        <p class="mt-1">
+                            한쪽에 창고가 여럿이면 맡기지 않은 물량까지 합산됩니다. 그러면 맞는
+                            품목도 틀린 것으로 나옵니다 — 견줄 창고를 골라 주세요.
+                        </p>
+                    </div>
+                </div>
+
+                <form method="post"
+                      th:action="@{/reconcile/{id}/warehouses(id=${definition.id})}">
+                    <div class="flex flex-wrap gap-x-10 gap-y-4">
+
+                        <div>
+                            <div class="text-xs text-base-content/60 mb-1"
+                                 th:text="${definition.leftSource}">좌측 원천</div>
+                            <p th:if="${#lists.isEmpty(leftWarehouses)}"
+                               class="text-base-content/40">담긴 자료가 없습니다</p>
+                            <label th:each="w : ${leftWarehouses}"
+                                   class="flex items-center gap-2 py-0.5 cursor-pointer">
+                                <input type="checkbox" name="leftWarehouse"
+                                       class="checkbox checkbox-sm"
+                                       th:value="${w.code}"
+                                       th:checked="${#lists.contains(leftScope.codes(), w.code)}">
+                                <span th:text="${w.label()}">창고</span>
+                                <span class="text-base-content/60 tabular-nums"
+                                      th:text="${#numbers.formatInteger(w.qty, 1, 'COMMA')}">0</span>
+                            </label>
+                        </div>
+
+                        <div>
+                            <div class="text-xs text-base-content/60 mb-1"
+                                 th:text="${definition.rightSource}">우측 원천</div>
+                            <p th:if="${#lists.isEmpty(rightWarehouses)}"
+                               class="text-base-content/40">담긴 자료가 없습니다</p>
+                            <label th:each="w : ${rightWarehouses}"
+                                   class="flex items-center gap-2 py-0.5 cursor-pointer">
+                                <input type="checkbox" name="rightWarehouse"
+                                       class="checkbox checkbox-sm"
+                                       th:value="${w.code}"
+                                       th:checked="${#lists.contains(rightScope.codes(), w.code)}">
+                                <span th:text="${w.label()}">창고</span>
+                                <span class="text-base-content/60 tabular-nums"
+                                      th:text="${#numbers.formatInteger(w.qty, 1, 'COMMA')}">0</span>
+                            </label>
+                        </div>
+
+                    </div>
+                    <button type="submit" class="btn btn-sm mt-3">저장</button>
+                </form>
+
+                <p class="text-base-content/60 mt-2">
+                    아무것도 고르지 않으면 <b>전부 더해서</b> 견줍니다. 옆의 숫자는 그 창고에 지금
+                    담겨 있는 수량입니다 — 맡긴 창고가 어느 것인지 규모로 알아볼 수 있습니다.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <section>
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">맞춰 본 기록</h2>

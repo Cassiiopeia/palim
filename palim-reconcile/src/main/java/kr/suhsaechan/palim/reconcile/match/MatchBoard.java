@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import kr.suhsaechan.palim.reconcile.rule.NormalizationEngine;
 import kr.suhsaechan.palim.reconcile.rule.RegexGuard;
 import lombok.RequiredArgsConstructor;
@@ -66,9 +68,8 @@ public class MatchBoard {
      * @param page    0부터
      */
     @Transactional(readOnly = true)
-    public Board load(UUID tenantId, String leftSource, String rightSource,
-                      Tab tab, String keyword, int page) {
-        List<Row> all = allRows(tenantId, leftSource, rightSource);
+    public Board load(UUID tenantId, Pairing pairing, Tab tab, String keyword, int page) {
+        List<Row> all = allRows(tenantId, pairing);
         Counts counts = Counts.of(all);
 
         String needle = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
@@ -81,7 +82,8 @@ public class MatchBoard {
 
         int from = Math.min(Math.max(0, page) * PAGE_SIZE, filtered.size());
         int to = Math.min(from + PAGE_SIZE, filtered.size());
-        return new Board(leftSource, rightSource, filtered.subList(from, to), counts,
+        return new Board(pairing.leftSource(), pairing.rightSource(),
+                filtered.subList(from, to), counts,
                 Math.max(0, page), filtered.size(), PAGE_SIZE);
     }
 
@@ -93,15 +95,16 @@ public class MatchBoard {
      * 끼워 넣을 수도 있다.
      */
     @Transactional(readOnly = true)
-    public Optional<Row> findRow(UUID tenantId, String leftSource, String rightSource, String key) {
-        return allRows(tenantId, leftSource, rightSource).stream()
+    public Optional<Row> findRow(UUID tenantId, Pairing pairing, String key) {
+        return allRows(tenantId, pairing).stream()
                 .filter(row -> row.key().equals(key))
                 .findFirst();
     }
 
     /** 품목 하나를 지금 담긴 재고에서 찾는다. 편집 화면이 품명·수량을 붙이는 데 쓴다. */
     @Transactional(readOnly = true)
-    public Optional<Item> findItem(UUID tenantId, String source, String itemRef) {
+    public Optional<Item> findItem(UUID tenantId, String source, String itemRef,
+                                   WarehouseScope scope) {
         return jdbcClient.sql("""
                         SELECT s.item_ref                          AS item_ref,
                                max(coalesce(s.raw_item_name, ''))  AS raw_name,
@@ -111,12 +114,13 @@ public class MatchBoard {
                            AND s.source    = :source
                            AND s.item_ref  = :itemRef
                            AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
-                                               WHERE x.tenant_id = :tenantId AND x.source = :source)
+                                               WHERE x.tenant_id = :tenantId AND x.source = :source)%s
                          GROUP BY s.item_ref
-                        """)
+                        """.formatted(scope.sqlAnd("s")))
                 .param("tenantId", tenantId)
                 .param("source", source)
                 .param("itemRef", itemRef)
+                .params(scope.params())
                 .query((rs, rowNum) -> new Item(source, rs.getString("item_ref"),
                         rs.getString("raw_name"), rs.getBigDecimal("qty"),
                         BigDecimal.ONE, null, null, null, false))
@@ -125,9 +129,8 @@ public class MatchBoard {
 
     /** 품목 하나가 든 줄. 짝 후보는 줄이 아니라 품목이라 이 길이 필요하다. */
     @Transactional(readOnly = true)
-    public Optional<Row> findRowByItem(UUID tenantId, String leftSource, String rightSource,
-                                       String token) {
-        return allRows(tenantId, leftSource, rightSource).stream()
+    public Optional<Row> findRowByItem(UUID tenantId, Pairing pairing, String token) {
+        return allRows(tenantId, pairing).stream()
                 .filter(row -> row.items().stream()
                         .anyMatch(item -> item.token().equals(token)))
                 .findFirst();
@@ -148,17 +151,17 @@ public class MatchBoard {
      * @param reference 이 이름과 닮은 순서로 정렬한다
      */
     @Transactional(readOnly = true)
-    public List<Item> mateCandidates(UUID tenantId, String leftSource, String rightSource,
+    public List<Item> mateCandidates(UUID tenantId, Pairing pairing,
                                      String side, String reference, String keyword, int limit) {
         String needle = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         NormalizationEngine.Batch batch = normalizer.batch();
         String base = batch.normalize(reference);
 
-        List<Item> free = allRows(tenantId, leftSource, rightSource).stream()
+        List<Item> free = allRows(tenantId, pairing).stream()
                 .filter(row -> row.kind() == Kind.PAIRED
                         || row.kind() == Kind.LEFT_ONLY || row.kind() == Kind.RIGHT_ONLY)
                 .flatMap(row -> (side == null ? row.items()
-                        : side.equals(leftSource) ? row.left() : row.right()).stream())
+                        : side.equals(pairing.leftSource()) ? row.left() : row.right()).stream())
                 .filter(item -> needle.isEmpty() || item.matches(needle))
                 .toList();
 
@@ -177,9 +180,11 @@ public class MatchBoard {
 
     // ── 계산 ────────────────────────────────────────────────────────────────
 
-    private List<Row> allRows(UUID tenantId, String leftSource, String rightSource) {
+    private List<Row> allRows(UUID tenantId, Pairing pairing) {
+        String leftSource = pairing.leftSource();
+        String rightSource = pairing.rightSource();
         Map<String, Item> items = new LinkedHashMap<>();
-        for (StockLine line : stockLines(tenantId, leftSource, rightSource)) {
+        for (StockLine line : stockLines(tenantId, pairing)) {
             items.put(tokenOf(line.source(), line.itemRef()),
                     new Item(line.source(), line.itemRef(), line.rawName(), line.quantity(),
                             BigDecimal.ONE, null, null, null, false));
@@ -286,7 +291,9 @@ public class MatchBoard {
      * <p>기준 시각을 원천마다 따로 잡는다. 한쪽 시각으로 양쪽을 훑으면, 한쪽을 더 촘촘하게
      * 담도록 바꾸는 순간 반대쪽이 <b>0건</b>이 되면서 화면은 「짝이 없습니다」 라고만 말한다.
      */
-    private List<StockLine> stockLines(UUID tenantId, String leftSource, String rightSource) {
+    private List<StockLine> stockLines(UUID tenantId, Pairing pairing) {
+        // 원천마다 볼 창고가 다르다. 한 이름으로 걸면 뒤엣값이 앞을 덮어써 양쪽이 같은 창고로
+        // 걸리므로, 좌·우를 다른 이름으로 바인딩한다.
         return jdbcClient.sql("""
                         SELECT s.source                            AS source,
                                s.item_ref                          AS item_ref,
@@ -294,15 +301,19 @@ public class MatchBoard {
                                sum(s.base_quantity)                AS qty
                           FROM std_stock_snapshot s
                          WHERE s.tenant_id = :tenantId
-                           AND s.source   IN (:leftSource, :rightSource)
+                           AND (    (s.source = :leftSource%s)
+                                 OR (s.source = :rightSource%s) )
                            AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
                                                WHERE x.tenant_id = s.tenant_id
                                                  AND x.source    = s.source)
                          GROUP BY s.source, s.item_ref
-                        """)
+                        """.formatted(pairing.leftScope().sqlAnd("s", "leftWarehouses"),
+                                      pairing.rightScope().sqlAnd("s", "rightWarehouses")))
                 .param("tenantId", tenantId)
-                .param("leftSource", leftSource)
-                .param("rightSource", rightSource)
+                .param("leftSource", pairing.leftSource())
+                .param("rightSource", pairing.rightSource())
+                .params(pairing.leftScope().params("leftWarehouses"))
+                .params(pairing.rightScope().params("rightWarehouses"))
                 .query((rs, rowNum) -> new StockLine(
                         rs.getString("source"), rs.getString("item_ref"),
                         rs.getString("raw_name"), rs.getBigDecimal("qty")))
