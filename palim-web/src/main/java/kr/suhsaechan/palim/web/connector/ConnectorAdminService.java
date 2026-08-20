@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
@@ -331,12 +332,35 @@ public class ConnectorAdminService {
                 .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
                 .map(mapping -> restore(mapping.getSourceSchema()))
                 .orElse(null);
-        if (active != null) {
-            return active;
+        SourceSchema sampled = latestSampledSchema(connectorId);
+        if (active == null) {
+            return sampled;
         }
-        return mappingRepository
-                .findByConnectorIdAndStatus(connectorId, MappingStatus.DRAFT)
+        // 확정판에 값이 없으면 초안이 갖고 있는 값을 빌려 온다.
+        //
+        // 확정은 «그때 있던 초안» 을 올린다. 그 뒤에 「다시 받아오기」 를 누르면 새로 받은
+        // 값은 새 초안에 들어가므로, 확정판에는 칸 이름만 남고 값이 없다. 그러면 화면의
+        // 「실제로 들어올 값」 이 전부 «—» 가 되고 「받아온 자료」 표도 사라진다 — 이 화면이
+        // 존재하는 이유가 «무엇이 들어오는지 보고 고르는 것» 인데 그것만 없어진다.
+        //
+        // keepSamples 는 칸 이름이 완전히 같을 때만 빌려주므로, 상대가 칸을 바꿨는데 옛 값을
+        // 보여 주는 일은 없다.
+        return keepSamples(active, sampled);
+    }
+
+    /**
+     * 값까지 갖고 있는 가장 최근 정의.
+     *
+     * <p>초안은 길(intake)마다 따로 있을 수 있어 {@code findByConnectorIdAndStatus} 로는
+     * 집을 수 없다 — 둘 이상이면 그 조회가 예외를 던진다. 버전이 높은 것부터 훑어 값을 가진
+     * 첫 번째를 쓴다.
+     */
+    private SourceSchema latestSampledSchema(UUID connectorId) {
+        return mappingRepository.findByConnectorIdOrderByVersionDesc(connectorId).stream()
                 .map(mapping -> restore(mapping.getSourceSchema()))
+                .filter(Objects::nonNull)
+                .filter(schema -> !schema.sampleRows().isEmpty())
+                .findFirst()
                 .orElse(null);
     }
 
