@@ -332,9 +332,12 @@ public class ConnectorAdminService {
                 .findByConnectorIdAndStatus(connectorId, MappingStatus.ACTIVE)
                 .map(mapping -> restore(mapping.getSourceSchema()))
                 .orElse(null);
-        SourceSchema sampled = latestSampledSchema(connectorId);
-        if (active == null) {
-            return sampled;
+        // 확정판이 없으면 작성 중인 초안을 쓴다 — 값이 없어도 «칸» 은 있어야 한다.
+        // 값이 있는 것만 골라 쓰면, 아직 값을 받아 오지 않은 연동에서 화면이 칸 목록조차
+        // 못 그리고 폼 전체가 사라진다.
+        SourceSchema base = active != null ? active : latestDraftSchema(connectorId);
+        if (base == null) {
+            return null;
         }
         // 확정판에 값이 없으면 초안이 갖고 있는 값을 빌려 온다.
         //
@@ -345,15 +348,30 @@ public class ConnectorAdminService {
         //
         // keepSamples 는 칸 이름이 완전히 같을 때만 빌려주므로, 상대가 칸을 바꿨는데 옛 값을
         // 보여 주는 일은 없다.
-        return keepSamples(active, sampled);
+        return keepSamples(base, latestSampledSchema(connectorId));
+    }
+
+    /**
+     * 작성 중인 가장 최근 초안.
+     *
+     * <p>초안은 길(intake)마다 따로 있을 수 있어 {@code findByConnectorIdAndStatus} 로는
+     * 집을 수 없다 — 둘 이상이면 그 단건 조회가 예외를 던진다. 버전이 높은 것부터 훑는다.
+     */
+    private SourceSchema latestDraftSchema(UUID connectorId) {
+        return mappingRepository.findByConnectorIdOrderByVersionDesc(connectorId).stream()
+                .filter(mapping -> mapping.getStatus() == MappingStatus.DRAFT)
+                .map(mapping -> restore(mapping.getSourceSchema()))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
      * 값까지 갖고 있는 가장 최근 정의.
      *
-     * <p>초안은 길(intake)마다 따로 있을 수 있어 {@code findByConnectorIdAndStatus} 로는
-     * 집을 수 없다 — 둘 이상이면 그 조회가 예외를 던진다. 버전이 높은 것부터 훑어 값을 가진
-     * 첫 번째를 쓴다.
+     * <p><b>값을 빌려 오는 용도로만 쓴다.</b> 이것을 칸 목록의 출처로 삼으면 아직 값을 받아
+     * 오지 않은 연동에서 화면이 통째로 비어 버린다 — 실제로 그렇게 폼이 사라져 재저장이
+     * 400 으로 떨어졌다.
      */
     private SourceSchema latestSampledSchema(UUID connectorId) {
         return mappingRepository.findByConnectorIdOrderByVersionDesc(connectorId).stream()
