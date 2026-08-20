@@ -145,6 +145,33 @@ public class NormalizationRuleService {
     }
 
     /**
+     * 켜져 있는 규칙을 <b>한 번에</b> 끈다.
+     *
+     * <p>하나씩 끄면 규칙이 넷일 때 네 번, 스물이면 스무 번이다. 그런데 이 화면에서 제일 자주
+     * 하는 일이 <b>껐다 켜 보며 짝 개수가 어떻게 변하는지</b> 보는 것이다 — 그 왕복이 길면
+     * 아무도 하지 않고, 결국 규칙이 무슨 일을 하는지 모르는 채로 쌓인다.
+     *
+     * <p><b>지우지 않고 끈다.</b> 지운 규칙의 정규식은 기억에서 복원되지 않는다. 끄면 목록에
+     * 남아 있어 언제든 되돌릴 수 있고, 무엇을 껐는지도 보인다.
+     *
+     * @return 실제로 끈 규칙 수. 이미 다 꺼져 있었으면 0
+     */
+    @Transactional
+    public int deactivateAll() {
+        List<NormalizationRule> on = rules.findAllByOrderBySortOrder().stream()
+                .filter(NormalizationRule::isActive)
+                .toList();
+        if (on.isEmpty()) {
+            return 0;
+        }
+        on.forEach(NormalizationRule::deactivate);
+        rules.saveAll(on);
+        engine.clearCache();
+        log.info("이름 다듬기 규칙 일괄 끄기 — {}건", on.size());
+        return on.size();
+    }
+
+    /**
      * 순서를 한 칸 옮긴다.
      *
      * <p>순서가 결과를 바꾼다 — 괄호를 떼기 전에 공백을 지우면 괄호 규칙이 안 맞는다. 그래서

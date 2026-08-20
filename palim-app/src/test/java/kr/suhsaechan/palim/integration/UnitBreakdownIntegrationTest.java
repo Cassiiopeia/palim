@@ -62,6 +62,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     @Autowired private UnitNaming naming;
     @Autowired private MatchBoard board;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationRuleRepository normalizationRules;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationEngine normalizer;
 
     private ReconcileDefinition definition;
     private String erp;
@@ -141,6 +143,20 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
      * <p>+11 이 어디서 왔는지를 로트별로 갈라 보여준다. 갈라 보지 않으면 「재고가 빈다」 로
      * 읽히고, 사람은 있지도 않은 재고 사고를 쫓게 된다.
      */
+
+    /**
+     * 괄호 안 유통기한을 떼는 규칙.
+     *
+     * <p>이 규칙은 <b>꺼진 채로 설치된다</b> — 소비기한으로만 구분되는 서로 다른 품목이 있는
+     * 곳에서 그것들을 한 물건으로 만들기 때문이다. 그래서 이 규칙이 있어야 성립하는 시험은
+     * 자기 전제를 직접 만든다.
+     */
+    private void bracketRule() {
+        normalizationRules.save(kr.suhsaechan.palim.reconcile.rule.NormalizationRule.of(
+                TENANT, "시험용 괄호 제거", "\\([^)]*\\)", "", 1));
+        normalizer.clearCache();
+    }
+
     @Test
     @DisplayName("합계 뒤에 무엇이 있는지 로트별로 갈라 보여준다")
     void 로트별로_갈라_본다() {
@@ -244,6 +260,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("여럿을 이으면 공통 부분만 이름으로 쓴다")
     void 공통_부분만_이름으로() {
+        // 이 시험은 괄호 규칙이 있어야 성립한다. 기본 규칙은 꺼진 채로 설치된다.
+        bracketRule();
         MatchBoard.Row row = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst();
 

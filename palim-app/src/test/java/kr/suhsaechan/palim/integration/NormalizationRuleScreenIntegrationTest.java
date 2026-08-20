@@ -398,4 +398,63 @@ class NormalizationRuleScreenIntegrationTest extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(Matchers.containsString(source)));
     }
+
+    /**
+     * 로트를 뭉개는 기본 규칙은 <b>꺼진 채로</b> 설치된다.
+     *
+     * <p>소비기한으로만 구분되는 서로 다른 품목이 있는 곳에서 이 규칙이 켜져 있으면 그것들을
+     * 한 물건으로 만든다. 그러면 대조는 「맞는다」 고 말하는데 실제로는 합쳐진 것이라 틀렸다는
+     * 사실조차 드러나지 않는다. 필요한 곳에서는 화면으로 켠다.
+     *
+     * <p><b>이름이 아니라 시드의 고정 ID 로 찾는다.</b> 규칙은 전역이라 다른 시험이 「괄호 안
+     * 내용 제거」 같은 이름으로 만들어 둔 것이 섞인다 — 이름으로 고르면 무엇을 보고 있는지
+     * 알 수 없다.
+     */
+    @Test
+    @DisplayName("로트를 뭉개는 기본 규칙은 꺼진 채로 설치된다")
+    void 기본_규칙은_꺼져_있다() {
+        for (UUID seedId : List.of(SEED_PAREN, SEED_DATE)) {
+            assertThat(rules.findById(seedId))
+                    .as("시드 규칙 자체는 남아 있어야 한다 — 지우면 정규식을 되돌릴 수 없다")
+                    .isPresent()
+                    .get()
+                    .matches(rule -> !rule.isActive(),
+                            "꺼져 있어야 한다 — 켜진 채면 서로 다른 품목을 조용히 합친다");
+        }
+    }
+
+    /**
+     * 하나씩 끄면 규칙이 넷일 때 네 번, 스물이면 스무 번이다.
+     *
+     * <p>그런데 이 화면에서 제일 자주 하는 일이 <b>껐다 켜 보며 짝 개수가 어떻게 변하는지</b>
+     * 보는 것이다. 그 왕복이 길면 아무도 하지 않고, 규칙이 무슨 일을 하는지 모르는 채로 쌓인다.
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("모두 끄기가 켜져 있는 규칙을 한 번에 끄되 지우지는 않는다")
+    void 모두_끈다() throws Exception {
+        rules.save(NormalizationRule.of(TENANT, MARK + " 켜짐하나", "@@1", "", 9501));
+        rules.save(NormalizationRule.of(TENANT, MARK + " 켜짐둘", "@@2", "", 9502));
+        engine.clearCache();
+
+        mockMvc.perform(post("/reconcile/rules/deactivate-all")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .locale(Locale.KOREAN))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(rules.findAllByOrderBySortOrder().stream()
+                .filter(rule -> rule.getName().contains(MARK))
+                .toList())
+                .as("끈 규칙은 목록에 남아 있어야 한다 — 지우면 정규식을 되돌릴 수 없다")
+                .isNotEmpty()
+                .allMatch(rule -> !rule.isActive());
+    }
+
+    /** V21 이 심는 「괄호와 그 안의 내용을 뺀다」. */
+    private static final UUID SEED_PAREN =
+            UUID.fromString("01937000-0000-7000-8000-000000000001");
+
+    /** V21 이 심는 「이름에 박힌 날짜를 뺀다」. */
+    private static final UUID SEED_DATE =
+            UUID.fromString("01937000-0000-7000-8000-000000000003");
 }
