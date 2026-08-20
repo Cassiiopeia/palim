@@ -57,6 +57,8 @@ class UnitEditIntegrationTest extends IntegrationTest {
     @Autowired private ReconcileUnitMemberRepository members;
     @Autowired private MatchBoard board;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationRuleRepository normalizationRules;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationEngine normalizer;
 
     private ReconcileDefinition definition;
     private String erp;
@@ -151,6 +153,20 @@ class UnitEditIntegrationTest extends IntegrationTest {
      * <p>이 길이 없어서 로트 셋 중 하나가 잘못 들어가면 묶음을 통째로 풀고 다시 묶어야 했다 —
      * 하나 때문에 나머지 둘까지 다시 하는 것이다.
      */
+
+    /**
+     * 괄호 안 유통기한을 떼는 규칙.
+     *
+     * <p>이 규칙은 <b>꺼진 채로 설치된다</b> — 소비기한으로만 구분되는 서로 다른 품목이 있는
+     * 곳에서 그것들을 한 물건으로 만들기 때문이다. 그래서 이 규칙이 있어야 성립하는 시험은
+     * 자기 전제를 직접 만든다.
+     */
+    private void bracketRule() {
+        normalizationRules.save(kr.suhsaechan.palim.reconcile.rule.NormalizationRule.of(
+                TENANT, "시험용 괄호 제거", "\\([^)]*\\)", "", 1));
+        normalizer.clearCache();
+    }
+
     @Test
     @WithMockUser
     @DisplayName("품목 하나만 빼면 나머지는 그대로 남는다")
@@ -258,6 +274,8 @@ class UnitEditIntegrationTest extends IntegrationTest {
     @WithMockUser
     @DisplayName("아직 안 묶인 줄을 나눠서 여러 묶음으로 묶는다")
     void 나눠서_묶는다() throws Exception {
+        // 이 시험은 괄호 규칙이 있어야 성립한다. 기본 규칙은 꺼진 채로 설치된다.
+        bracketRule();
         String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
 
@@ -279,6 +297,8 @@ class UnitEditIntegrationTest extends IntegrationTest {
     @WithMockUser
     @DisplayName("나누기 전에 어떤 묶음들이 되는지 미리 보여준다")
     void 나누기_전에_미리본다() throws Exception {
+        // 이 시험은 괄호 규칙이 있어야 성립한다. 기본 규칙은 꺼진 채로 설치된다.
+        bracketRule();
         String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
 

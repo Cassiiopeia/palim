@@ -151,6 +151,22 @@ public class RuleController {
         return "redirect:/reconcile/rules";
     }
 
+    /**
+     * 켜져 있는 규칙을 한 번에 끈다.
+     *
+     * <p>기본으로 심어진 규칙이 자기 자료에 맞지 않는 곳에서는 <b>처음에 전부 끄고</b> 필요한
+     * 것만 다시 켜는 것이 빠르다. 하나씩 끄게 하면 그 앞에서 포기한다.
+     */
+    @PostMapping("/reconcile/rules/deactivate-all")
+    public String deactivateAll(RedirectAttributes redirect) {
+        int turnedOff = ruleService.deactivateAll();
+        redirect.addFlashAttribute("flashSuccess", turnedOff == 0
+                ? "이미 모두 꺼져 있습니다."
+                : "규칙 %d개를 껐습니다. 지운 것이 아니므로 언제든 다시 켤 수 있습니다."
+                        .formatted(turnedOff));
+        return "redirect:/reconcile/rules";
+    }
+
     @PostMapping("/reconcile/rules/{id}/toggle")
     public String toggle(@PathVariable UUID id, RedirectAttributes redirect) {
         var rule = ruleService.toggle(id);
