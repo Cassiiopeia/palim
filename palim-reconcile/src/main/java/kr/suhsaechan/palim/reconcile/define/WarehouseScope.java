@@ -28,8 +28,25 @@ public record WarehouseScope(List<String> codes) {
 
     private static final WarehouseScope ALL = new WarehouseScope(List.of());
 
+    /**
+     * <b>빈 값을 걸러 담는다.</b>
+     *
+     * <p>창고를 구분하지 않는 원천은 {@code warehouse_code} 가 빈 문자열이다(그 컬럼은
+     * {@code NOT NULL DEFAULT ''} 다). 화면이 그 창고를 고르면 빈 문자열이 그대로 들어오는데,
+     * 걸러 내지 않으면 저장 → 다시 읽기 왕복에서 <b>선택이 조용히 사라진다</b> —
+     * {@code toStored()} 가 {@code ""} 를 만들고 {@link #parse} 가 그것을 「전부」 로 읽는다.
+     * 화면은 「정했습니다」 라고 말하는데 대조는 여전히 전 창고를 더한다.
+     *
+     * <p>{@link #parse} 와 같은 규칙을 쓴다. 두 입구가 다른 규칙을 쓰면 한쪽으로 들어온 값만
+     * 다르게 취급되고, 그 차이는 「어제는 됐는데 오늘은 안 된다」 로만 드러난다.
+     */
     public WarehouseScope {
-        codes = codes == null ? List.of() : List.copyOf(codes);
+        codes = codes == null ? List.of() : codes.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
+                .distinct()
+                .toList();
     }
 
     /** 전부 보는 범위. */
@@ -47,13 +64,9 @@ public record WarehouseScope(List<String> codes) {
         if (csv == null || csv.isBlank()) {
             return ALL;
         }
-        List<String> parsed = Arrays.stream(csv.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
-                .stream()
-                .toList();
-        return parsed.isEmpty() ? ALL : new WarehouseScope(parsed);
+        // 다듬기는 생성자가 한다 — 두 입구가 다른 규칙을 쓰면 한쪽으로 들어온 값만 다르게 취급된다.
+        WarehouseScope parsed = new WarehouseScope(Arrays.asList(csv.split(",")));
+        return parsed.isAll() ? ALL : parsed;
     }
 
     /** 저장할 문자열. 비면 {@code null} — 빈 문자열로 두면 「고른 것이 없음」 과 구분되지 않는다. */

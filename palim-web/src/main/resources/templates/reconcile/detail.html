@@ -81,9 +81,13 @@
                                class="text-base-content/40">담긴 자료가 없습니다</p>
                             <label th:each="w : ${leftWarehouses}"
                                    class="flex items-center gap-2 py-0.5 cursor-pointer">
+                                <!--/* 창고를 구분하지 않는 원천은 코드가 빈 문자열이다. 그것을
+                                       고르면 저장 왕복에서 선택이 사라지므로 고를 수 없게 둔다 —
+                                       창고가 하나뿐이라 「전체」 와 뜻이 같기도 하다. */-->
                                 <input type="checkbox" name="leftWarehouse"
                                        class="checkbox checkbox-sm"
                                        th:value="${w.code}"
+                                       th:disabled="${#strings.isEmpty(w.code)}"
                                        th:checked="${#lists.contains(leftScope.codes(), w.code)}">
                                 <span th:text="${w.label()}">창고</span>
                                 <span class="text-base-content/60 tabular-nums"
@@ -101,6 +105,7 @@
                                 <input type="checkbox" name="rightWarehouse"
                                        class="checkbox checkbox-sm"
                                        th:value="${w.code}"
+                                       th:disabled="${#strings.isEmpty(w.code)}"
                                        th:checked="${#lists.contains(rightScope.codes(), w.code)}">
                                 <span th:text="${w.label()}">창고</span>
                                 <span class="text-base-content/60 tabular-nums"

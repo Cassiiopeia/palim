@@ -308,6 +308,37 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
                 .isEmpty();
     }
 
+    /**
+     * 창고를 구분하지 않는 원천은 코드가 <b>빈 문자열</b>이다({@code warehouse_code} 는
+     * {@code NOT NULL DEFAULT ''}).
+     *
+     * <p>그것을 그대로 담으면 저장 → 다시 읽기 왕복에서 <b>선택이 조용히 사라진다</b> —
+     * 저장값이 빈 문자열이 되고, 읽을 때 그것은 「전부」 로 해석된다. 화면은 「정했습니다」 라고
+     * 말하는데 대조는 여전히 전 창고를 더한다. 고쳤다고 믿는 쪽이 안 고친 것보다 나쁘다.
+     */
+    @Test
+    @DisplayName("빈 창고 코드는 「고르지 않음」과 구분되지 않으므로 담지 않는다")
+    void 빈_창고_코드는_걸러진다() {
+        assertThat(new WarehouseScope(List.of("")).isAll())
+                .as("빈 코드만 고른 것은 「전부」 와 같다 — 저장해도 사라지므로 애초에 담지 않는다")
+                .isTrue();
+
+        assertThat(new WarehouseScope(List.of("W-1", "", "  ", "W-1")).codes())
+                .as("빈 값과 중복은 버리고 고른 순서는 지킨다")
+                .containsExactly("W-1");
+
+        assertThat(WarehouseScope.parse("W-1, ,W-2,W-1").codes())
+                .as("저장된 값을 읽는 길도 같은 규칙이어야 한다 — 두 입구가 다르면 한쪽만 어긋난다")
+                .containsExactly("W-1", "W-2");
+
+        assertThat(new WarehouseScope(List.of("W-1")).toStored())
+                .as("저장 형태는 쉼표로 잇는다")
+                .isEqualTo("W-1");
+        assertThat(WarehouseScope.all().toStored())
+                .as("전부일 때는 NULL — 빈 문자열로 두면 「고른 것이 없음」 과 구분되지 않는다")
+                .isNull();
+    }
+
     /** 위탁 창고 코드. 시험 안에서 「어느 창고가 맡긴 곳인지」 를 이름으로 드러낸다. */
     private static final String CONSIGNED = "W-CONSIGN";
 
