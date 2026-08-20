@@ -84,9 +84,8 @@ public class UnitEditController {
         // 터지면 200 인 채로 페이지가 잘린다(07-DECISIONS 저장된 함정).
         model.addAttribute("leftMembers", all.stream().filter(MemberView::left).toList());
         model.addAttribute("rightMembers", all.stream().filter(m -> !m.left()).toList());
-        model.addAttribute("breakdown", breakdowns.of(tenantId, unitId,
-                definition.getLeftSource(), definition.getRightSource(),
-                null, null, java.time.Instant.now(), using));
+        model.addAttribute("breakdown", breakdowns.of(tenantId, unitId, Pairing.of(definition),
+                UnitBreakdown.At.now(), using));
 
         // 「+ 품목 넣기」 를 누른 쪽에만 고를 목록을 편다. 두 쪽을 다 펴 두면 화면이 늘 길다.
         if (add != null && !add.isBlank()) {
@@ -174,8 +173,7 @@ public class UnitEditController {
         }
         UUID tenantId = TenantContext.current();
         try {
-            List<ReconcileUnit> created = splitter.split(tenantId, unitId,
-                    definition.getLeftSource(), definition.getRightSource(),
+            List<ReconcileUnit> created = splitter.split(tenantId, unitId, Pairing.of(definition),
                     breakdowns.axisOf(tenantId, axis));
             if (created.isEmpty()) {
                 redirect.addFlashAttribute("flashError",
@@ -271,7 +269,6 @@ public class UnitEditController {
         }
         try {
             List<ReconcileUnit> created = splitter.linkSeparately(tenantId, found,
-                    definition.getLeftSource(), definition.getRightSource(),
                     breakdowns.axisOf(tenantId, axis));
             redirect.addFlashAttribute("flashSuccess",
                     "%d개 묶음으로 나눠서 묶었습니다.".formatted(created.size()));

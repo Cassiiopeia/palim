@@ -10,6 +10,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.CompareField;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -110,22 +113,31 @@ public class UnitBreakdown {
      * @param axis        무엇을 기준으로 좌·우를 같은 줄에 놓을지
      */
     @Transactional(readOnly = true)
-    public Breakdown of(UUID tenantId, UUID unitId, String leftSource, String rightSource,
-                        Instant leftBaseAt, Instant rightBaseAt, Instant before,
-                        BreakdownAxis axis) {
+    public Breakdown of(UUID tenantId, UUID unitId, Pairing pairing, At at, BreakdownAxis axis) {
         BreakdownAxis using = axis == null ? BreakdownAxis.byName() : axis;
-        boolean exact = leftBaseAt != null && rightBaseAt != null;
-        List<Part> left = parts(tenantId, unitId, leftSource,
-                leftBaseAt != null ? leftBaseAt : latestBefore(tenantId, leftSource, before), using);
-        List<Part> right = parts(tenantId, unitId, rightSource,
-                rightBaseAt != null ? rightBaseAt : latestBefore(tenantId, rightSource, before), using);
+        At when = at == null ? At.now() : at;
+        boolean exact = when.exact();
+        List<Part> left = parts(tenantId, unitId, pairing.leftSource(),
+                when.leftOr(latestBefore(tenantId, pairing.leftSource(), when.before())),
+                pairing.leftScope(), pairing.compareField(), using);
+        List<Part> right = parts(tenantId, unitId, pairing.rightSource(),
+                when.rightOr(latestBefore(tenantId, pairing.rightSource(), when.before())),
+                pairing.rightScope(), pairing.compareField(), using);
 
         // 고른 기준이 이 자료에 없을 수 있다. 조용히 「전부 짝 없음」 을 보여주면 사람은 자료가
         // 잘못된 줄 알지, 기준을 잘못 골랐다고는 생각하지 못한다.
+        // 「고른 기준이 이 자료에 없다」 는 판정은 «재고가 실제로 있는» 품목만 보고 한다.
+        // 고른 창고 밖 품목은 조인이 끊겨 기준 값도 비는데, 그것까지 세면 원인이 창고인데도
+        // 「기준을 잘못 골랐다」 고 말하게 된다 — 사람은 통하지 않을 처방을 들고 다른 기준을
+        // 고르러 간다.
+        List<Part> leftInStock = left.stream().filter(Part::inStock).toList();
+        List<Part> rightInStock = right.stream().filter(Part::inStock).toList();
         boolean leftMissing = using.kind() == BreakdownAxis.Kind.FIELD
-                && !left.isEmpty() && left.stream().allMatch(part -> part.axisKey().isBlank());
+                && !leftInStock.isEmpty()
+                && leftInStock.stream().allMatch(part -> part.axisKey().isBlank());
         boolean rightMissing = using.kind() == BreakdownAxis.Kind.FIELD
-                && !right.isEmpty() && right.stream().allMatch(part -> part.axisKey().isBlank());
+                && !rightInStock.isEmpty()
+                && rightInStock.stream().allMatch(part -> part.axisKey().isBlank());
 
         return new Breakdown(pair(left, right, using), exact, using, leftMissing, rightMissing);
     }
@@ -182,6 +194,7 @@ public class UnitBreakdown {
      * 이어 붙이지 않는다.
      */
     private List<Part> parts(UUID tenantId, UUID unitId, String source, Instant baseAt,
+                             WarehouseScope scope, String compareField,
                              BreakdownAxis axis) {
         if (baseAt == null) {
             return List.of();
@@ -195,26 +208,39 @@ public class UnitBreakdown {
         return jdbcClient.sql("""
                         SELECT m.item_ref                          AS item_ref,
                                m.factor                            AS factor,
-                               coalesce(max(s.raw_item_name), '')  AS raw_name,
-                               sum(s.base_quantity)                AS qty,
+                               -- 이름은 «무엇» 이지 «얼마» 가 아니다. 창고 조건이 걸린 조인에서
+                               -- 뽑으면 범위 밖 품목의 이름이 비어 화면에 품목코드가 나온다 —
+                               -- 무슨 물건인지 모르는 줄은 사람이 손대지 않는다.
+                               coalesce((SELECT max(n.raw_item_name)
+                                           FROM std_stock_snapshot n
+                                          WHERE n.tenant_id = :tenantId
+                                            AND n.source    = :source
+                                            AND n.item_ref  = m.item_ref
+                                            AND n.base_at   = :baseAt), '') AS raw_name,
+                               sum(s.%s)                           AS qty,
                                %s                                  AS axis_key
                           FROM reconcile_unit_member m
+                          -- 창고 조건은 «ON 절» 에 붙인다. WHERE 로 내리면 LEFT JOIN 이 사실상
+                          -- INNER JOIN 이 되어, 범위 밖 창고에만 있는 품목이 줄에서 통째로
+                          -- 사라진다 — 그러면 그 품목을 빼거나 옮길 자리도 함께 사라진다.
                           LEFT JOIN std_stock_snapshot s
                             ON s.tenant_id = m.tenant_id
                            AND s.source    = m.source
                            AND s.item_ref  = m.item_ref
-                           AND s.base_at   = :baseAt
+                           AND s.base_at   = :baseAt%s
                          WHERE m.tenant_id     = :tenantId
                            AND m.unit_id       = :unitId
                            AND m.source        = :source
                            AND m.confirmed_at IS NOT NULL
                          GROUP BY m.item_ref, m.factor%s
                          ORDER BY m.item_ref
-                        """.formatted(axisSelect, axisGroup))
+                        """.formatted(CompareField.sanitize(compareField), axisSelect,
+                                      scope.sqlAnd("s"), axisGroup))
                 .param("tenantId", tenantId)
                 .param("unitId", unitId)
                 .param("source", source)
                 .param("baseAt", baseAt.atOffset(java.time.ZoneOffset.UTC))
+                .params(scope.params())
                 .query((rs, rowNum) -> new Part(
                         source,
                         rs.getString("item_ref"),
@@ -353,6 +379,46 @@ public class UnitBreakdown {
      * @param exact 그 회차가 실제로 본 시각으로 계산했나. 거짓이면 되짚은 값이라 화면이 그
      *              사실을 말해야 한다
      */
+    /**
+     * <b>어느 시점의 자료를 볼지.</b>
+     *
+     * <p>시각 셋을 따로 받으면 {@link #of} 인자가 아홉 개가 되어 호출부를 읽을 수 없다.
+     * 세 값은 늘 함께 움직이므로 묶어 둔다.
+     *
+     * @param left   좌측 원천에서 합산한 시각. {@code null} 이면 {@code before} 이전 최근으로 되짚는다
+     * @param right  우측 원천에서 합산한 시각
+     * @param before 되짚을 기준. 보통 회차 시작 시각
+     */
+    public record At(Instant left, Instant right, Instant before) {
+
+        /** 회차가 기록해 둔 시각으로 본다. */
+        public static At of(Instant left, Instant right, Instant before) {
+            return new At(left, right, before);
+        }
+
+        /** 지금 담긴 자료로 본다 — 옛 회차가 아니라 「현재」 를 뜯어볼 때. */
+        public static At now() {
+            return new At(null, null, Instant.now());
+        }
+
+        /**
+         * 좌·우 시각이 둘 다 정해졌나.
+         *
+         * <p>되짚은 값이면 「그때 본 것과 똑같다」 고 말할 수 없다 — 화면이 그 사실을 밝힌다.
+         */
+        public boolean exact() {
+            return left != null && right != null;
+        }
+
+        public Instant leftOr(Instant fallback) {
+            return left != null ? left : fallback;
+        }
+
+        public Instant rightOr(Instant fallback) {
+            return right != null ? right : fallback;
+        }
+    }
+
     public record Breakdown(List<Line> lines, boolean exact, BreakdownAxis axis,
                             boolean leftAxisMissing, boolean rightAxisMissing) {
 
@@ -413,12 +479,22 @@ public class UnitBreakdown {
             return diff().signum() != 0;
         }
 
+        /**
+         * 왼쪽 수량 표시.
+         *
+         * <p><b>「없음」 과 「0개」 를 가른다.</b> 고른 창고 밖에 있는 품목은 조인이 끊겨
+         * 수량이 비는데, 그것을 0 으로 그리면 「재고가 0 이다」 라는 <b>없는 이야기</b>가 된다 —
+         * 실제로는 그 창고에서 안 보기로 한 것뿐이다. 줄 단위 설명이 이 화면의 존재 이유이므로
+         * 여기서 거짓말하면 화면 전체를 못 믿는다.
+         */
         public String leftText() {
-            return left == null ? "—" : MatchBoard.amount(left.effectiveQuantity());
+            return left == null || !left.inStock()
+                    ? "—" : MatchBoard.amount(left.effectiveQuantity());
         }
 
         public String rightText() {
-            return right == null ? "—" : MatchBoard.amount(right.effectiveQuantity());
+            return right == null || !right.inStock()
+                    ? "—" : MatchBoard.amount(right.effectiveQuantity());
         }
 
         public String diffText() {

@@ -11,23 +11,38 @@ package kr.suhsaechan.palim.reconcile.define;
  * 넘어간다 — 이것이 이 타입의 존재 이유다. 나중에 「로트만 본다」 같은 범위가 늘어도 여기만
  * 넓히면 모든 조회가 함께 따라온다.
  *
- * @param leftSource  좌측 원천. 대개 전산(ERP)
- * @param rightSource 우측 원천. 대개 재고를 맡긴 곳
- * @param leftScope   좌측에서 볼 창고. 비어 있으면 전부
- * @param rightScope  우측에서 볼 창고. 비어 있으면 전부
+ * <p><b>창고만 담지 않는다.</b> 「어느 칸을 더할지」({@code compareField})도 같은 성격이다 —
+ * 정의가 정하는데 조회가 안 받으면 각자 다른 칸을 더한다. 실제로 뜯어보기가 {@code base_quantity}
+ * 를 고정으로 박아 두어, 다른 칸을 고른 정의에서 합계와 상세가 어긋났다. 「견주는 방식」 을 한
+ * 묶음으로 들고 다니면 새 조회를 만들 때 그중 하나만 빠뜨릴 수가 없다.
+ *
+ * @param leftSource   좌측 원천. 대개 전산(ERP)
+ * @param rightSource  우측 원천. 대개 재고를 맡긴 곳
+ * @param leftScope    좌측에서 볼 창고. 비어 있으면 전부
+ * @param rightScope   우측에서 볼 창고. 비어 있으면 전부
+ * @param compareField 더할 수치 칸. 허용 목록에 없으면 기본 칸으로 되돌린다
  */
 public record Pairing(String leftSource, String rightSource,
-                      WarehouseScope leftScope, WarehouseScope rightScope) {
+                      WarehouseScope leftScope, WarehouseScope rightScope,
+                      String compareField) {
 
     public Pairing {
         leftScope = leftScope == null ? WarehouseScope.all() : leftScope;
         rightScope = rightScope == null ? WarehouseScope.all() : rightScope;
+        // 칸 이름은 SQL 에 그대로 들어간다. 담을 때 한 번 걸러 두면 쓰는 쪽이 매번 신경 쓰지 않는다.
+        compareField = CompareField.sanitize(compareField);
+    }
+
+    /** 견줄 칸을 따로 정하지 않는 자리. 기본 칸으로 본다. */
+    public Pairing(String leftSource, String rightSource,
+                   WarehouseScope leftScope, WarehouseScope rightScope) {
+        this(leftSource, rightSource, leftScope, rightScope, null);
     }
 
     /** 정의가 정한 그대로. 화면·엔진은 이 길로만 만든다. */
     public static Pairing of(ReconcileDefinition definition) {
         return new Pairing(definition.getLeftSource(), definition.getRightSource(),
-                definition.leftScope(), definition.rightScope());
+                definition.leftScope(), definition.rightScope(), definition.getCompareField());
     }
 
     /**

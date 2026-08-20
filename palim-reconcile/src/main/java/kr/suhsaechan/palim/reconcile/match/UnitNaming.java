@@ -3,6 +3,8 @@ package kr.suhsaechan.palim.reconcile.match;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -36,8 +38,10 @@ public class UnitNaming {
      * @return 지을 이름. 재료가 없으면 빈 문자열
      */
     @Transactional(readOnly = true)
-    public String suggest(UUID tenantId, UUID unitId, String leftSource, String rightSource) {
-        return CommonName.of(names(tenantId, unitId, leftSource), names(tenantId, unitId, rightSource));
+    public String suggest(UUID tenantId, UUID unitId, Pairing pairing) {
+        return CommonName.of(
+                names(tenantId, unitId, pairing.leftSource(), pairing.leftScope()),
+                names(tenantId, unitId, pairing.rightSource(), pairing.rightScope()));
     }
 
     /**
@@ -56,11 +60,11 @@ public class UnitNaming {
      * 붙이는 일이 아니다.
      */
     @Transactional(readOnly = true)
-    public List<Suggestion> suggestions(UUID tenantId, String leftSource, String rightSource) {
+    public List<Suggestion> suggestions(UUID tenantId, Pairing pairing) {
         List<Suggestion> found = new ArrayList<>();
         for (UnitRow unit : activeUnits(tenantId)) {
-            List<String> left = names(tenantId, unit.id(), leftSource);
-            List<String> right = names(tenantId, unit.id(), rightSource);
+            List<String> left = names(tenantId, unit.id(), pairing.leftSource(), pairing.leftScope());
+            List<String> right = names(tenantId, unit.id(), pairing.rightSource(), pairing.rightScope());
             if (left.size() < 2 && right.size() < 2) {
                 continue;
             }
@@ -88,8 +92,18 @@ public class UnitNaming {
                 .list();
     }
 
-    /** 이 묶음에 든 그 원천 품목들의 품명 — 지금 담긴 최신 재고에서. */
-    private List<String> names(UUID tenantId, UUID unitId, String source) {
+    /**
+     * 이 묶음에 든 그 원천 품목들의 품명 — 지금 담긴 최신 재고에서.
+     *
+     * <p><b>창고 범위 안에서만 본다.</b> 정의가 안 보기로 한 창고에만 있는 품목의 이름이
+     * 재료에 섞이면 두 가지가 어긋난다 — (가) 공통 부분이 실제보다 짧게 깎이고,
+     * (나) 「한쪽에 둘 이상일 때만 제안한다」 는 판정이 부풀어, 범위 안에서는 1↔1 인 묶음까지
+     * 다시 짓기 후보로 올라온다. 이 클래스가 스스로 경계한 「나쁜 쪽으로 끌고 가는 제안」 이다.
+     *
+     * <p>기준 시각을 고르는 서브쿼리에는 창고를 걸지 <b>않는다.</b> 시각은 「언제」 이고 창고는
+     * 「얼마」 다 — 좁히면 그 창고에 자료가 없는 회차를 건너뛰어 더 옛 시각을 고르게 된다.
+     */
+    private List<String> names(UUID tenantId, UUID unitId, String source, WarehouseScope scope) {
         return jdbcClient.sql("""
                         SELECT coalesce(max(s.raw_item_name), '') AS raw_name
                           FROM reconcile_unit_member m
@@ -99,16 +113,21 @@ public class UnitNaming {
                            AND s.item_ref  = m.item_ref
                            AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
                                                WHERE x.tenant_id = m.tenant_id
-                                                 AND x.source    = m.source)
-                         WHERE m.tenant_id = :tenantId
-                           AND m.unit_id   = :unitId
-                           AND m.source    = :source
+                                                 AND x.source    = m.source)%s
+                         WHERE m.tenant_id     = :tenantId
+                           AND m.unit_id       = :unitId
+                           AND m.source        = :source
+                           -- 견주는 쪽(합계·뜯어보기)은 확정된 연결만 본다. 이름만 미확정까지
+                           -- 세면 «묶음에 든 품목 수» 가 두 벌이 되어, 「한쪽에 둘 이상일 때만
+                           -- 제안한다」 는 판정이 실제와 어긋난다.
+                           AND m.confirmed_at IS NOT NULL
                          GROUP BY m.item_ref
                          ORDER BY m.item_ref
-                        """)
+                        """.formatted(scope.sqlAnd("s")))
                 .param("tenantId", tenantId)
                 .param("unitId", unitId)
                 .param("source", source)
+                .params(scope.params())
                 .query(String.class)
                 .list()
                 .stream()

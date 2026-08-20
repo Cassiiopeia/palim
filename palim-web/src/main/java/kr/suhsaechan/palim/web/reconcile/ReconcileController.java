@@ -284,9 +284,9 @@ public class ReconcileController {
             model.addAttribute("expandUnitId", expand);
             model.addAttribute("axis", using);
             model.addAttribute("axes", breakdowns.axes(tenantId));
-            model.addAttribute("breakdown", breakdowns.of(tenantId, expand,
-                    definition.getLeftSource(), definition.getRightSource(),
-                    run.getLeftBaseAt(), run.getRightBaseAt(), run.getStartedAt(), using));
+            model.addAttribute("breakdown", breakdowns.of(tenantId, expand, Pairing.of(definition),
+                    UnitBreakdown.At.of(run.getLeftBaseAt(), run.getRightBaseAt(),
+                            run.getStartedAt()), using));
         }
 
         model.addAttribute("title", definition.getName() + " · 결과");
