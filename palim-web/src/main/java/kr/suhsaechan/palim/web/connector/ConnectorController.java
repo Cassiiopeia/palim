@@ -379,6 +379,19 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/" + id + "/mapping";
+        } catch (RuntimeException e) {
+            // 예상하지 못한 실패도 «화면으로» 돌려보낸다.
+            //
+            // 이 폼은 브라우저가 보내는 것인데 여기서 예외가 새어 나가면 전역 핸들러가
+            // JSON 오류 본문을 그대로 내려준다 — 사장님 화면에 {"errorCode":"INTERNAL_ERROR"}
+            // 가 뜨고, 뒤로 가기 말고는 길이 없다. 실제로 그렇게 겪었다.
+            //
+            // 실행 기록은 ConnectorRunner 가 이미 실패로 닫았고 무엇이 터졌는지 한 줄이
+            // 남아 있다. 그 자리로 보낸다 — 「오류가 났습니다」 만으로는 다음에 할 일이 없다.
+            log.error("실행이 예상하지 못한 오류로 끝났습니다 — 커넥터id={} 모드={}", id, mode, e);
+            redirect.addFlashAttribute("flashError",
+                    "실행이 예상하지 못한 오류로 멈췄습니다. 실행 이력에서 무엇이 잘못됐는지 볼 수 있습니다.");
+            return "redirect:/connectors/" + id + "/runs";
         } finally {
             adminService.deleteQuietly(temp);
         }
