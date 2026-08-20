@@ -11,6 +11,8 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -94,6 +96,46 @@ public class ReconcileRun extends BaseTimeEntity {
     }
 
     /** 어느 시각의 자료를 봤는지 남긴다. 합산 직후 부른다. */
+    /**
+     * 이 회차가 <b>무엇을 견줬는지</b>.
+     *
+     * <p>정의를 보고 다시 계산하면 안 된다 — 설정을 바꾼 뒤 지난 회차를 열면 저장된 합계와
+     * 화면의 상세가 어긋난다. 게다가 회차마다 맞기도 하고 틀리기도 해서 「늘 틀린다」 보다
+     * 원인을 찾기 어렵다.
+     *
+     * <p>비어 있으면 「그때는 전 창고를 봤다」 로 읽는다 — 이 칸이 생기기 전 회차가 그랬다.
+     */
+    @Column(length = 1000)
+    private String leftWarehouses;
+
+    @Column(length = 1000)
+    private String rightWarehouses;
+
+    /** 이 회차가 더한 수치 칸. 비어 있으면 기본 칸. */
+    @Column(length = 50)
+    private String compareField;
+
+    /** 이 회차가 실제로 본 범위를 남긴다. 실행 직후 한 번만 부른다. */
+    public void recordScope(Pairing pairing) {
+        this.leftWarehouses = pairing.leftScope().toStored();
+        this.rightWarehouses = pairing.rightScope().toStored();
+        this.compareField = pairing.compareField();
+    }
+
+    /**
+     * 이 회차가 본 범위 그대로.
+     *
+     * <p>상세 화면이 «오늘의 정의» 가 아니라 이 값으로 다시 계산해야 저장된 합계와 맞는다.
+     *
+     * @param leftSource  회차에는 원천 이름을 남기지 않으므로 정의에서 받는다.
+     *                    원천이 바뀌면 그것은 다른 대조다
+     */
+    public Pairing scopeOf(String leftSource, String rightSource) {
+        return new Pairing(leftSource, rightSource,
+                WarehouseScope.parse(leftWarehouses), WarehouseScope.parse(rightWarehouses),
+                compareField);
+    }
+
     public void recordSourceTimes(Instant leftBaseAt, Instant rightBaseAt) {
         this.leftBaseAt = leftBaseAt;
         this.rightBaseAt = rightBaseAt;

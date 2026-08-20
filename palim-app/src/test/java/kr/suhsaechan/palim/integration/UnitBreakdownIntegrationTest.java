@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
@@ -103,13 +104,19 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     }
 
     private void snapshot(String source, String itemRef, String name, String qty) {
+        snapshot(source, itemRef, name, qty, "");
+    }
+
+    /** 창고를 지정해 담는다. 스냅샷의 자연키에 창고가 들어 있어 같은 품목을 창고별로 담을 수 있다. */
+    private void snapshot(String source, String itemRef, String name, String qty,
+                          String warehouse) {
         var at = baseAt.atOffset(ZoneOffset.UTC);
         jdbcClient.sql("""
                         INSERT INTO std_stock_snapshot
                             (id, tenant_id, item_ref, base_at, source, warehouse_code, lot_code,
                              quantity, base_quantity, base_unit, raw_item_name,
                              created_at, updated_at)
-                        VALUES (:id, :tenant, :item, :at, :source, '', '',
+                        VALUES (:id, :tenant, :item, :at, :source, :warehouse, '',
                                 :qty, :qty, 'EA', :name, :at, :at)
                         """)
                 .param("id", UUID.randomUUID())
@@ -117,6 +124,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 .param("item", itemRef)
                 .param("at", at)
                 .param("source", source)
+                .param("warehouse", warehouse)
                 .param("qty", new BigDecimal(qty))
                 .param("name", name)
                 .update();
@@ -162,8 +170,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     void 로트별로_갈라_본다() {
         ReconcileUnit unit = linkedUnit();
 
-        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt, BreakdownAxis.byName());
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), Pairing.ofSources(erp, wms),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
 
         assertThat(result.lines()).hasSize(4);
         assertThat(result.leftTotal()).isEqualByComparingTo("318");
@@ -196,8 +204,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
         ReconcileUnit unit = unitService.link(picks,
                 "U-" + UUID.randomUUID().toString().substring(0, 8), "클래식 850g", "EA");
 
-        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt, BreakdownAxis.byName());
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), Pairing.ofSources(erp, wms),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
 
         assertThat(result.orphans())
                 .as("한쪽에 하나 더 붙어 있다는 사실이 안 보이면 잘못 이은 것을 못 찾는다")
@@ -303,7 +311,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 "U-" + UUID.randomUUID().toString().substring(0, 8),
                 "클래식 850g (27.03.16)", "EA");
 
-        assertThat(naming.suggestions(TENANT, erp, wms))
+        assertThat(naming.suggestions(TENANT, Pairing.ofSources(erp, wms)))
                 .as("담긴 품명과 다른 이름은 다시 지을 후보로 보여야 한다")
                 .anySatisfy(suggestion -> {
                     assertThat(suggestion.unitId()).isEqualTo(unit.getId());
@@ -393,8 +401,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 "U-" + UUID.randomUUID().toString().substring(0, 8), "제품A", "EA");
 
         BreakdownAxis byLot = breakdowns.axisOf(TENANT, "FIELD:lot_code");
-        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), left, right,
-                baseAt, baseAt, baseAt, byLot);
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), Pairing.ofSources(left, right),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), byLot);
 
         assertThat(result.lines()).hasSize(2);
         assertThat(result.orphans()).isZero();
@@ -419,8 +427,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     void 기준이_안_맞으면_말한다() {
         ReconcileUnit unit = linkedUnit();
 
-        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt, breakdowns.axisOf(TENANT, "FIELD:lot_code"));
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), Pairing.ofSources(erp, wms),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), breakdowns.axisOf(TENANT, "FIELD:lot_code"));
 
         assertThat(result.axisUnusable())
                 .as("말하지 않으면 사람은 자료가 잘못된 줄 안다")
@@ -433,8 +441,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     void 짝짓지_않는다() {
         ReconcileUnit unit = linkedUnit();
 
-        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), erp, wms,
-                baseAt, baseAt, baseAt, BreakdownAxis.none());
+        UnitBreakdown.Breakdown result = breakdowns.of(TENANT, unit.getId(), Pairing.ofSources(erp, wms),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.none());
 
         assertThat(result.lines()).hasSize(8);
         assertThat(result.lines()).noneSatisfy(line -> assertThat(line.paired()).isTrue());
@@ -557,5 +565,83 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 .as("남기지 않으면 그 회차가 본 자료를 다시 불러올 수 없다")
                 .isNotNull();
         assertThat(run.getRightBaseAt()).isNotNull();
+    }
+
+    /**
+     * <b>합계와 뜯어보기가 같은 수를 낸다.</b>
+     *
+     * <p>엔진은 정의가 고른 창고로 좁혀 합산하는데 뜯어보기가 전 창고를 더하면, 결과 화면에서
+     * 줄의 합계와 그 <b>바로 아래</b> 상세가 다른 수를 말한다. 두 값이 붙어 있어 어긋남이 즉시
+     * 눈에 띄고, 어느 쪽을 믿을지 알 방법이 없다.
+     */
+    @Test
+    @DisplayName("창고를 고르면 뜯어보기도 그 창고만 더한다")
+    void 뜯어보기가_창고를_따른다() {
+        snapshot(erp, "P-1", "제품A", "100", "W-CONSIGN");
+        snapshot(erp, "P-1", "제품A", "30", "W-OFFICE");
+        snapshot(wms, "Q-1", "제품A", "100");
+
+        ReconcileUnit unit = unitService.link(List.of(
+                new ReconcileUnitService.Pick(erp, "P-1", BigDecimal.ONE),
+                new ReconcileUnitService.Pick(wms, "Q-1", BigDecimal.ONE)),
+                "U-WH-" + UUID.randomUUID().toString().substring(0, 6), "제품A", "EA");
+
+        Pairing all = Pairing.ofSources(erp, wms);
+        Pairing consigned = new Pairing(erp, wms,
+                new WarehouseScope(List.of("W-CONSIGN")), WarehouseScope.all(), null);
+
+        var whole = breakdowns.of(TENANT, unit.getId(), all,
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
+        var scoped = breakdowns.of(TENANT, unit.getId(), consigned,
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
+
+        assertThat(whole.lines()).singleElement().satisfies(line ->
+                assertThat(line.leftQuantity())
+                        .as("창고를 안 고르면 위탁 100 + 사무실 30 을 더한다")
+                        .isEqualByComparingTo("130"));
+
+        assertThat(scoped.lines()).singleElement().satisfies(line -> {
+            assertThat(line.leftQuantity())
+                    .as("위탁 창고만 고르면 그 창고 수량만 더한다 — 엔진 합계와 같아야 한다")
+                    .isEqualByComparingTo("100");
+            assertThat(line.diff())
+                    .as("좁히면 어긋남이 사라진다")
+                    .isEqualByComparingTo("0");
+        });
+    }
+
+    /**
+     * 고른 창고 밖에 있는 품목은 <b>「없음」 이지 「0개」 가 아니다.</b>
+     *
+     * <p>0 으로 그리면 「재고가 0 이다」 라는 없는 이야기가 된다 — 실제로는 그 창고에서 안 보기로
+     * 한 것뿐이다. 그리고 줄에서 아예 빼 버리면 그 품목을 빼거나 옮길 자리도 함께 사라진다.
+     */
+    @Test
+    @DisplayName("고른 창고 밖 품목은 줄에 남되 「없음」 으로 그려지고 이름을 잃지 않는다")
+    void 범위_밖_품목은_없음으로() {
+        snapshot(erp, "P-2", "제품B", "50", "W-OFFICE");
+        snapshot(wms, "Q-2", "제품B", "50");
+
+        ReconcileUnit unit = unitService.link(List.of(
+                new ReconcileUnitService.Pick(erp, "P-2", BigDecimal.ONE),
+                new ReconcileUnitService.Pick(wms, "Q-2", BigDecimal.ONE)),
+                "U-OUT-" + UUID.randomUUID().toString().substring(0, 6), "제품B", "EA");
+
+        var scoped = breakdowns.of(TENANT, unit.getId(),
+                new Pairing(erp, wms, new WarehouseScope(List.of("W-CONSIGN")),
+                        WarehouseScope.all(), null),
+                UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
+
+        assertThat(scoped.lines())
+                .as("범위 밖이라고 줄에서 빼면 그 품목을 손댈 자리가 사라진다")
+                .isNotEmpty()
+                .anySatisfy(line -> {
+                    assertThat(line.leftText())
+                            .as("「0」 으로 그리면 재고가 0 이라는 없는 이야기가 된다")
+                            .isEqualTo("—");
+                    assertThat(line.label())
+                            .as("이름은 「무엇」 이라 창고와 무관하다 — 품목코드가 나오면 안 된다")
+                            .isEqualTo("제품B");
+                });
     }
 }
