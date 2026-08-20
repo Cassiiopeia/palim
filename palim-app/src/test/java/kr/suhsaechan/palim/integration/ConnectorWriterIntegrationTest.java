@@ -40,7 +40,7 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     @DisplayName("TEST 적재는 표준 테이블을 건드리지 않는다")
     void 테스트_적재는_운영을_건드리지_않는다() {
         String itemRef = uniqueItem();
-        UUID runId = UUID.randomUUID();
+        UUID runId = newRun();
 
         stagingWriter.write(TENANT, runId, snapshotModel(), List.of(snapshotRow(itemRef, "10")));
 
@@ -52,8 +52,8 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("스테이징 삭제는 그 실행분만 지운다")
     void 스테이징을_실행_단위로_지운다() {
-        UUID keep = UUID.randomUUID();
-        UUID drop = UUID.randomUUID();
+        UUID keep = newRun();
+        UUID drop = newRun();
         stagingWriter.write(TENANT, keep, snapshotModel(), List.of(snapshotRow(uniqueItem(), "10")));
         stagingWriter.write(TENANT, drop, snapshotModel(), List.of(snapshotRow(uniqueItem(), "20")));
 
@@ -69,7 +69,7 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     void 표준_테이블에_적재한다() {
         String itemRef = uniqueItem();
 
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(),
+        standardWriter.write(TENANT, newRun(), snapshotModel(),
                 List.of(snapshotRow(itemRef, "10")));
 
         assertThat(countSnapshot(itemRef)).isEqualTo(1);
@@ -81,9 +81,9 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     void 재적재가_중복을_만들지_않는다() {
         String itemRef = uniqueItem();
 
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(),
+        standardWriter.write(TENANT, newRun(), snapshotModel(),
                 List.of(snapshotRow(itemRef, "10")));
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(),
+        standardWriter.write(TENANT, newRun(), snapshotModel(),
                 List.of(snapshotRow(itemRef, "25")));
 
         assertThat(countSnapshot(itemRef))
@@ -98,8 +98,8 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
         // lot_code 와 warehouse_code 가 없는 행. NULLS NOT DISTINCT 가 없으면 매번 새 행이 된다.
         MappedRow row = snapshotRow(itemRef, "10");
 
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(), List.of(row));
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(), List.of(row));
+        standardWriter.write(TENANT, newRun(), snapshotModel(), List.of(row));
+        standardWriter.write(TENANT, newRun(), snapshotModel(), List.of(row));
 
         assertThat(countSnapshot(itemRef)).isEqualTo(1);
     }
@@ -108,7 +108,7 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     @DisplayName("처음 만든 행은 undo 로그에 이전 값이 없다 — 되돌리기는 삭제다")
     void 신규_행은_이전값이_없다() {
         String itemRef = uniqueItem();
-        UUID runId = UUID.randomUUID();
+        UUID runId = newRun();
 
         standardWriter.write(TENANT, runId, snapshotModel(), List.of(snapshotRow(itemRef, "10")));
 
@@ -119,10 +119,10 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     @DisplayName("덮어쓴 행은 undo 로그에 이전 값이 남는다")
     void 덮어쓰면_이전값을_남긴다() {
         String itemRef = uniqueItem();
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(),
+        standardWriter.write(TENANT, newRun(), snapshotModel(),
                 List.of(snapshotRow(itemRef, "10")));
 
-        UUID secondRun = UUID.randomUUID();
+        UUID secondRun = newRun();
         standardWriter.write(TENANT, secondRun, snapshotModel(),
                 List.of(snapshotRow(itemRef, "25")));
 
@@ -134,10 +134,10 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     @DisplayName("한 실행에 같은 자연키가 두 번 와도 undo 는 하나만 남는다")
     void undo_는_실행당_하나다() {
         String itemRef = uniqueItem();
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(),
+        standardWriter.write(TENANT, newRun(), snapshotModel(),
                 List.of(snapshotRow(itemRef, "10")));
 
-        UUID runId = UUID.randomUUID();
+        UUID runId = newRun();
         standardWriter.write(TENANT, runId, snapshotModel(),
                 List.of(snapshotRow(itemRef, "20"), snapshotRow(itemRef, "30")));
 
@@ -154,7 +154,7 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
         MappedRow row = new MappedRow(1, snapshotValues(itemRef, "10"),
                 Map.of("공급처", "합성공급처", "비고", "메모"));
 
-        standardWriter.write(TENANT, UUID.randomUUID(), snapshotModel(), List.of(row));
+        standardWriter.write(TENANT, newRun(), snapshotModel(), List.of(row));
 
         String attributes = jdbcClient.sql(
                         "SELECT attributes::text FROM std_stock_snapshot WHERE item_ref = :ref")
@@ -165,6 +165,47 @@ class ConnectorWriterIntegrationTest extends IntegrationTest {
     private TargetModel snapshotModel() {
         return targetModelRepository.findByTenantIdAndCode(TENANT, "std_stock_snapshot")
                 .orElseThrow();
+    }
+
+    /**
+     * 실제로 있는 실행 하나.
+     *
+     * <p>예전에는 여기에 {@code UUID.randomUUID()} 를 넘겼다. 그때는 {@code run_id} 에 외래키가
+     * 없어 아무 값이나 통했지만, 지금은 <b>담긴 자료가 실제 실행을 가리켜야</b> 한다
+     * ({@code V33__connector_cascade.sql}) — 연동을 지울 때 그 자료가 무엇에 딸린 것인지
+     * 알아야 함께 지울 수 있기 때문이다.
+     *
+     * <p>실행마다 커넥터를 새로 만든다. {@code ux_connector_run_running} 이 커넥터당 RUNNING 을
+     * 하나로 묶으므로 상태는 끝난 것으로 둔다 — 적재기 시험에 실행 상태는 상관이 없다.
+     */
+    private UUID newRun() {
+        UUID connectorId = UUID.randomUUID();
+        jdbcClient.sql("""
+                        INSERT INTO connector
+                            (id, tenant_id, code, name, target_model_id, source_type,
+                             created_at, updated_at)
+                        VALUES (:id, :tenant, :code, '적재기 시험', :model, 'HTTP_API', now(), now())
+                        """)
+                .param("id", connectorId)
+                .param("tenant", TENANT)
+                .param("code", "WRITER-" + connectorId.toString().substring(0, 8))
+                .param("model", snapshotModel().getId())
+                .update();
+
+        UUID created = UUID.randomUUID();
+        jdbcClient.sql("""
+                        INSERT INTO connector_run
+                            (id, tenant_id, connector_id, mapping_id, mapping_version,
+                             run_mode, trigger_type, status, started_at, created_at, updated_at)
+                        VALUES (:id, :tenant, :connector, :mapping, 1,
+                                'LIVE', 'MANUAL', 'SUCCEEDED', now(), now(), now())
+                        """)
+                .param("id", created)
+                .param("tenant", TENANT)
+                .param("connector", connectorId)
+                .param("mapping", UUID.randomUUID())
+                .update();
+        return created;
     }
 
     private String uniqueItem() {
