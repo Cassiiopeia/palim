@@ -3,10 +3,13 @@ package kr.suhsaechan.palim.web.reconcile;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.engine.SnapshotAggregator;
 import kr.suhsaechan.palim.reconcile.match.BreakdownAxis;
 import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
@@ -43,6 +46,7 @@ public class ReconcileController {
     private final UnitBreakdown breakdowns;
     private final ReconcileEngine engine;
     private final ReconcileDefinitionRepository definitions;
+    private final SnapshotAggregator aggregator;
     private final ReconcileRunRepository runs;
     private final ReconcileDiffRepository diffs;
     private final ErrorMessageResolver errorMessages;
@@ -128,7 +132,47 @@ public class ReconcileController {
         model.addAttribute("definition", definition);
         model.addAttribute("runs", runs.findByDefinitionIdOrderByStartedAtDesc(id));
         model.addAttribute("granularities", BaseAtGranularity.values());
+        // 어느 창고끼리 견줄지 고르려면 «담긴 자료에 실제로 있는» 창고를 보여줘야 한다.
+        UUID tenantId = TenantContext.current();
+        model.addAttribute("leftWarehouses",
+                aggregator.warehouses(tenantId, definition.getLeftSource()));
+        model.addAttribute("rightWarehouses",
+                aggregator.warehouses(tenantId, definition.getRightSource()));
+        model.addAttribute("leftScope", definition.leftScope());
+        model.addAttribute("rightScope", definition.rightScope());
         return "reconcile/detail";
+    }
+
+    /**
+     * <b>어느 창고끼리 견줄지</b> 정한다.
+     *
+     * <p>재고를 맡긴 곳은 자기가 보관 중인 것만 안다. 그런데 전산 쪽에는 창고가 여럿이다 —
+     * 위탁 창고, 사무실, 매장. <b>전부 더해서 견주면 위탁하지 않은 물량만큼 무조건 어긋나고</b>,
+     * 그 어긋남은 맞던 품목까지 틀린 것으로 보이게 만든다.
+     *
+     * <p>비우면 전부 본다 — 지금까지의 동작이라 이미 만들어 둔 정의가 깨지지 않는다. 한쪽만
+     * 정하는 것도 허용한다. 맡긴 쪽은 창고가 하나뿐이라 고를 것이 없는 경우가 흔하다.
+     */
+    @PostMapping("/reconcile/{id}/warehouses")
+    public String changeWarehouses(@PathVariable UUID id,
+                                   @RequestParam(name = "leftWarehouse", required = false)
+                                   List<String> left,
+                                   @RequestParam(name = "rightWarehouse", required = false)
+                                   List<String> right,
+                                   RedirectAttributes redirect) {
+        ReconcileDefinition definition = definitions.findById(id).orElseThrow();
+
+        WarehouseScope leftScope = new WarehouseScope(left == null ? List.of() : left);
+        WarehouseScope rightScope = new WarehouseScope(right == null ? List.of() : right);
+        definition.changeWarehouses(leftScope, rightScope);
+        definitions.save(definition);
+
+        log.info("대조 창고 범위 변경 — 정의={} 좌={} 우={}",
+                definition.getCode(), leftScope.describe(), rightScope.describe());
+        redirect.addFlashAttribute("flashSuccess",
+                "견줄 창고를 정했습니다. 좌 «%s» · 우 «%s». 다음 대조부터 적용됩니다."
+                        .formatted(leftScope.describe(), rightScope.describe()));
+        return "redirect:/reconcile/" + id;
     }
 
     /**

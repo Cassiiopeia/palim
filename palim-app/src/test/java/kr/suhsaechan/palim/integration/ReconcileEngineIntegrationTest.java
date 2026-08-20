@@ -11,6 +11,7 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
@@ -63,11 +64,17 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
     }
 
     private void snapshot(String source, String itemRef, String qty, Instant at) {
+        snapshot(source, itemRef, qty, at, "");
+    }
+
+    /** 창고를 지정해 담는다. 창고 짝을 시험하려면 한 원천에 창고가 여럿이어야 한다. */
+    private void snapshot(String source, String itemRef, String qty, Instant at,
+                          String warehouse) {
         jdbcClient.sql("""
                         INSERT INTO std_stock_snapshot
                             (id, tenant_id, item_ref, base_at, source, warehouse_code, lot_code,
                              quantity, base_quantity, base_unit, raw_item_name, created_at, updated_at)
-                        VALUES (:id, :tenant, :item, :at, :source, '', '',
+                        VALUES (:id, :tenant, :item, :at, :source, :warehouse, '',
                                 :qty, :qty, 'EA', :name, :at, :at)
                         """)
                 .param("id", UUID.randomUUID())
@@ -75,6 +82,7 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
                 .param("item", itemRef)
                 .param("at", at.atOffset(ZoneOffset.UTC))
                 .param("source", source)
+                .param("warehouse", warehouse)
                 .param("qty", new BigDecimal(qty))
                 .param("name", "제품 " + itemRef)
                 .update();
@@ -255,5 +263,110 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
                 .doesNotContain("RECONCILE_SNAPSHOT_MISSING")
                 .as("자동으로 돈 것도 화면과 같은 말이어야 한다")
                 .contains("비교할 재고가 없습니다");
+    }
+
+    /**
+     * 재고를 맡긴 곳은 <b>자기가 보관 중인 것만</b> 안다.
+     *
+     * <p>그런데 전산 쪽에는 창고가 여럿이다 — 위탁 창고, 사무실, 매장. 전부 더해서 견주면
+     * 위탁하지 않은 물량만큼 무조건 어긋난다. 그것뿐이면 「숫자가 좀 크다」 로 끝나지만,
+     * <b>맞던 품목까지 틀린 것으로 보인다.</b>
+     *
+     * <p>실측(2026-08-19)에서 전 창고를 더해 견주니 총합 차이가 754개로 나왔는데, 위탁 창고만
+     * 견주면 1개였다. 일치 품목은 11건에서 3건으로 무너졌다.
+     */
+    @Test
+    @DisplayName("창고를 고르지 않으면 맡기지 않은 창고까지 합산되어 차이로 나온다")
+    void 창고를_안_고르면_전부_합산된다() {
+        ReconcileUnit unit = unitAcrossWarehouses("100", "30", "100");
+        ReconcileDefinition definition = definition("0");
+
+        ReconcileRun run = engine.run(definition.getId());
+
+        assertThat(diffsOf(run))
+                .as("위탁 100 + 사무실 30 을 더해 130 으로 견주므로 30 이 차이로 남는다")
+                .anySatisfy(diff -> {
+                    assertThat(diff.getUnitId()).isEqualTo(unit.getId());
+                    assertThat(diff.getDelta()).isEqualByComparingTo("30");
+                });
+    }
+
+    /** 맡긴 창고만 고르면 견주는 범위가 좁아져 어긋남이 사라진다. */
+    @Test
+    @DisplayName("맡긴 창고만 고르면 그 창고만 견준다")
+    void 창고를_고르면_그것만_견준다() {
+        unitAcrossWarehouses("100", "30", "100");
+        ReconcileDefinition definition = definition("0");
+        definition.changeWarehouses(
+                new WarehouseScope(List.of(CONSIGNED)), WarehouseScope.all());
+        definitions.save(definition);
+
+        ReconcileRun run = engine.run(definition.getId());
+
+        assertThat(diffsOf(run))
+                .as("위탁 창고 100 과 물류 100 은 같으므로 차이가 없어야 한다")
+                .isEmpty();
+    }
+
+    /**
+     * 창고를 구분하지 않는 원천은 코드가 <b>빈 문자열</b>이다({@code warehouse_code} 는
+     * {@code NOT NULL DEFAULT ''}).
+     *
+     * <p>그것을 그대로 담으면 저장 → 다시 읽기 왕복에서 <b>선택이 조용히 사라진다</b> —
+     * 저장값이 빈 문자열이 되고, 읽을 때 그것은 「전부」 로 해석된다. 화면은 「정했습니다」 라고
+     * 말하는데 대조는 여전히 전 창고를 더한다. 고쳤다고 믿는 쪽이 안 고친 것보다 나쁘다.
+     */
+    @Test
+    @DisplayName("빈 창고 코드는 「고르지 않음」과 구분되지 않으므로 담지 않는다")
+    void 빈_창고_코드는_걸러진다() {
+        assertThat(new WarehouseScope(List.of("")).isAll())
+                .as("빈 코드만 고른 것은 「전부」 와 같다 — 저장해도 사라지므로 애초에 담지 않는다")
+                .isTrue();
+
+        assertThat(new WarehouseScope(List.of("W-1", "", "  ", "W-1")).codes())
+                .as("빈 값과 중복은 버리고 고른 순서는 지킨다")
+                .containsExactly("W-1");
+
+        assertThat(WarehouseScope.parse("W-1, ,W-2,W-1").codes())
+                .as("저장된 값을 읽는 길도 같은 규칙이어야 한다 — 두 입구가 다르면 한쪽만 어긋난다")
+                .containsExactly("W-1", "W-2");
+
+        assertThat(new WarehouseScope(List.of("W-1")).toStored())
+                .as("저장 형태는 쉼표로 잇는다")
+                .isEqualTo("W-1");
+        assertThat(WarehouseScope.all().toStored())
+                .as("전부일 때는 NULL — 빈 문자열로 두면 「고른 것이 없음」 과 구분되지 않는다")
+                .isNull();
+    }
+
+    /** 위탁 창고 코드. 시험 안에서 「어느 창고가 맡긴 곳인지」 를 이름으로 드러낸다. */
+    private static final String CONSIGNED = "W-CONSIGN";
+
+    /** 사무실 창고. 맡기지 않은 물량이라 견주면 안 되는 쪽이다. */
+    private static final String OFFICE = "W-OFFICE";
+
+    /**
+     * 전산 쪽 <b>두 창고</b>와 물류 쪽 한 곳에 같은 묶음으로 담는다.
+     *
+     * <p>스냅샷의 자연키에 창고가 들어 있어(`(tenant, source, base_at, item_ref,
+     * warehouse_code, lot_code)`) 같은 품목을 창고별로 따로 담을 수 있다 — 자료 구조는 창고를
+     * 처음부터 지원했고, 견주는 쪽만 그것을 안 보고 있었다.
+     */
+    private ReconcileUnit unitAcrossWarehouses(String consignedQty, String officeQty,
+                                               String wmsQty) {
+        ReconcileUnit unit = unitService.create(
+                "UNIT-" + UUID.randomUUID().toString().substring(0, 8), "제품A", "EA");
+        String erpItem = "E-" + UUID.randomUUID().toString().substring(0, 6);
+        String wmsItem = "W-" + UUID.randomUUID().toString().substring(0, 6);
+
+        unitService.confirm(unitService.propose(
+                unit.getId(), erp, erpItem, BigDecimal.ONE).getId());
+        unitService.confirm(unitService.propose(
+                unit.getId(), wms, wmsItem, BigDecimal.ONE).getId());
+
+        snapshot(erp, erpItem, consignedQty, baseAt, CONSIGNED);
+        snapshot(erp, erpItem, officeQty, baseAt, OFFICE);
+        snapshot(wms, wmsItem, wmsQty, baseAt, "");
+        return unit;
     }
 }

@@ -119,6 +119,13 @@
         <div class="flex items-center gap-3 mb-2">
             <h2 class="text-base font-semibold">지금 쓰는 규칙</h2>
             <span class="text-xs text-base-content/60">위에서부터 차례로 적용합니다</span>
+            <!--/* 자기 자료에 맞지 않는 기본 규칙이 심어져 있을 때, 전부 끄고 필요한 것만 다시
+                   켜는 편이 빠르다. 하나씩 끄게 하면 그 앞에서 포기한다. 지우는 것이 아니라
+                   끄는 것이므로 되돌릴 수 있고, 확인을 묻지 않는다. */-->
+            <form th:if="${!#lists.isEmpty(rules)}" method="post"
+                  th:action="@{/reconcile/rules/deactivate-all}">
+                <button type="submit" class="btn btn-ghost btn-sm">모두 끄기</button>
+            </form>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 

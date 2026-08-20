@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.match.MatchBoard;
@@ -84,7 +85,7 @@ class MatchBoardIntegrationTest extends IntegrationTest {
     }
 
     private MatchBoard.Board load(MatchBoard.Tab tab) {
-        return board.load(TENANT, erp, wms, tab, null, 0);
+        return board.load(TENANT, Pairing.ofSources(erp, wms), tab, null, 0);
     }
 
     @Test
@@ -199,14 +200,14 @@ class MatchBoardIntegrationTest extends IntegrationTest {
      * 다른 물건이 되어 영영 안 묶인다.
      */
     @Test
-    @DisplayName("기본 규칙만으로 유통기한 표기 차이를 흡수한다")
+    @DisplayName("켜진 채로 남는 기본 규칙은 표기 차이만 흡수한다")
     void 기본_규칙이_있다() {
         normalizer.clearCache();
 
-        assertThat(normalizer.normalize("제품A 227g (26.10.17)"))
-                .as("괄호에 붙은 유통기한 — 로트가 달라도 같은 제품이다")
-                .isEqualTo(normalizer.normalize("제품A 227g (27.04.07)"));
-
+        // 괄호·이름 속 날짜를 떼는 둘은 «꺼진 채로» 설치된다. 소비기한으로만 구분되는 서로 다른
+        // 품목을 한 물건으로 만들기 때문이다 — 그 확인은 규칙 화면 시험이 시드 ID 로 한다.
+        // 여기서 같은 것을 이름으로 확인하면, 다른 시험이 남긴 「괄호 안 내용 제거」 에 걸려
+        // 무엇을 보고 있는지 알 수 없게 된다.
         assertThat(normalizer.normalize("C227P_26.10.17"))
                 .as("품목코드에 붙은 유통기한")
                 .isEqualTo(normalizer.normalize("C227P_27.04.07"));

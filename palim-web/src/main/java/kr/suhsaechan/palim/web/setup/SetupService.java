@@ -2,6 +2,7 @@ package kr.suhsaechan.palim.web.setup;
 
 import java.util.ArrayList;
 import java.util.List;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
@@ -128,8 +129,7 @@ public class SetupService {
         int todo = 0;
         int linked = 0;
         for (ReconcileDefinition definition : definitions) {
-            MatchBoard.Counts counts = matchBoard.load(TenantContext.current(),
-                    definition.getLeftSource(), definition.getRightSource(),
+            MatchBoard.Counts counts = matchBoard.load(TenantContext.current(), Pairing.of(definition),
                     MatchBoard.Tab.TODO, null, 0).counts();
             todo += counts.todo();
             linked += counts.linked();

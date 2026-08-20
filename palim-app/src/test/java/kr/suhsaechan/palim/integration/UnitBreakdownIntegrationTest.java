@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -61,6 +62,8 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     @Autowired private UnitNaming naming;
     @Autowired private MatchBoard board;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationRuleRepository normalizationRules;
+    @Autowired private kr.suhsaechan.palim.reconcile.rule.NormalizationEngine normalizer;
 
     private ReconcileDefinition definition;
     private String erp;
@@ -140,6 +143,20 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
      * <p>+11 이 어디서 왔는지를 로트별로 갈라 보여준다. 갈라 보지 않으면 「재고가 빈다」 로
      * 읽히고, 사람은 있지도 않은 재고 사고를 쫓게 된다.
      */
+
+    /**
+     * 괄호 안 유통기한을 떼는 규칙.
+     *
+     * <p>이 규칙은 <b>꺼진 채로 설치된다</b> — 소비기한으로만 구분되는 서로 다른 품목이 있는
+     * 곳에서 그것들을 한 물건으로 만들기 때문이다. 그래서 이 규칙이 있어야 성립하는 시험은
+     * 자기 전제를 직접 만든다.
+     */
+    private void bracketRule() {
+        normalizationRules.save(kr.suhsaechan.palim.reconcile.rule.NormalizationRule.of(
+                TENANT, "시험용 괄호 제거", "\\([^)]*\\)", "", 1));
+        normalizer.clearCache();
+    }
+
     @Test
     @DisplayName("합계 뒤에 무엇이 있는지 로트별로 갈라 보여준다")
     void 로트별로_갈라_본다() {
@@ -243,7 +260,9 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("여럿을 이으면 공통 부분만 이름으로 쓴다")
     void 공통_부분만_이름으로() {
-        MatchBoard.Row row = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        // 이 시험은 괄호 규칙이 있어야 성립한다. 기본 규칙은 꺼진 채로 설치된다.
+        bracketRule();
+        MatchBoard.Row row = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst();
 
         assertThat(row.suggestedName())
@@ -260,7 +279,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
         snapshot(other, "X1", "코코아 227g (27.01.15)", "10");
         snapshot(otherWms, "Y1", "코코아 227g (27.01.15)", "8");
 
-        MatchBoard.Row row = board.load(TENANT, other, otherWms, MatchBoard.Tab.PAIRED, null, 0)
+        MatchBoard.Row row = board.load(TENANT, Pairing.ofSources(other, otherWms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst();
 
         assertThat(row.suggestedName()).isEqualTo("코코아 227g (27.01.15)");
@@ -506,7 +525,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                         .param("rule", "FIRST_ITEM"))
                 .andExpect(status().is3xxRedirection());
 
-        String key = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
         mockMvc.perform(post("/reconcile/units/link")
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
