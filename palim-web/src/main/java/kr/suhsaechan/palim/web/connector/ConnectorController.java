@@ -450,9 +450,15 @@ public class ConnectorController {
     /**
      * 연동 지우기.
      *
-     * <p>자료를 담은 적이 있거나 대조가 쓰고 있으면 <b>막고 이유를 말한다.</b> DB 에 외래키가
-     * 없어 지우는 것 자체는 아무것도 막아주지 않는다 — 그대로 지우면 대조가 다음 날 아침
-     * 조용히 깨지고, 화면에는 「비교할 재고가 없습니다」 만 떠서 원인을 알 수 없다.
+     * <p>딸린 것 — 매핑·후처리 스크립트·실행 이력, 그리고 그 실행들이 담은 재고 자료 — 은
+     * 외래키가 함께 지운다({@code V33__connector_cascade.sql}).
+     *
+     * <p>막는 것은 <b>대조가 쓰고 있을 때뿐</b> 이다. 대조 정의는 연동을 code 문자열로 가리켜
+     * 외래키를 걸 수 없고, 그대로 지우면 대조가 다음 날 아침 조용히 깨져 화면에는
+     * 「비교할 재고가 없습니다」 만 떠서 원인을 알 수 없다.
+     *
+     * <p>지운 뒤에는 <b>몇 건이 사라졌는지</b> 를 말한다. 「지웠습니다」 만으로는 방금 무엇을
+     * 없앤 것인지 알 수 없어, 잘못 지웠을 때 그 사실을 알아차릴 단서가 없다.
      */
     @PostMapping("/connectors/{id}/remove")
     public String remove(@PathVariable UUID id, RedirectAttributes redirect) {
@@ -461,8 +467,12 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashError", blocked);
             return "redirect:/connectors";
         }
+        int removedRuns = removal.runCount(id);
         removal.remove(id);
-        redirect.addFlashAttribute("flashSuccess", "연동을 지웠습니다.");
+        redirect.addFlashAttribute("flashSuccess", removedRuns > 0
+                ? "연동을 지웠습니다. 실행 이력 %d건과 그 실행들이 담은 자료도 함께 지워졌습니다."
+                        .formatted(removedRuns)
+                : "연동을 지웠습니다.");
         return "redirect:/connectors";
     }
 
