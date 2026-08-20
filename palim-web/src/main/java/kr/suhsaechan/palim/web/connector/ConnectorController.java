@@ -200,9 +200,12 @@ public class ConnectorController {
     private void addMappingView(Model model, UUID id, Connector connector, SourceSchema schema) {
         String modelCode = adminService.targetModelCode(connector);
         Map<String, ConnectorFieldMap> existing = existingByTarget(id);
-        model.addAttribute("groups", assembler.assemble(
-                adminService.targetFields(id), existing, schema, modelCode));
-        model.addAttribute("leftovers", assembler.leftovers(schema, existing));
+        List<MappingGroupView> groups = assembler.assemble(
+                adminService.targetFields(id), existing, schema, modelCode);
+        model.addAttribute("groups", groups);
+        // 화면에 그려진 줄을 그대로 넘긴다. 저장된 것만 보면 추천으로 채워진 칸이
+        // 「연결됨」 과 「자리 없음」 에 동시에 나온다.
+        model.addAttribute("leftovers", assembler.leftovers(schema, groups));
     }
 
     /**
@@ -376,6 +379,19 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashError",
                     errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return "redirect:/connectors/" + id + "/mapping";
+        } catch (RuntimeException e) {
+            // 예상하지 못한 실패도 «화면으로» 돌려보낸다.
+            //
+            // 이 폼은 브라우저가 보내는 것인데 여기서 예외가 새어 나가면 전역 핸들러가
+            // JSON 오류 본문을 그대로 내려준다 — 사장님 화면에 {"errorCode":"INTERNAL_ERROR"}
+            // 가 뜨고, 뒤로 가기 말고는 길이 없다. 실제로 그렇게 겪었다.
+            //
+            // 실행 기록은 ConnectorRunner 가 이미 실패로 닫았고 무엇이 터졌는지 한 줄이
+            // 남아 있다. 그 자리로 보낸다 — 「오류가 났습니다」 만으로는 다음에 할 일이 없다.
+            log.error("실행이 예상하지 못한 오류로 끝났습니다 — 커넥터id={} 모드={}", id, mode, e);
+            redirect.addFlashAttribute("flashError",
+                    "실행이 예상하지 못한 오류로 멈췄습니다. 실행 이력에서 무엇이 잘못됐는지 볼 수 있습니다.");
+            return "redirect:/connectors/" + id + "/runs";
         } finally {
             adminService.deleteQuietly(temp);
         }
@@ -450,9 +466,15 @@ public class ConnectorController {
     /**
      * 연동 지우기.
      *
-     * <p>자료를 담은 적이 있거나 대조가 쓰고 있으면 <b>막고 이유를 말한다.</b> DB 에 외래키가
-     * 없어 지우는 것 자체는 아무것도 막아주지 않는다 — 그대로 지우면 대조가 다음 날 아침
-     * 조용히 깨지고, 화면에는 「비교할 재고가 없습니다」 만 떠서 원인을 알 수 없다.
+     * <p>딸린 것 — 매핑·후처리 스크립트·실행 이력, 그리고 그 실행들이 담은 재고 자료 — 은
+     * 외래키가 함께 지운다({@code V33__connector_cascade.sql}).
+     *
+     * <p>막는 것은 <b>대조가 쓰고 있을 때뿐</b> 이다. 대조 정의는 연동을 code 문자열로 가리켜
+     * 외래키를 걸 수 없고, 그대로 지우면 대조가 다음 날 아침 조용히 깨져 화면에는
+     * 「비교할 재고가 없습니다」 만 떠서 원인을 알 수 없다.
+     *
+     * <p>지운 뒤에는 <b>몇 건이 사라졌는지</b> 를 말한다. 「지웠습니다」 만으로는 방금 무엇을
+     * 없앤 것인지 알 수 없어, 잘못 지웠을 때 그 사실을 알아차릴 단서가 없다.
      */
     @PostMapping("/connectors/{id}/remove")
     public String remove(@PathVariable UUID id, RedirectAttributes redirect) {
@@ -461,8 +483,12 @@ public class ConnectorController {
             redirect.addFlashAttribute("flashError", blocked);
             return "redirect:/connectors";
         }
+        int removedRuns = removal.runCount(id);
         removal.remove(id);
-        redirect.addFlashAttribute("flashSuccess", "연동을 지웠습니다.");
+        redirect.addFlashAttribute("flashSuccess", removedRuns > 0
+                ? "연동을 지웠습니다. 실행 이력 %d건과 그 실행들이 담은 자료도 함께 지워졌습니다."
+                        .formatted(removedRuns)
+                : "연동을 지웠습니다.");
         return "redirect:/connectors";
     }
 

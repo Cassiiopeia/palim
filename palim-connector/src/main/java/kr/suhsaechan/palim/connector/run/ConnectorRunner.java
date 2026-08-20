@@ -34,6 +34,7 @@ import kr.suhsaechan.palim.connector.write.WriterSelector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 실행 오케스트레이터.
@@ -114,7 +115,35 @@ public class ConnectorRunner {
                     run.getId(), connector.getCode(), e.getErrorCode(), e);
             run.fail(e.getMessage());
             return runRepository.save(run);
+        } catch (RuntimeException e) {
+            // 예상하지 못한 실패도 실행 기록을 «닫는다».
+            //
+            // 닫지 않으면 RUNNING 인 채로 굳는다. 그런데 커넥터당 RUNNING 은 하나뿐이라
+            // (ux_connector_run_running) 다음 실행은 전부 「이미 실행 중」으로 거절된다 —
+            // 한 번의 예상 못 한 오류가 그 연동을 «영영» 못 돌게 만든다. 굳은 것을 푸는
+            // 길은 StaleRunRecovery 뿐이고 그것은 앱을 다시 띄울 때만 돈다.
+            //
+            // 원인은 다시 던져 위에서 다루게 두되, 여기서 스택을 남긴다 — 실행 기록에는
+            // 한 줄 요약만 들어가므로 무엇이 터졌는지는 로그에만 있다.
+            log.error("커넥터 실행이 예상하지 못한 오류로 멈췄습니다 — 실행id={} 커넥터={} 모드={}",
+                    run.getId(), connector.getCode(), run.getRunMode(), e);
+            run.fail(summarize(e));
+            runRepository.save(run);
+            throw e;
         }
+    }
+
+    /**
+     * 실행 기록에 남길 한 줄.
+     *
+     * <p>예외 종류를 함께 적는다. 메시지만 남기면 {@code null} 이거나 「0」 같은 것이 와서
+     * 나중에 실행 이력을 봐도 무엇이 터졌는지 알 수 없다.
+     */
+    private static String summarize(RuntimeException e) {
+        String message = e.getMessage();
+        return StringUtils.hasText(message)
+                ? "%s: %s".formatted(e.getClass().getSimpleName(), message)
+                : e.getClass().getSimpleName();
     }
 
     private ConnectorRun execute(Connector connector, ConnectorMapping mapping,

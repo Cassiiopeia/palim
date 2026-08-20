@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import kr.suhsaechan.palim.connector.define.ConnectorFieldMap;
 import kr.suhsaechan.palim.connector.model.TargetField;
 import kr.suhsaechan.palim.connector.source.SourceSchema;
@@ -78,16 +80,22 @@ public class MappingViewAssembler {
      *
      * <p>버리지 않고 보관하지만, 그 사실을 <b>사람이 알아야</b> 한다. 화면이 말하지 않으면
      * 자기 자료가 어디 갔는지 모른 채 넘어간다.
+     *
+     * <p><b>화면에 그려진 줄</b>을 보고 판단한다 — 저장된 연결만 보면 안 된다. 아직 저장하지
+     * 않은 연동은 줄마다 추천이 채워져 있고 사람 눈에는 전부 연결된 것으로 보이는데, 저장된
+     * 것은 하나도 없으므로 같은 칸이 아래 「우리 항목에 없는 칸」 에도 그대로 나온다. 한
+     * 화면이 같은 칸을 두고 <b>연결됐다</b> 와 <b>자리가 없다</b> 를 동시에 말하면, 사람은
+     * 무엇을 믿어야 할지 알 수 없어 저장 자체를 망설인다.
      */
-    public List<LeftoverView> leftovers(SourceSchema schema,
-                                        Map<String, ConnectorFieldMap> existing) {
+    public List<LeftoverView> leftovers(SourceSchema schema, List<MappingGroupView> groups) {
         if (schema == null) {
             return List.of();
         }
-        List<String> connected = existing.values().stream()
-                .map(ConnectorFieldMap::getSourceField)
+        Set<String> connected = groups.stream()
+                .flatMap(group -> group.rows().stream())
+                .map(MappingRowView::picked)
                 .filter(StringUtils::hasText)
-                .toList();
+                .collect(Collectors.toSet());
         Map<String, List<String>> previews = previews(schema);
 
         return schema.fields().stream()
