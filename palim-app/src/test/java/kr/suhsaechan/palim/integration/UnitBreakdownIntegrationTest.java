@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -243,7 +244,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
     @Test
     @DisplayName("여럿을 이으면 공통 부분만 이름으로 쓴다")
     void 공통_부분만_이름으로() {
-        MatchBoard.Row row = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        MatchBoard.Row row = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst();
 
         assertThat(row.suggestedName())
@@ -260,7 +261,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
         snapshot(other, "X1", "코코아 227g (27.01.15)", "10");
         snapshot(otherWms, "Y1", "코코아 227g (27.01.15)", "8");
 
-        MatchBoard.Row row = board.load(TENANT, other, otherWms, MatchBoard.Tab.PAIRED, null, 0)
+        MatchBoard.Row row = board.load(TENANT, Pairing.ofSources(other, otherWms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst();
 
         assertThat(row.suggestedName()).isEqualTo("코코아 227g (27.01.15)");
@@ -506,7 +507,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                         .param("rule", "FIRST_ITEM"))
                 .andExpect(status().is3xxRedirection());
 
-        String key = board.load(TENANT, erp, wms, MatchBoard.Tab.PAIRED, null, 0)
+        String key = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.PAIRED, null, 0)
                 .rows().getFirst().key();
         mockMvc.perform(post("/reconcile/units/link")
                         .with(SecurityMockMvcRequestPostProcessors.csrf())

@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.web.reconcile;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
@@ -92,7 +93,7 @@ public class UnitEditController {
             model.addAttribute("addSource", add);
             model.addAttribute("q", q == null ? "" : q);
             model.addAttribute("candidates", board.mateCandidates(tenantId,
-                    definition.getLeftSource(), definition.getRightSource(),
+                    Pairing.of(definition),
                     add, unit.getName(), q, PICK_LIMIT));
         }
         // 합칠 상대. 자기 자신은 뺀다.
@@ -106,7 +107,10 @@ public class UnitEditController {
     private List<MemberView> membersOf(UUID tenantId, ReconcileDefinition definition, UUID unitId) {
         return unitService.membersOf(unitId).stream()
                 .map(member -> {
-                    var item = board.findItem(tenantId, member.getSource(), member.getItemRef());
+                    // 그 원천에 걸린 창고 범위로 본다. 전 창고를 더한 수량을 보여주면
+                    // 「이 묶음에 얼마나 있나」 가 대조 결과와 어긋난다.
+                    var item = board.findItem(tenantId, member.getSource(), member.getItemRef(),
+                            Pairing.of(definition).scopeOf(member.getSource()));
                     return new MemberView(
                             member.getId(),
                             member.getSource(),
@@ -228,8 +232,7 @@ public class UnitEditController {
             return "redirect:/reconcile/units";
         }
         UUID tenantId = TenantContext.current();
-        MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), row).orElse(null);
+        MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), row).orElse(null);
         if (found == null) {
             return "redirect:/reconcile/units?definitionId=" + definitionId;
         }
@@ -260,8 +263,7 @@ public class UnitEditController {
             return "redirect:/reconcile/units";
         }
         UUID tenantId = TenantContext.current();
-        MatchBoard.Row found = board.findRow(tenantId, definition.getLeftSource(),
-                definition.getRightSource(), row).orElse(null);
+        MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), row).orElse(null);
         if (found == null) {
             redirect.addFlashAttribute("flashError",
                     "그 줄을 지금 자료에서 찾지 못했습니다. 화면을 새로 고친 뒤 다시 해 보세요.");

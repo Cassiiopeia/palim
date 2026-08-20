@@ -14,6 +14,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.UUID;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
@@ -109,7 +110,7 @@ class ManualLinkIntegrationTest extends IntegrationTest {
 
     /** 화면이 그 품목에 붙여 놓은 줄 열쇠. 폼이 보내는 값과 같은 것을 시험도 쓴다. */
     private String rowKeyOf(String source, String itemRef) {
-        return board.findRowByItem(TENANT, erp, wms, MatchBoard.tokenOf(source, itemRef))
+        return board.findRowByItem(TENANT, Pairing.ofSources(erp, wms), MatchBoard.tokenOf(source, itemRef))
                 .orElseThrow(() -> new IllegalStateException("줄을 못 찾았다: " + itemRef))
                 .key();
     }
@@ -278,7 +279,7 @@ class ManualLinkIntegrationTest extends IntegrationTest {
                         .param("reason", "DISCONTINUED"))
                 .andExpect(status().is3xxRedirection());
 
-        var afterSetAside = board.load(TENANT, erp, wms, MatchBoard.Tab.TODO, null, 0);
+        var afterSetAside = board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.TODO, null, 0);
         assertThat(afterSetAside.counts().setAside()).isEqualTo(1);
         assertThat(afterSetAside.rows())
                 .as("짝 없음으로 둔 것이 할 일에 남아 있으면 개수가 0에 도달하지 못한다")
@@ -289,7 +290,7 @@ class ManualLinkIntegrationTest extends IntegrationTest {
         mockMvc.perform(action("/reconcile/units/restore").param("rows", setAsideKey))
                 .andExpect(status().is3xxRedirection());
 
-        assertThat(board.load(TENANT, erp, wms, MatchBoard.Tab.TODO, null, 0).counts().setAside())
+        assertThat(board.load(TENANT, Pairing.ofSources(erp, wms), MatchBoard.Tab.TODO, null, 0).counts().setAside())
                 .as("단종인 줄 알았는데 다시 들어오는 일이 실제로 있다")
                 .isZero();
     }
