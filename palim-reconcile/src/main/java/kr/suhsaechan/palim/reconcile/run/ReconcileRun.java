@@ -12,11 +12,14 @@ import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSnapshot;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 대조 한 번의 기록.
@@ -103,7 +106,8 @@ public class ReconcileRun extends BaseTimeEntity {
      * 화면의 상세가 어긋난다. 게다가 회차마다 맞기도 하고 틀리기도 해서 「늘 틀린다」 보다
      * 원인을 찾기 어렵다.
      *
-     * <p>비어 있으면 「그때는 전 창고를 봤다」 로 읽는다 — 이 칸이 생기기 전 회차가 그랬다.
+     * <p><b>V35 부터는 {@code filtersJson} 이 이 자리를 대신한다.</b> 이 두 칸은 그 이전
+     * 회차를 읽기 위해서만 남아 있다 — 지우면 그 회차가 무엇을 봤는지 알 방법이 없어진다.
      */
     @Column(length = 1000)
     private String leftWarehouses;
@@ -115,25 +119,38 @@ public class ReconcileRun extends BaseTimeEntity {
     @Column(length = 50)
     private String compareField;
 
-    /** 이 회차가 실제로 본 범위를 남긴다. 실행 직후 한 번만 부른다. */
-    public void recordScope(Pairing pairing) {
-        this.leftWarehouses = pairing.leftScope().toStored();
-        this.rightWarehouses = pairing.rightScope().toStored();
+    /**
+     * 이 회차가 쓴 조건. 좌·우 식과 그때 푼 상대 날짜.
+     *
+     * <p><b>표로 쪼개지 않는다.</b> 회차는 편집 대상이 아니라 기록이고, 조회도 「그때 뭐였나」 를
+     * 통째로 읽는 것뿐이라 조인만 늘어난다. 그리고 카탈로그에서 사라진 칸도 그대로 남길 수 있다 —
+     * 정규화된 표라면 없는 칸을 가리키는 행이 되어 무결성이 애매해진다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "filters_json", columnDefinition = "jsonb")
+    private FilterSnapshot filters;
+
+    /**
+     * 이 회차가 실제로 본 조건을 남긴다. 실행 직후 한 번만 부른다.
+     *
+     * <p>상대 날짜는 <b>여기서 푼다.</b> 회차가 도는 시각이 그 회차의 「오늘」 이기 때문이다.
+     * 저장 시점에 풀면 저장한 날짜로 굳어, 매일 도는 대조가 다음 날부터 조용히 어긋난다.
+     */
+    public void recordScope(Pairing pairing, Instant asOf) {
+        this.filters = FilterSnapshot.of(pairing.leftFilter(), pairing.rightFilter(),
+                pairing.compareField(), asOf);
         this.compareField = pairing.compareField();
     }
 
     /**
-     * 이 회차가 본 범위 그대로.
+     * 이 회차가 쓴 조건.
      *
-     * <p>상세 화면이 «오늘의 정의» 가 아니라 이 값으로 다시 계산해야 저장된 합계와 맞는다.
-     *
-     * @param leftSource  회차에는 원천 이름을 남기지 않으므로 정의에서 받는다.
-     *                    원천이 바뀌면 그것은 다른 대조다
+     * <p>V35 이전 회차는 {@code filters_json} 이 비어 있다 — 그때의 기록인 옛 창고 칸을 읽는다.
+     * 기록이 사라지면 「그 회차는 무엇을 봤나」 에 답할 방법이 없어진다.
      */
-    public Pairing scopeOf(String leftSource, String rightSource) {
-        return new Pairing(leftSource, rightSource,
-                WarehouseScope.parse(leftWarehouses), WarehouseScope.parse(rightWarehouses),
-                compareField);
+    public FilterSnapshot getFilters() {
+        return filters != null ? filters
+                : FilterSnapshot.fromLegacy(leftWarehouses, rightWarehouses, compareField);
     }
 
     public void recordSourceTimes(Instant leftBaseAt, Instant rightBaseAt) {

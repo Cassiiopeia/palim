@@ -14,6 +14,7 @@ import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.filter.FilterService;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
@@ -48,6 +49,7 @@ public class ReconcileEngine {
     private final ReconcileRunRepository runs;
     private final ReconcileDiffRepository diffs;
     private final SnapshotAggregator aggregator;
+    private final FilterService filters;
     private final BaseAtResolver baseAtResolver;
     private final DiffPromoter promoter;
     /** 실패 사유를 사람 말로 옮긴다. 로그용 문자열이 화면에 그대로 나가면 안 된다. */
@@ -105,7 +107,8 @@ public class ReconcileEngine {
         run.recordSourceTimes(aligned.left(), aligned.right());
         // 이 회차가 «무엇을 견줬는지» 를 남긴다. 나중에 정의를 보고 다시 계산하면, 설정을 바꾼
         // 뒤 지난 회차를 열 때 저장된 합계와 화면의 상세가 어긋난다.
-        run.recordScope(Pairing.of(definition));
+        Pairing pairing = filters.pairingOf(definition);
+        run.recordScope(pairing, baseAt);
         run = runs.save(run);
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);
@@ -114,10 +117,10 @@ public class ReconcileEngine {
         // 이것을 안 넘기면 위탁하지 않은 창고 물량까지 합산되어, 맞는 품목도 틀린 것으로 나온다.
         Map<UUID, BigDecimal> left = aggregator.sumByUnit(
                 tenantId, definition.getLeftSource(), aligned.left(), definition.getCompareField(),
-                definition.leftScope());
+                pairing.leftFilter());
         Map<UUID, BigDecimal> right = aggregator.sumByUnit(
                 tenantId, definition.getRightSource(), aligned.right(),
-                definition.getCompareField(), definition.rightScope());
+                definition.getCompareField(), pairing.rightFilter());
         log.debug("단위 합산 — 실행={} 칸={} 좌원천={}({}) {}단위 우원천={}({}) {}단위",
                 run.getId(), baseAt,
                 definition.getLeftSource(), aligned.left(), left.size(),
@@ -218,10 +221,10 @@ public class ReconcileEngine {
     private int addUnmatched(ReconcileRun run, ReconcileDefinition definition, Instant baseAt,
                              String source, DiffType type, List<ReconcileDiff> found) {
         // 합계와 «같은 범위» 여야 한다. 한쪽만 걸러지면 합계와 상세가 어긋난다.
+        // 조건을 고르는 판단을 Pairing 한 곳에 모은다. 여기서 다시 삼항으로 고르면 좌·우를
+        // 뒤바꾸는 실수가 이 자리에서만 따로 생긴다.
         var items = aggregator.unmatched(run.getTenantId(), source, baseAt,
-                definition.getCompareField(),
-                source.equals(definition.getLeftSource())
-                        ? definition.leftScope() : definition.rightScope());
+                definition.getCompareField(), filters.pairingOf(definition).filterOf(source));
 
         if (!items.isEmpty()) {
             // 실패는 아니지만 사람이 연결해 줘야 사라지는 잔여다. 쌓이면 대조 범위가 줄어든다.

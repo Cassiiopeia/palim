@@ -45,83 +45,147 @@
         </div>
     </div>
 
-    <!--/* 재고를 맡긴 곳은 «자기가 보관 중인 것만» 안다. 그런데 전산 쪽에는 창고가 여럿이다 —
-           위탁 창고, 사무실, 매장. 전부 더해서 견주면 위탁하지 않은 물량만큼 무조건 어긋나고,
-           그 어긋남은 맞던 품목까지 틀린 것으로 보이게 만든다.
+    <!--/* 재고를 맡긴 곳은 «자기가 보관 중인 것만» 안다. 그런데 걸러야 하는 것은 창고만이
+           아니다 — 불량 재고, 유통기한이 지난 것, 원천이 주는 고유 구분값. 칸마다 화면을 새로
+           만들면 다음 요구에서 또 막히므로, 거르는 방법을 하나 두고 창고를 그중 한 줄로 둔다.
 
            실측: 전 창고를 더하면 총합 차이 754개 · 일치 3건.
                  위탁 창고만 견주면 총합 차이 1개 · 일치 11건. */-->
-    <div class="card bg-base-100 shadow-sm mb-6">
-        <div class="card-body p-4 flex-row items-start gap-4 flex-wrap">
-            <div class="w-28 font-medium text-sm">견줄 창고</div>
-            <div class="grow text-sm">
+    <div class="card bg-base-100 shadow-sm mb-6" id="filters">
+        <div class="card-body p-4">
+            <h2 class="card-title text-base">볼 조건</h2>
 
-                <!--/* 창고가 여럿인데 전부 더하고 있으면 «조용히 틀린 답» 이 나온다. 지금 이
-                       화면에서 확인이 필요한 상태이므로 경고색이 맞다(11-UI-RULES C7). */-->
-                <div th:if="${(#lists.size(leftWarehouses) > 1 and leftScope.isAll())
-                              or (#lists.size(rightWarehouses) > 1 and rightScope.isAll())}"
-                     class="alert alert-warning mb-3" role="alert">
-                    <div>
-                        <p class="font-medium">창고를 나누지 않고 전부 더해서 견주고 있습니다.</p>
-                        <p class="mt-1">
-                            한쪽에 창고가 여럿이면 맡기지 않은 물량까지 합산됩니다. 그러면 맞는
-                            품목도 틀린 것으로 나옵니다 — 견줄 창고를 골라 주세요.
-                        </p>
-                    </div>
+            <!--/* 조건을 안 걸었는데 값이 여럿이면 «조용히 틀린 답» 이 나온다. 지금 이 화면에서
+                   확인이 필요한 상태이므로 경고색이 맞다(11-UI-RULES C7). 이 화면의 색 박스는
+                   이것 하나뿐이다(B5). */-->
+            <div th:if="${leftEdit.needsChoice() or rightEdit.needsChoice()}"
+                 class="alert alert-warning" role="alert">
+                <div>
+                    <p class="font-medium">조건을 걸지 않고 전부 더해서 견주고 있습니다.</p>
+                    <p class="mt-1">
+                        한쪽에 창고가 여럿이면 맡기지 않은 물량까지 합산됩니다. 그러면 맞는
+                        품목도 틀린 것으로 나옵니다 — 볼 조건을 정해 주세요.
+                    </p>
                 </div>
-
-                <form method="post"
-                      th:action="@{/reconcile/{id}/warehouses(id=${definition.id})}">
-                    <div class="flex flex-wrap gap-x-10 gap-y-4">
-
-                        <div>
-                            <div class="text-xs text-base-content/60 mb-1"
-                                 th:text="${definition.leftSource}">좌측 원천</div>
-                            <p th:if="${#lists.isEmpty(leftWarehouses)}"
-                               class="text-base-content/40">담긴 자료가 없습니다</p>
-                            <label th:each="w : ${leftWarehouses}"
-                                   class="flex items-center gap-2 py-0.5 cursor-pointer">
-                                <!--/* 창고를 구분하지 않는 원천은 코드가 빈 문자열이다. 그것을
-                                       고르면 저장 왕복에서 선택이 사라지므로 고를 수 없게 둔다 —
-                                       창고가 하나뿐이라 「전체」 와 뜻이 같기도 하다. */-->
-                                <input type="checkbox" name="leftWarehouse"
-                                       class="checkbox checkbox-sm"
-                                       th:value="${w.code}"
-                                       th:disabled="${#strings.isEmpty(w.code)}"
-                                       th:checked="${#lists.contains(leftScope.codes(), w.code)}">
-                                <span th:text="${w.label()}">창고</span>
-                                <span class="text-base-content/60 tabular-nums"
-                                      th:text="${#numbers.formatInteger(w.qty, 1, 'COMMA')}">0</span>
-                            </label>
-                        </div>
-
-                        <div>
-                            <div class="text-xs text-base-content/60 mb-1"
-                                 th:text="${definition.rightSource}">우측 원천</div>
-                            <p th:if="${#lists.isEmpty(rightWarehouses)}"
-                               class="text-base-content/40">담긴 자료가 없습니다</p>
-                            <label th:each="w : ${rightWarehouses}"
-                                   class="flex items-center gap-2 py-0.5 cursor-pointer">
-                                <input type="checkbox" name="rightWarehouse"
-                                       class="checkbox checkbox-sm"
-                                       th:value="${w.code}"
-                                       th:disabled="${#strings.isEmpty(w.code)}"
-                                       th:checked="${#lists.contains(rightScope.codes(), w.code)}">
-                                <span th:text="${w.label()}">창고</span>
-                                <span class="text-base-content/60 tabular-nums"
-                                      th:text="${#numbers.formatInteger(w.qty, 1, 'COMMA')}">0</span>
-                            </label>
-                        </div>
-
-                    </div>
-                    <button type="submit" class="btn btn-sm mt-3">저장</button>
-                </form>
-
-                <p class="text-base-content/60 mt-2">
-                    아무것도 고르지 않으면 <b>전부 더해서</b> 견줍니다. 옆의 숫자는 그 창고에 지금
-                    담겨 있는 수량입니다 — 맡긴 창고가 어느 것인지 규모로 알아볼 수 있습니다.
-                </p>
             </div>
+
+            <div class="flex flex-wrap gap-x-10 gap-y-6">
+                <div th:each="edit : ${ {leftEdit, rightEdit} }" class="grow min-w-80">
+                    <form method="post"
+                          th:action="@{/reconcile/{id}/filters(id=${definition.id})}">
+                        <input type="hidden" name="side" th:value="${edit.side}">
+
+                        <div class="text-xs text-base-content/60 mb-2"
+                             th:text="${edit.source}">원천</div>
+
+                        <p th:if="${edit.isEmpty()}" class="text-base-content/40 text-sm">
+                            담긴 자료가 없습니다
+                        </p>
+
+                        <!--/* 조건 줄. 지금 걸린 것을 그리고, 「+ 조건 추가」 가 같은 모양을
+                               하나 더 붙인다. */-->
+                        <div th:id="'rows-' + ${edit.side}">
+                            <div th:each="row : ${edit.rows}" class="flex flex-wrap gap-2 mb-2">
+                                <select name="fieldKey"
+                                        class="select select-bordered select-sm w-40">
+                                    <option th:each="f : ${edit.fields}"
+                                            th:value="${f.key}" th:text="${f.label}"
+                                            th:selected="${f.key == row.fieldKey}">칸</option>
+                                </select>
+                                <select name="operator"
+                                        class="select select-bordered select-sm w-32">
+                                    <option th:each="op : ${operators}"
+                                            th:value="${op}" th:text="${op.label}"
+                                            th:selected="${op == row.operator}">연산자</option>
+                                </select>
+                                <input type="text" name="values"
+                                       class="input input-bordered input-sm grow"
+                                       th:value="${row.joinedValues()}">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                        data-remove>지우기</button>
+                            </div>
+                        </div>
+
+                        <!--/* 줄을 더할 때 쓰는 틀. 서버 왕복을 두면 줄 하나 더할 때마다 화면이
+                               깜빡이고 적던 값이 날아간다. */-->
+                        <template th:id="'row-template-' + ${edit.side}">
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                <select name="fieldKey"
+                                        class="select select-bordered select-sm w-40">
+                                    <option th:each="f : ${edit.fields}"
+                                            th:value="${f.key}" th:text="${f.label}">칸</option>
+                                </select>
+                                <select name="operator"
+                                        class="select select-bordered select-sm w-32">
+                                    <option th:each="op : ${operators}"
+                                            th:value="${op}" th:text="${op.label}">연산자</option>
+                                </select>
+                                <input type="text" name="values"
+                                       class="input input-bordered input-sm grow">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                        data-remove>지우기</button>
+                            </div>
+                        </template>
+
+                        <button type="button" class="btn btn-sm mb-2"
+                                data-add th:data-side="${edit.side}">+ 조건 추가</button>
+
+                        <!--/* 값 후보. 어느 것이 맡긴 분인지 «규모로» 판단하게 되므로 수량을
+                               함께 보인다 — 이름만으로는 알 수 없다. */-->
+                        <details class="mb-2">
+                            <summary class="text-sm cursor-pointer">담긴 값 보기</summary>
+                            <div class="text-sm mt-2 space-y-1">
+                                <div th:each="entry : ${edit.valuesByField}"
+                                     th:if="${!#lists.isEmpty(entry.value)}">
+                                    <span class="text-base-content/60"
+                                          th:text="${entry.key}">칸</span>
+                                    <span th:each="v : ${entry.value}" class="ml-2">
+                                        <span th:text="${v.display()}">값</span>
+                                        <span class="text-base-content/60 tabular-nums"
+                                              th:text="${#numbers.formatInteger(v.qty, 1, 'COMMA')}">0</span>
+                                    </span>
+                                    <span th:if="${edit.truncated(entry.key)}"
+                                          class="text-base-content/60">
+                                        … 더 있습니다. 식으로 걸어 주세요
+                                    </span>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!--/* 줄로 안 되는 조건 — 칸을 넘는 OR, 괄호. 대부분은 줄로 끝나므로
+                               접어 두되, 내용이 있으면 펴 둔다. */-->
+                        <details class="mb-2" th:open="${!#strings.isEmpty(edit.expression)}">
+                            <summary class="text-sm cursor-pointer">고급 — 줄로 안 되는 조건</summary>
+                            <textarea name="expression" rows="2"
+                                      class="textarea textarea-bordered textarea-sm w-full mt-2"
+                                      placeholder="(창고 = '01' 또는 창고 = '02') 그리고 품질상태 ≠ '불량'"
+                                      th:text="${edit.expression}"></textarea>
+                            <p class="text-base-content/60 mt-1 text-sm">
+                                칸 이름은 위 목록의 이름을 그대로 씁니다. 글은 작은따옴표로
+                                감쌉니다. 날짜는 <span class="font-mono">오늘</span> ·
+                                <span class="font-mono">오늘+30</span> 처럼 적으면 매일 맞습니다.
+                            </p>
+                        </details>
+
+                        <p class="text-base-content/60 text-sm">
+                            지금 조건이면
+                            <span class="tabular-nums"
+                                  th:text="${edit.preview.totalItems()}">0</span>줄 중
+                            <span class="tabular-nums font-medium"
+                                  th:text="${edit.preview.keptItems()}">0</span>줄 ·
+                            합계
+                            <span class="tabular-nums"
+                                  th:text="${#numbers.formatInteger(edit.preview.keptQty(), 1, 'COMMA')}">0</span>
+                        </p>
+
+                        <button type="submit" class="btn btn-sm mt-3">저장</button>
+                    </form>
+                </div>
+            </div>
+
+            <p class="text-base-content/60 mt-2 text-sm">
+                아무 조건도 걸지 않으면 <b>전부 더해서</b> 견줍니다.
+            </p>
         </div>
     </div>
 
@@ -184,5 +248,24 @@
     </section>
 
 </div>
+
+<!--/* 줄을 더하고 지운다. 서버 왕복을 두면 줄 하나 더할 때마다 화면이 깜빡이고 적던 값이
+       날아간다 — 그 왕복이 이 화면의 쓸모를 떨어뜨린다. */-->
+<script th:inline="none">
+    document.querySelectorAll('[data-add]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var side = button.dataset.side;
+            var template = document.getElementById('row-template-' + side);
+            document.getElementById('rows-' + side)
+                    .appendChild(template.content.cloneNode(true));
+        });
+    });
+    document.addEventListener('click', function (event) {
+        if (event.target.matches('[data-remove]')) {
+            event.target.closest('div').remove();
+        }
+    });
+</script>
+
 </body>
 </html>
