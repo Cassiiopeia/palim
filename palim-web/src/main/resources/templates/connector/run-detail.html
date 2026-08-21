@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <!--/* 실행 결과.
 
-       시험 실행은 «진짜 자료에 넣기 전에 눈으로 보는» 단계다. 그러려면 담길 모습이 읽혀야
-       한다. 저장된 JSON 을 그대로 뿌리면 값이 제대로 들어갔는지 확인하려고 사람이 중괄호를
-       읽어야 하고, 그러면 확인 단계 자체가 형식이 된다.
+       이 화면은 «그 실행이 무엇을, 어떤 설정으로 담았나» 하나에 답한다.
 
-       실패한 줄은 «왜» 와 «원본» 을 함께 보여준다. 줄 번호와 코드만 있으면 원본 파일을 다시
-       열어 대조해야 하는데, 원천이 API 면 그 시점 자료를 다시 볼 방법이 없다.
+       담긴 자리는 실행 방식에 따라 다르다 — 시험은 결과 보관함에, 실제 적재는 표준 모델 표에
+       바로 쓴다. 예전에는 화면이 보관함만 알아서, 45 건이 멀쩡히 들어간 실제 적재가
+       «보여줄 내역이 없습니다» 로 보였다. 화면이 사실이 아닌 말을 하면 사람은 확인할 방법이
+       없다고 판단하고 화면을 떠난다.
+
+       설정을 함께 싣는 이유 — «무엇이 담겼나» 만으로는 그 값이 맞는지 판단할 수 없다. 어느 칸을
+       어디에 넣기로 하고 담은 것인지 알아야 틀린 자리를 짚을 수 있다.
 
        daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). */-->
 <html lang="ko" xmlns:th="http://www.thymeleaf.org"
@@ -74,13 +77,26 @@
         <span class="text-sm" th:text="${run.errorSummary}">사유</span>
     </div>
 
-    <!--/* 담길 모습 — 이 화면의 존재 이유다. */-->
-    <section class="mb-8" th:unless="${staging.isEmpty()}">
-        <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-base font-semibold">담길 모습</h2>
+    <!--/* 담은 건수와 지금 남은 건수가 다를 때 그 사정을 말한다. 말하지 않으면 «45건 성공» 바로
+           아래에 12 줄짜리 표가 놓여, 둘 중 하나는 거짓인데 어느 쪽인지 알 수 없다. */-->
+    <div th:if="${notice != null}" class="alert mb-6"
+         th:classappend="${notice.warn()} ? 'alert-warning'">
+        <span class="text-sm" th:text="${notice.text()}">사정</span>
+    </div>
+
+    <!--/* 담긴 것 — 이 화면의 존재 이유다. */-->
+    <section class="mb-8" th:if="${result != null and !result.isEmpty()}">
+        <div class="flex flex-wrap items-center gap-3 mb-2">
+            <h2 class="text-base font-semibold"
+                th:text="${run != null and run.isTest()} ? '담길 모습' : '담긴 모습'">담긴 모습</h2>
             <span class="text-xs text-base-content/60">
-                처음 <b th:text="${#lists.size(staging.rows)}">0</b>줄
+                처음 <b th:text="${#lists.size(result.rows)}">0</b>줄
+                <span th:if="${landedInto != null and landedInto.total() > #lists.size(result.rows)}"
+                      th:text="|· 이 실행 것으로 남아 있는 줄 ${landedInto.total()}|">· 총 0</span>
             </span>
+            <!--/* 어디에 담겼는지 밝힌다. «담겼다» 만으로는 어디를 확인해야 할지 알 수 없다. */-->
+            <span th:if="${landedInto != null}" class="badge badge-ghost badge-sm font-mono"
+                  th:text="${landedInto.tableName()}">표</span>
             <div class="flex-1 h-px bg-base-300"></div>
         </div>
 
@@ -91,14 +107,17 @@
                 <thead>
                 <tr class="text-xs">
                     <th class="w-12">줄</th>
-                    <th th:each="c : ${staging.columns}" th:text="${c}">칸</th>
+                    <!--/* 사람 이름을 쓰고, 담긴 칸 이름은 title 로 붙인다. 칸 키만 쓰면 무슨
+                           값인지 알려고 연결 화면을 다시 열어야 한다. */-->
+                    <th th:each="c : ${result.columns}" th:text="${c.label()}"
+                        th:title="${c.key()}">칸</th>
                 </tr>
                 </thead>
                 <tbody>
-                <tr th:each="r : ${staging.rows}">
-                    <td class="tabular-nums text-base-content/60" th:text="${r.rowNumber}">1</td>
+                <tr th:each="r : ${result.rows}">
+                    <td class="tabular-nums text-base-content/60" th:text="${r.rowNumber()}">1</td>
                     <!--/* 숫자는 오른쪽으로 모아 자릿수를 눈으로 비교하게 한다. */-->
-                    <td th:each="v : ${r.values}" class="font-mono text-xs tabular-nums"
+                    <td th:each="v : ${r.values()}" class="font-mono text-xs tabular-nums"
                         th:text="${v}">값</td>
                 </tr>
                 </tbody>
@@ -107,16 +126,19 @@
           </div>
         </div>
 
-        <p class="text-xs text-base-content/60 mt-2">
+        <p class="text-xs text-base-content/60 mt-2" th:if="${run != null and run.isTest()}">
             <code>9451.0000000000</code> 같은 값은 <code>9,451</code> 로 정리해 보여줍니다.
             <b>바꾸는 규칙을 고르실 필요는 없습니다.</b>
         </p>
 
-        <details class="collapse collapse-arrow bg-base-200 mt-3">
-            <summary class="collapse-title text-sm font-medium">저장된 값 그대로 보기</summary>
+        <details class="collapse collapse-arrow bg-base-200 mt-3" th:if="${result.hasRaw()}">
+            <summary class="collapse-title text-sm font-medium"
+                     th:text="${run != null and run.isTest()}
+                              ? '저장된 값 그대로 보기' : '표준 칸에 없어 따로 모아 둔 값'">원문</summary>
             <div class="collapse-content">
-                <pre class="text-xs overflow-x-auto" th:each="r : ${staging.rows}"
-                     th:text="${r.rowNumber} + '번째 줄 — ' + ${r.raw}">원문</pre>
+                <pre class="text-xs overflow-x-auto" th:each="r : ${result.rows}"
+                     th:if="${r.raw() != null}"
+                     th:text="${r.rowNumber()} + '번째 줄 — ' + ${r.raw()}">원문</pre>
             </div>
         </details>
     </section>
@@ -172,11 +194,90 @@
         </div>
     </section>
 
-    <div th:if="${errorGroups.isEmpty() and staging.isEmpty()}" class="card bg-base-100 shadow-sm">
+    <!--/* 이 실행의 설정.
+
+           «무엇이 담겼나» 만으로는 그 값이 맞는지 판단할 수 없다. 어느 칸을 어디에 넣기로 하고
+           담은 것인지 알아야 틀린 자리를 짚을 수 있다. 접어 두는 이유는 늘 보는 것이 아니라
+           «값이 이상할 때» 여는 것이기 때문이다. */-->
+    <section class="mb-8">
+        <details class="collapse collapse-arrow bg-base-100 shadow-sm">
+            <summary class="collapse-title font-semibold">이 실행의 설정</summary>
+            <div class="collapse-content">
+
+                <div class="grid gap-x-8 gap-y-3 sm:grid-cols-2 mb-4 text-sm">
+                    <div>
+                        <div class="text-xs text-base-content/60">가져온 곳</div>
+                        <div th:text="${connector.name}">연동</div>
+                        <div class="text-xs text-base-content/60 font-mono"
+                             th:text="${connector.sourceType}">API</div>
+                    </div>
+                    <div th:if="${landedInto != null}">
+                        <div class="text-xs text-base-content/60">담은 곳</div>
+                        <div th:text="${landedInto.modelName()}">표준 모델</div>
+                        <div class="text-xs text-base-content/60 font-mono"
+                             th:text="${landedInto.tableName()}">표</div>
+                    </div>
+                    <div th:if="${run != null}">
+                        <div class="text-xs text-base-content/60">실행 방식</div>
+                        <div th:text="(${run.isTest()} ? '시험 실행' : '실제 적재')
+                                      + ' · ' + ${run.triggerType}">실제 적재</div>
+                    </div>
+                    <div th:if="${run != null}">
+                        <div class="text-xs text-base-content/60">언제</div>
+                        <div th:text="${#temporals.format(run.startedAt, 'yyyy-MM-dd HH:mm')}">
+                            시각
+                        </div>
+                        <div class="text-xs text-base-content/60"
+                             th:if="${run.elapsedSeconds() != null}"
+                             th:text="|${run.elapsedSeconds()}초 걸림|">0초</div>
+                    </div>
+                </div>
+
+                <!--/* 그때 쓰던 연결이다. 지금 활성 연결이 아니라 실행이 붙들고 있던 것을 따라간다 —
+                       연결을 고친 뒤 옛 실행을 열었을 때 화면이 다른 이야기를 하면 안 된다. */-->
+                <div th:unless="${#lists.isEmpty(fieldMaps)}">
+                    <div class="text-xs text-base-content/60 mb-1"
+                         th:text="|칸 연결 (연결 기준 v${run != null ? run.mappingVersion : 1})|">
+                        칸 연결
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                            <tr class="text-xs">
+                                <th>저쪽 칸</th>
+                                <th>담은 칸</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="m : ${fieldMaps}">
+                                <td class="font-mono text-xs" th:text="${m.sourceField()}">칸</td>
+                                <td class="text-xs">
+                                    <span th:text="${m.label()}">이름</span>
+                                    <span class="text-base-content/50 font-mono"
+                                          th:text="${m.targetFieldKey()}">키</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <!--/* 정말로 보여줄 것이 없을 때만.
+
+           예전에는 여기서 «실제 적재는 결과를 따로 담아 두지 않습니다» 라고 했다. 사실이 아니다 —
+           담아 두고 있었고, 화면이 안 찾았을 뿐이다. 화면이 거짓말을 하면 사람은 확인할 방법이
+           없다고 믿고 떠난다. 이제는 왜 비었는지만 말한다. */-->
+    <div th:if="${errorGroups.isEmpty() and (result == null or result.isEmpty())}"
+         class="card bg-base-100 shadow-sm">
         <div class="card-body items-center text-center py-12">
-            <p class="text-base-content/70">보여줄 내역이 없습니다.</p>
-            <p class="text-sm text-base-content/60">
-                실제 적재는 결과를 따로 담아 두지 않습니다. 시험 실행에서 확인하세요.
+            <p class="text-base-content/70">이 실행으로 담긴 줄이 지금은 없습니다.</p>
+            <p class="text-sm text-base-content/60" th:if="${notice != null}"
+               th:text="${notice.text()}">사정</p>
+            <p class="text-sm text-base-content/60" th:if="${notice == null}">
+                담긴 줄이 0건이거나, 이 연동이 표에 담는 방식이 아닙니다.
             </p>
         </div>
     </div>

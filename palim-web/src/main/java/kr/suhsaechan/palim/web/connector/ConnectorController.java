@@ -513,31 +513,73 @@ public class ConnectorController {
         return "connector/runs";
     }
 
-    /** 실행 상세 — 실패 행과 테스트 적재 결과를 함께 보여준다. */
+    /**
+     * 실행 하나가 <b>무엇을, 어떻게</b> 담았는가.
+     *
+     * <p>담긴 자리는 실행 방식에 따라 다르다 — 시험은 결과 보관함에, 실제 적재는 표준 모델 표에
+     * 바로 쓴다. 예전에는 화면이 보관함만 알아서, 45 건이 멀쩡히 들어간 실제 적재가
+     * 「보여줄 내역이 없습니다」 로 보였다. 담긴 것을 확인할 수 없으면 확인 단계가 형식이 되고,
+     * 잘못 담긴 값이 그대로 대조의 기준이 된다.
+     *
+     * <p>연결·버전·시각을 함께 싣는다. 「무엇이 담겼나」 만으로는 그 값이 맞는지 판단할 수 없다 —
+     * 어느 칸을 어디에 넣기로 하고 담은 것인지 알아야 틀린 자리를 짚을 수 있다.
+     */
     @GetMapping("/connectors/{id}/runs/{runId}")
     public String runDetail(@PathVariable UUID id, @PathVariable UUID runId, Model model) {
         Connector connector = adminService.connector(id);
         model.addAttribute("title", connector.getName() + " · 실행 결과");
         model.addAttribute("connector", connector);
-        model.addAttribute("run", queryService.runs(id, RUN_HISTORY_LIMIT).stream()
+
+        RunSummary run = queryService.runs(id, RUN_HISTORY_LIMIT).stream()
                 .filter(summary -> summary.id().equals(runId))
-                .findFirst().orElse(null));
-        // 실패한 줄을 하나씩 늘어놓으면 같은 원인이 수십 번 반복되고, 그 옆에 칸 스무 개짜리
-        // 원문이 붙는다. 사람이 알아야 하는 것은 «무엇이 왜 안 됐고 어디를 고치면 되는지» 다.
+                .findFirst().orElse(null);
+        model.addAttribute("run", run);
+
         Map<String, String> labels = new LinkedHashMap<>();
         adminService.targetFields(id)
                 .forEach(field -> labels.put(field.getFieldKey(), field.getDisplayName()));
+
+        // 그때 쓰던 연결을 따라간다. 지금 활성 연결로 그리면, 연결을 고친 뒤 옛 실행을 열었을 때
+        // 화면이 그때 담긴 값과 다른 이야기를 한다.
+        List<ConnectorQueryService.RunFieldMap> fieldMaps = queryService.runFieldMaps(runId);
+        model.addAttribute("fieldMaps", fieldMaps);
+
+        // 실패한 줄을 하나씩 늘어놓으면 같은 원인이 수십 번 반복되고, 그 옆에 칸 스무 개짜리
+        // 원문이 붙는다. 사람이 알아야 하는 것은 «무엇이 왜 안 됐고 어디를 고치면 되는지» 다.
         Map<String, String> sourceOf = new LinkedHashMap<>();
-        existingByTarget(id).forEach((target, map) -> sourceOf.put(target, map.getSourceField()));
+        fieldMaps.forEach(map -> sourceOf.put(map.targetFieldKey(), map.sourceField()));
         model.addAttribute("errorGroups", RunErrorGroupView.of(
                 queryService.errors(runId, ERROR_ROW_LIMIT), labels, sourceOf));
 
-        // JSON 원문을 그대로 뿌리면 값이 제대로 들어갔는지 사람이 중괄호를 읽어야 한다.
-        // 확인하라고 만든 화면인데 확인할 수 없으면 그 단계는 형식이 된다.
-        // 화면은 담긴 값을 그대로 보여준다. 읽기 좋게 만드는 일은 담을 때 끝낸다.
-        model.addAttribute("staging",
-                StagingTableView.of(queryService.staging(runId, PREVIEW_LIMIT)));
+        addRunResult(runId, run, fieldMaps, labels, model);
         return "connector/run-detail";
+    }
+
+    /**
+     * 그 실행이 담은 표를 싣는다.
+     *
+     * <p>시험이면 결과 보관함, 실제면 표준 모델 표에서 가져온다. 화면은 표 하나만 알고, 어디서
+     * 왔는지는 {@code landedInto} 로만 구분한다 — 오는 곳이 화면까지 올라오면 같은 질문에 두
+     * 가지 답이 생긴다.
+     */
+    private void addRunResult(UUID runId, RunSummary run,
+                              List<ConnectorQueryService.RunFieldMap> fieldMaps,
+                              Map<String, String> labels, Model model) {
+        if (run != null && run.isTest()) {
+            model.addAttribute("result", RunResultTable.ofStaging(
+                    queryService.staging(runId, PREVIEW_LIMIT), labels));
+            return;
+        }
+
+        List<String> keys = fieldMaps.stream()
+                .map(ConnectorQueryService.RunFieldMap::targetFieldKey).toList();
+        queryService.landed(runId, keys, PREVIEW_LIMIT).ifPresent(landed -> {
+            model.addAttribute("result", RunResultTable.ofLanded(landed, labels));
+            model.addAttribute("landedInto", landed);
+            model.addAttribute("notice", LandedNotice.of(landed.total(),
+                    run == null ? 0 : run.successCount(),
+                    run != null && run.rolledBack()));
+        });
     }
 
     @PostMapping("/connectors/{id}/runs/{runId}/rollback")
