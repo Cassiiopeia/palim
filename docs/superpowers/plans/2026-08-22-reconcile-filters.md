@@ -1121,8 +1121,14 @@ public final class FilterSql {
         return sql.toString();
     }
 
+    /**
+     * 담긴 값들. <b>담은 순서를 지킨다.</b>
+     *
+     * <p>{@code Map.copyOf} 는 순서를 흩는다. 이름이 순번으로 붙으므로 결과는 같지만, 로그와
+     * 시험이 읽기 어려워지고 「무엇이 몇 번인지」 를 눈으로 좇을 수 없게 된다.
+     */
     public Map<String, Object> params() {
-        return Map.copyOf(params);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(params));
     }
 }
 ```
@@ -1406,7 +1412,17 @@ public record FilterSpec(FilterNode root) {
         }
         FilterSql out = new FilterSql(alias, prefix, asOf);
         out.append(" AND ");
+        // 조각은 «어디에 붙여도 안전해야» 한다. 부르는 쪽이 OR 이 섞인 WHERE 절에 이어 붙이면
+        // 괄호 없는 조각은 우선순위가 뒤집혀 조용히 다른 뜻이 된다. And·Or 는 스스로 감싸므로
+        // 그때만 두 겹이 되는 것을 피한다.
+        boolean selfWrapping = root instanceof FilterNode.And || root instanceof FilterNode.Or;
+        if (!selfWrapping) {
+            out.append("(");
+        }
         root.appendTo(out);
+        if (!selfWrapping) {
+            out.append(")");
+        }
         return new Compiled(out.sql(), out.params());
     }
 
