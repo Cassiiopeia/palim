@@ -464,11 +464,11 @@ class FilterOperatorTest {
     }
 
     @Test
-    @DisplayName("불리언 칸에는 참·거짓·비었음만 있다")
+    @DisplayName("불리언 칸에는 참·거짓·비었음·값있음만 있다")
     void boolOperators() {
         assertThat(FilterOperator.forType(FieldType.BOOL))
                 .containsExactlyInAnyOrder(FilterOperator.IS_TRUE, FilterOperator.IS_FALSE,
-                        FilterOperator.IS_EMPTY);
+                        FilterOperator.IS_EMPTY, FilterOperator.IS_NOT_EMPTY);
     }
 }
 ```
@@ -619,7 +619,7 @@ public enum FilterOperator {
     IS_EMPTY("비었음", "비었음", Arity.NONE,
             EnumSet.of(FieldType.TEXT, FieldType.NUMBER, FieldType.DATE, FieldType.BOOL)),
     IS_NOT_EMPTY("값 있음", "값있음", Arity.NONE,
-            EnumSet.of(FieldType.TEXT, FieldType.NUMBER, FieldType.DATE)),
+            EnumSet.of(FieldType.TEXT, FieldType.NUMBER, FieldType.DATE, FieldType.BOOL)),
 
     IS_TRUE("참", "참", Arity.NONE, EnumSet.of(FieldType.BOOL)),
     IS_FALSE("거짓", "거짓", Arity.NONE, EnumSet.of(FieldType.BOOL));
