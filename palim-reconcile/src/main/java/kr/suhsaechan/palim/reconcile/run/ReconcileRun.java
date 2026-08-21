@@ -13,13 +13,10 @@ import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.reconcile.filter.FilterSnapshot;
-import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * 대조 한 번의 기록.
@@ -120,37 +117,43 @@ public class ReconcileRun extends BaseTimeEntity {
     private String compareField;
 
     /**
-     * 이 회차가 쓴 조건. 좌·우 식과 그때 푼 상대 날짜.
+     * 이 회차가 쓴 조건. 좌·우를 <b>사람이 읽는 식</b>으로 적는다.
      *
-     * <p><b>표로 쪼개지 않는다.</b> 회차는 편집 대상이 아니라 기록이고, 조회도 「그때 뭐였나」 를
-     * 통째로 읽는 것뿐이라 조인만 늘어난다. 그리고 카탈로그에서 사라진 칸도 그대로 남길 수 있다 —
-     * 정규화된 표라면 없는 칸을 가리키는 행이 되어 무결성이 애매해진다.
+     * <p>구조화해 담지 않는 이유가 있다 — 그 글이 곧 다시 계산할 수 있는 기록이고, 카탈로그에서
+     * 사라진 칸도 그대로 남으며, 읽는 쪽이 JSON 매핑에 매이지 않는다.
      */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "filters_json", columnDefinition = "jsonb")
-    private FilterSnapshot filters;
+    @Column(length = 2000)
+    private String filtersLeft;
+
+    @Column(length = 2000)
+    private String filtersRight;
 
     /**
      * 이 회차가 실제로 본 조건을 남긴다. 실행 직후 한 번만 부른다.
      *
-     * <p>상대 날짜는 <b>여기서 푼다.</b> 회차가 도는 시각이 그 회차의 「오늘」 이기 때문이다.
-     * 저장 시점에 풀면 저장한 날짜로 굳어, 매일 도는 대조가 다음 날부터 조용히 어긋난다.
+     * <p>상대 날짜는 <b>풀어서 담지 않는다.</b> 회차는 자기가 돈 시각을 이미 알므로 필요할 때
+     * 다시 풀면 똑같은 답이 나온다 — 파생값을 저장하면 저장한 것과 다시 푼 것이 어긋날 자리만
+     * 생긴다.
      */
-    public void recordScope(Pairing pairing, Instant asOf) {
-        this.filters = FilterSnapshot.of(pairing.leftFilter(), pairing.rightFilter(),
-                pairing.compareField(), asOf);
+    public void recordScope(Pairing pairing) {
+        this.filtersLeft = pairing.leftFilter().describe();
+        this.filtersRight = pairing.rightFilter().describe();
         this.compareField = pairing.compareField();
     }
 
     /**
      * 이 회차가 쓴 조건.
      *
-     * <p>V35 이전 회차는 {@code filters_json} 이 비어 있다 — 그때의 기록인 옛 창고 칸을 읽는다.
-     * 기록이 사라지면 「그 회차는 무엇을 봤나」 에 답할 방법이 없어진다.
+     * <p>V35 이전 회차는 이 칸이 비어 있다 — 그때의 기록인 옛 창고 칸을 읽는다. 기록이 사라지면
+     * 「그 회차는 무엇을 봤나」 에 답할 방법이 없어진다.
      */
     public FilterSnapshot getFilters() {
-        return filters != null ? filters
-                : FilterSnapshot.fromLegacy(leftWarehouses, rightWarehouses, compareField);
+        boolean recorded = filtersLeft != null || filtersRight != null;
+        return new FilterSnapshot(
+                recorded ? filtersLeft : FilterSnapshot.fromLegacyCsv(leftWarehouses),
+                recorded ? filtersRight : FilterSnapshot.fromLegacyCsv(rightWarehouses),
+                compareField,
+                startedAt);
     }
 
     public void recordSourceTimes(Instant leftBaseAt, Instant rightBaseAt) {

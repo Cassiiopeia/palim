@@ -108,7 +108,7 @@ public class ReconcileEngine {
         // 이 회차가 «무엇을 견줬는지» 를 남긴다. 나중에 정의를 보고 다시 계산하면, 설정을 바꾼
         // 뒤 지난 회차를 열 때 저장된 합계와 화면의 상세가 어긋난다.
         Pairing pairing = filters.pairingOf(definition);
-        run.recordScope(pairing, baseAt);
+        run.recordScope(pairing);
         run = runs.save(run);
         log.debug("실행 생성 — 실행={} 정의={}({}) 기준시각={}",
                 run.getId(), definitionId, definition.getCode(), baseAt);
