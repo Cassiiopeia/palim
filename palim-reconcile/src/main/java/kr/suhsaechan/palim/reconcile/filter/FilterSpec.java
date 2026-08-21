@@ -79,8 +79,7 @@ public record FilterSpec(FilterNode root) {
 
     /** 화면에 보여줄 말. 「전체」 인지 무엇이 걸렸는지가 한눈에 보여야 잘못 걸린 것을 알아챈다. */
     public String describe() {
-        // Task 7 에서 ExpressionWriter.write(root) 로 바꾼다. 그전까지는 컴파일이 되게만 둔다.
-        return isAll() ? "전체" : "조건 " + root.nodeCount() + "개";
+        return ExpressionWriter.write(root);
     }
 
     /** 컴파일 결과. 조각과 값은 언제나 함께 다닌다. */

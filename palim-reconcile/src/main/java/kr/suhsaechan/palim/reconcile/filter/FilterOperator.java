@@ -106,6 +106,10 @@ public enum FilterOperator {
         };
     }
 
+    private static String strip(String value) {
+        return value.toUpperCase(Locale.ROOT).replace(" ", "");
+    }
+
     /** 그 타입에 쓸 수 있는 연산자. 화면이 드롭다운을 그리는 데 쓴다. */
     public static List<FilterOperator> forType(FieldType type) {
         return Arrays.stream(values()).filter(op -> op.supports(type)).toList();
@@ -123,8 +127,11 @@ public enum FilterOperator {
         }
         String noSpace = token.trim().toUpperCase(Locale.ROOT).replace(" ", "");
         for (FilterOperator op : values()) {
-            if (op.symbol.toUpperCase(Locale.ROOT).replace(" ", "").equals(noSpace)
-                    || op.name().equals(noSpace)) {
+            // 이름·기호·화면 이름을 모두 받는다. 화면에서 「사이」 를 보고 식에 그대로 적었는데
+            // 안 읽히면, 사람은 무엇이 틀렸는지 알 수 없다.
+            if (op.name().equals(noSpace)
+                    || strip(op.symbol).equals(noSpace)
+                    || strip(op.label).equals(noSpace)) {
                 return Optional.of(op);
             }
         }

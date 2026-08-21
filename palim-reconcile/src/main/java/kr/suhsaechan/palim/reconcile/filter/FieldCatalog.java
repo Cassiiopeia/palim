@@ -33,19 +33,19 @@ public final class FieldCatalog {
         text("unit", "단위");
         text("base_unit", "기준단위");
         text("serial_no", "일련번호");
-        text("raw_item_name", "원본 품명");
-        text("normalized_name", "다듬은 품명");
+        text("raw_item_name", "원본품명");
+        text("normalized_name", "다듬은품명");
         text("item_ref", "품목코드");
         text("currency", "통화");
         date("expiry_date", "유통기한");
         date("manufacture_date", "제조일");
-        number("quantity", "원본 수량");
-        number("base_quantity", "기준 수량");
-        number("available_quantity", "가용 수량");
-        number("reserved_quantity", "할당 수량");
-        number("defective_quantity", "불량 수량");
-        number("incoming_quantity", "입고 예정");
-        number("outgoing_quantity", "출고 예정");
+        number("quantity", "원본수량");
+        number("base_quantity", "기준수량");
+        number("available_quantity", "가용수량");
+        number("reserved_quantity", "할당수량");
+        number("defective_quantity", "불량수량");
+        number("incoming_quantity", "입고예정");
+        number("outgoing_quantity", "출고예정");
         number("unit_cost", "단가");
         number("amount", "금액");
     }
@@ -69,7 +69,13 @@ public final class FieldCatalog {
         STANDARD.put(key, new FilterableField(key, label, type, key, false));
     }
 
-    /** 표준 칸 전부. 화면이 드롭다운을 그리는 데 쓴다. */
+    /**
+     * 표준 칸 전부. 화면이 드롭다운을 그리는 데 쓴다.
+     *
+     * <p><b>화면 이름에 공백을 두지 않는다.</b> 식은 낱말 단위로 읽으므로 「원본 품명」 처럼
+     * 띄어 쓰면 두 낱말이 되어 되읽을 수 없다 — 「식으로 보기」 로 나온 글을 그대로 저장할 수
+     * 없게 된다.
+     */
     public static List<FilterableField> standard() {
         return List.copyOf(STANDARD.values());
     }

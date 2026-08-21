@@ -404,7 +404,32 @@ public enum ErrorCode {
      * <p>사람이 정규식을 직접 넣는 화면이라 <b>되돌아가는 패턴</b>이 들어올 수 있다.
      * {@code (a+)+$} 같은 것 하나로 요청 스레드가 영원히 돌 수 있으므로 시간을 끊는다.
      */
-    NORMALIZATION_PREVIEW_TIMEOUT("R007", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
+    NORMALIZATION_PREVIEW_TIMEOUT("R007", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /**
+     * 조건이 가리키는 칸이 카탈로그에 없다.
+     *
+     * <p>원천 구성이 바뀌어 그 칸이 사라졌거나, 손으로 고친 값이 들어왔다. <b>조용히 건너뛰지
+     * 않는다</b> — 건너뛰면 조건이 빠진 채로 대조가 도는데 화면은 걸려 있다고 보인다.
+     */
+    FILTER_FIELD_UNKNOWN("R011", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN),
+
+    /** 그 칸에 쓸 수 없는 연산자다. 글 칸에 「사이」 를 걸려는 식. */
+    FILTER_OPERATOR_MISMATCH("R012", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /** 연산자가 요구하는 값 개수와 다르다. 값이 0개인 「이것만」 은 IN () 이 되어 문법 오류다. */
+    FILTER_VALUE_COUNT("R013", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 식을 읽지 못했다. 어디서 막혔는지를 함께 알려 도는 순간까지 미루지 않는다. */
+    FILTER_EXPRESSION_INVALID("R014", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.DEBUG),
+
+    /**
+     * 식이 너무 길거나 깊다.
+     *
+     * <p>파싱이 되어도 비싼 것은 만들 수 있다. 상한이 없으면 화면의 미리보기 하나가 서버를
+     * 물고 늘어진다.
+     */
+    FILTER_EXPRESSION_TOO_COMPLEX("R015", HttpStatus.UNPROCESSABLE_ENTITY, LogLevel.WARN);
 
     private final String code;
     private final HttpStatus httpStatus;
