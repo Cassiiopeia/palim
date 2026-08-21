@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.CompareField;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -119,10 +119,10 @@ public class UnitBreakdown {
         boolean exact = when.exact();
         List<Part> left = parts(tenantId, unitId, pairing.leftSource(),
                 when.leftOr(latestBefore(tenantId, pairing.leftSource(), when.before())),
-                pairing.leftScope(), pairing.compareField(), using);
+                pairing.leftFilter(), pairing.compareField(), using);
         List<Part> right = parts(tenantId, unitId, pairing.rightSource(),
                 when.rightOr(latestBefore(tenantId, pairing.rightSource(), when.before())),
-                pairing.rightScope(), pairing.compareField(), using);
+                pairing.rightFilter(), pairing.compareField(), using);
 
         // 고른 기준이 이 자료에 없을 수 있다. 조용히 「전부 짝 없음」 을 보여주면 사람은 자료가
         // 잘못된 줄 알지, 기준을 잘못 골랐다고는 생각하지 못한다.
@@ -194,11 +194,12 @@ public class UnitBreakdown {
      * 이어 붙이지 않는다.
      */
     private List<Part> parts(UUID tenantId, UUID unitId, String source, Instant baseAt,
-                             WarehouseScope scope, String compareField,
+                             FilterSpec filter, String compareField,
                              BreakdownAxis axis) {
         if (baseAt == null) {
             return List.of();
         }
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, baseAt);
         boolean byField = axis.kind() == BreakdownAxis.Kind.FIELD;
         String axisSelect = byField
                 ? "coalesce(max(s.%s)::text, '')".formatted(axis.fieldKey())
@@ -235,12 +236,12 @@ public class UnitBreakdown {
                          GROUP BY m.item_ref, m.factor%s
                          ORDER BY m.item_ref
                         """.formatted(CompareField.sanitize(compareField), axisSelect,
-                                      scope.sqlAnd("s"), axisGroup))
+                                      where.sql(), axisGroup))
                 .param("tenantId", tenantId)
                 .param("unitId", unitId)
                 .param("source", source)
                 .param("baseAt", baseAt.atOffset(java.time.ZoneOffset.UTC))
-                .params(scope.params())
+                .params(where.params())
                 .query((rs, rowNum) -> new Part(
                         source,
                         rs.getString("item_ref"),

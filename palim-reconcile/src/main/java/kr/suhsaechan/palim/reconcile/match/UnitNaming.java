@@ -1,10 +1,11 @@
 package kr.suhsaechan.palim.reconcile.match;
 
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -40,8 +41,8 @@ public class UnitNaming {
     @Transactional(readOnly = true)
     public String suggest(UUID tenantId, UUID unitId, Pairing pairing) {
         return CommonName.of(
-                names(tenantId, unitId, pairing.leftSource(), pairing.leftScope()),
-                names(tenantId, unitId, pairing.rightSource(), pairing.rightScope()));
+                names(tenantId, unitId, pairing.leftSource(), pairing.leftFilter()),
+                names(tenantId, unitId, pairing.rightSource(), pairing.rightFilter()));
     }
 
     /**
@@ -63,8 +64,8 @@ public class UnitNaming {
     public List<Suggestion> suggestions(UUID tenantId, Pairing pairing) {
         List<Suggestion> found = new ArrayList<>();
         for (UnitRow unit : activeUnits(tenantId)) {
-            List<String> left = names(tenantId, unit.id(), pairing.leftSource(), pairing.leftScope());
-            List<String> right = names(tenantId, unit.id(), pairing.rightSource(), pairing.rightScope());
+            List<String> left = names(tenantId, unit.id(), pairing.leftSource(), pairing.leftFilter());
+            List<String> right = names(tenantId, unit.id(), pairing.rightSource(), pairing.rightFilter());
             if (left.size() < 2 && right.size() < 2) {
                 continue;
             }
@@ -103,7 +104,8 @@ public class UnitNaming {
      * <p>기준 시각을 고르는 서브쿼리에는 창고를 걸지 <b>않는다.</b> 시각은 「언제」 이고 창고는
      * 「얼마」 다 — 좁히면 그 창고에 자료가 없는 회차를 건너뛰어 더 옛 시각을 고르게 된다.
      */
-    private List<String> names(UUID tenantId, UUID unitId, String source, WarehouseScope scope) {
+    private List<String> names(UUID tenantId, UUID unitId, String source, FilterSpec filter) {
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, Instant.now());
         return jdbcClient.sql("""
                         SELECT coalesce(max(s.raw_item_name), '') AS raw_name
                           FROM reconcile_unit_member m
@@ -123,11 +125,11 @@ public class UnitNaming {
                            AND m.confirmed_at IS NOT NULL
                          GROUP BY m.item_ref
                          ORDER BY m.item_ref
-                        """.formatted(scope.sqlAnd("s")))
+                        """.formatted(where.sql()))
                 .param("tenantId", tenantId)
                 .param("unitId", unitId)
                 .param("source", source)
-                .params(scope.params())
+                .params(where.params())
                 .query(String.class)
                 .list()
                 .stream()

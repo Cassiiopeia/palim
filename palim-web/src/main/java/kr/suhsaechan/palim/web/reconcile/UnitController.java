@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.filter.FilterService;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
@@ -59,6 +60,7 @@ public class UnitController {
     private final SnapshotAggregator aggregator;
     private final ReconcileDefinitionRepository definitions;
     private final ErrorMessageResolver errorMessages;
+    private final FilterService filters;
 
     @GetMapping("/reconcile/units")
     public String units(@RequestParam(required = false) UUID definitionId,
@@ -85,10 +87,17 @@ public class UnitController {
 
         UUID tenantId = TenantContext.current();
         MatchBoard.Tab current = MatchBoard.Tab.of(tab);
-        MatchBoard.Board loaded = board.load(tenantId, Pairing.of(definition), current, q, page);
+        Pairing pairing = filters.pairingOf(definition);
+        MatchBoard.Board loaded = board.load(tenantId, pairing, current, q, page);
 
         model.addAttribute("definition", definition);
         model.addAttribute("board", loaded);
+        // 지금 보고 있는 수치가 «전부 더한 것인지 좁힌 것인지» 를 화면이 말해야 한다. 이것이
+        // 없어서, 조건은 뒤에서 제대로 걸리는데 사장님은 무엇을 보고 있는지 알 수 없었다.
+        model.addAttribute("leftFilterText", pairing.leftFilter().describe());
+        model.addAttribute("rightFilterText", pairing.rightFilter().describe());
+        model.addAttribute("filtersAreAll",
+                pairing.leftFilter().isAll() && pairing.rightFilter().isAll());
         model.addAttribute("tab", current);
         model.addAttribute("q", q == null ? "" : q);
         model.addAttribute("reasons", UnpairedItem.Reason.values());
@@ -103,7 +112,7 @@ public class UnitController {
 
         // 담긴 품명과 어긋나는 이름들. 「다시 짓기」 를 권할 자리이자, 로트 날짜가 박힌
         // 옛 이름이 몇 개 남았는지 사람이 아는 유일한 길이다.
-        model.addAttribute("renameSuggestions", naming.suggestions(tenantId, Pairing.of(definition)));
+        model.addAttribute("renameSuggestions", naming.suggestions(tenantId, filters.pairingOf(definition)));
 
         addMateCandidates(tenantId, definition, loaded, expand, eq, model);
         return "reconcile/units";
@@ -138,7 +147,7 @@ public class UnitController {
         model.addAttribute("expandSource",
                 opposite == null ? "양쪽" : opposite);
         model.addAttribute("eq", eq == null ? "" : eq);
-        model.addAttribute("mates", board.mateCandidates(tenantId, Pairing.of(definition), opposite, row.displayName(), eq, MATE_LIMIT));
+        model.addAttribute("mates", board.mateCandidates(tenantId, filters.pairingOf(definition), opposite, row.displayName(), eq, MATE_LIMIT));
     }
 
     /** 고른 것이 있으면 그것, 하나뿐이면 그것, 여럿인데 안 골랐으면 {@code null}. */
@@ -186,7 +195,7 @@ public class UnitController {
         String lastName = "";
         List<String> refused = new ArrayList<>();
         for (String key : targets) {
-            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, filters.pairingOf(definition), key).orElse(null);
             if (found == null) {
                 continue;
             }
@@ -250,7 +259,7 @@ public class UnitController {
             return "redirect:/reconcile/units";
         }
         UUID tenantId = TenantContext.current();
-        MatchBoard.Row row = board.findRow(tenantId, Pairing.of(definition), rowKey).orElse(null);
+        MatchBoard.Row row = board.findRow(tenantId, filters.pairingOf(definition), rowKey).orElse(null);
         MatchBoard.Row mateRow = mateRowOf(tenantId, definition, mate);
         if (row == null || mateRow == null) {
             redirect.addFlashAttribute("flashError",
@@ -279,7 +288,7 @@ public class UnitController {
 
     /** 고른 품목이 든 줄. 짝 후보는 줄이 아니라 품목이므로 그 품목이 속한 줄을 되찾는다. */
     private MatchBoard.Row mateRowOf(UUID tenantId, ReconcileDefinition definition, String token) {
-        return board.findRowByItem(tenantId, Pairing.of(definition), token).orElse(null);
+        return board.findRowByItem(tenantId, filters.pairingOf(definition), token).orElse(null);
     }
 
     /**
@@ -344,7 +353,7 @@ public class UnitController {
         UnpairedItem.Reason parsed = reasonOf(reason);
         int marked = 0;
         for (String key : targets) {
-            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, filters.pairingOf(definition), key).orElse(null);
             if (found == null || found.kind() == MatchBoard.Kind.LINKED) {
                 continue;
             }
@@ -377,7 +386,7 @@ public class UnitController {
         UUID tenantId = TenantContext.current();
         int restored = 0;
         for (String key : targetsOf(row, rows)) {
-            MatchBoard.Row found = board.findRow(tenantId, Pairing.of(definition), key).orElse(null);
+            MatchBoard.Row found = board.findRow(tenantId, filters.pairingOf(definition), key).orElse(null);
             if (found == null) {
                 continue;
             }
@@ -451,7 +460,7 @@ public class UnitController {
             } catch (IllegalArgumentException e) {
                 continue;
             }
-            String suggested = naming.suggest(tenantId, unitId, Pairing.of(definition));
+            String suggested = naming.suggest(tenantId, unitId, filters.pairingOf(definition));
             if (suggested.isBlank()) {
                 continue;
             }

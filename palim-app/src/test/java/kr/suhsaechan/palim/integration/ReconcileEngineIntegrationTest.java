@@ -11,7 +11,10 @@ import java.util.UUID;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterOperator;
+import kr.suhsaechan.palim.reconcile.filter.FilterRow;
+import kr.suhsaechan.palim.reconcile.filter.FilterRowRepository;
+import kr.suhsaechan.palim.reconcile.filter.FilterSide;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
@@ -44,6 +47,7 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
     @Autowired private ReconcileUnitService unitService;
     @Autowired private ReconcileDefinitionRepository definitions;
     @Autowired private ReconcileDiffRepository diffs;
+    @Autowired private FilterRowRepository filterRows;
     @Autowired private JdbcClient jdbcClient;
 
     private Instant baseAt;
@@ -297,9 +301,8 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
     void 창고를_고르면_그것만_견준다() {
         unitAcrossWarehouses("100", "30", "100");
         ReconcileDefinition definition = definition("0");
-        definition.changeWarehouses(
-                new WarehouseScope(List.of(CONSIGNED)), WarehouseScope.all());
         definitions.save(definition);
+        onlyWarehouse(definition, CONSIGNED);
 
         ReconcileRun run = engine.run(definition.getId());
 
@@ -309,34 +312,21 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
     }
 
     /**
-     * 창고를 구분하지 않는 원천은 코드가 <b>빈 문자열</b>이다({@code warehouse_code} 는
-     * {@code NOT NULL DEFAULT ''}).
+     * 화면이 한 칸에 담아 보낸 값을 나눌 때 <b>빈 조각을 버린다.</b>
      *
-     * <p>그것을 그대로 담으면 저장 → 다시 읽기 왕복에서 <b>선택이 조용히 사라진다</b> —
-     * 저장값이 빈 문자열이 되고, 읽을 때 그것은 「전부」 로 해석된다. 화면은 「정했습니다」 라고
-     * 말하는데 대조는 여전히 전 창고를 더한다. 고쳤다고 믿는 쪽이 안 고친 것보다 나쁘다.
+     * <p>창고를 구분하지 않는 원천은 코드가 빈 문자열이다({@code warehouse_code} 는
+     * {@code NOT NULL DEFAULT ''}). 그것을 값으로 담으면 조건이 「빈 문자열인 것만」 이 되어
+     * 대조 대상이 통째로 빈다 — 화면은 「정했습니다」 라고 말하는데 결과가 0건이 된다.
      */
     @Test
-    @DisplayName("빈 창고 코드는 「고르지 않음」과 구분되지 않으므로 담지 않는다")
-    void 빈_창고_코드는_걸러진다() {
-        assertThat(new WarehouseScope(List.of("")).isAll())
-                .as("빈 코드만 고른 것은 「전부」 와 같다 — 저장해도 사라지므로 애초에 담지 않는다")
-                .isTrue();
-
-        assertThat(new WarehouseScope(List.of("W-1", "", "  ", "W-1")).codes())
-                .as("빈 값과 중복은 버리고 고른 순서는 지킨다")
-                .containsExactly("W-1");
-
-        assertThat(WarehouseScope.parse("W-1, ,W-2,W-1").codes())
-                .as("저장된 값을 읽는 길도 같은 규칙이어야 한다 — 두 입구가 다르면 한쪽만 어긋난다")
+    @DisplayName("빈 값과 공백은 조건 값으로 담지 않는다")
+    void 빈_값은_걸러진다() {
+        assertThat(kr.suhsaechan.palim.reconcile.filter.FilterValues.split(""))
+                .as("빈 칸은 값이 없는 것이다")
+                .isEmpty();
+        assertThat(kr.suhsaechan.palim.reconcile.filter.FilterValues.split("W-1| |W-2|"))
+                .as("빈 조각과 공백은 버리고 적은 순서는 지킨다")
                 .containsExactly("W-1", "W-2");
-
-        assertThat(new WarehouseScope(List.of("W-1")).toStored())
-                .as("저장 형태는 쉼표로 잇는다")
-                .isEqualTo("W-1");
-        assertThat(WarehouseScope.all().toStored())
-                .as("전부일 때는 NULL — 빈 문자열로 두면 「고른 것이 없음」 과 구분되지 않는다")
-                .isNull();
     }
 
     /**
@@ -347,31 +337,41 @@ class ReconcileEngineIntegrationTest extends IntegrationTest {
      * 해서 「늘 틀린다」 보다 원인을 찾기 어렵다.
      */
     @Test
-    @DisplayName("회차가 그때 본 창고 범위를 남긴다")
+    @DisplayName("회차가 그때 본 조건을 남긴다")
     void 회차가_범위를_남긴다() {
         unitAcrossWarehouses("100", "30", "100");
         ReconcileDefinition definition = definition("0");
-        definition.changeWarehouses(
-                new WarehouseScope(List.of(CONSIGNED)), WarehouseScope.all());
         definitions.save(definition);
+        onlyWarehouse(definition, CONSIGNED);
 
         ReconcileRun run = engine.run(definition.getId());
 
-        var scope = run.scopeOf(definition.getLeftSource(), definition.getRightSource());
-        assertThat(scope.leftScope().codes())
-                .as("나중에 정의가 바뀌어도 이 회차는 그때 본 창고로 다시 계산되어야 한다")
-                .containsExactly(CONSIGNED);
-        assertThat(scope.rightScope().isAll())
-                .as("고르지 않은 쪽은 「전부」 로 남는다")
-                .isTrue();
+        assertThat(run.getFilters().leftExpression())
+                .as("나중에 정의가 바뀌어도 이 회차는 그때 본 조건으로 다시 계산되어야 한다")
+                .contains(CONSIGNED);
+        assertThat(run.getFilters().rightExpression())
+                .as("고르지 않은 쪽은 「전체」 로 남는다")
+                .isEqualTo("전체");
+
+        // 기록한 글이 그대로 되읽혀야 지난 회차 상세를 다시 계산할 수 있다.
+        assertThat(run.getFilters()
+                .toPairing(definition.getLeftSource(), definition.getRightSource())
+                .leftFilter().isAll())
+                .as("되읽은 조건이 「전부」 이면 그 회차는 다시 계산할 수 없다")
+                .isFalse();
 
         // 정의를 바꿔도 회차가 남긴 값은 그대로여야 한다
-        definition.changeWarehouses(WarehouseScope.all(), WarehouseScope.all());
-        definitions.save(definition);
-        assertThat(run.scopeOf(definition.getLeftSource(), definition.getRightSource())
-                .leftScope().codes())
+        filterRows.deleteAll(
+                filterRows.findByDefinitionIdOrderBySideAscOrdinalAsc(definition.getId()));
+        assertThat(run.getFilters().leftExpression())
                 .as("정의를 바꾸면 지난 회차 상세가 따라 바뀌는 것이 이 시험이 막는 문제다")
-                .containsExactly(CONSIGNED);
+                .contains(CONSIGNED);
+    }
+
+    /** 좌측 원천에서 그 창고만 보게 조건을 건다. */
+    private void onlyWarehouse(ReconcileDefinition definition, String warehouse) {
+        filterRows.save(FilterRow.field(TENANT, definition.getId(), FilterSide.LEFT, 0,
+                "warehouse_code", FilterOperator.IN, List.of(warehouse)));
     }
 
     /** 위탁 창고 코드. 시험 안에서 「어느 창고가 맡긴 곳인지」 를 이름으로 드러낸다. */

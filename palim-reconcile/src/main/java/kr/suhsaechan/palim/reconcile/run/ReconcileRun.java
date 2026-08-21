@@ -12,7 +12,7 @@ import kr.suhsaechan.palim.common.UuidV7;
 import kr.suhsaechan.palim.common.entity.BaseTimeEntity;
 import kr.suhsaechan.palim.common.tenant.TenantFilters;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSnapshot;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -103,7 +103,8 @@ public class ReconcileRun extends BaseTimeEntity {
      * 화면의 상세가 어긋난다. 게다가 회차마다 맞기도 하고 틀리기도 해서 「늘 틀린다」 보다
      * 원인을 찾기 어렵다.
      *
-     * <p>비어 있으면 「그때는 전 창고를 봤다」 로 읽는다 — 이 칸이 생기기 전 회차가 그랬다.
+     * <p><b>V35 부터는 {@code filtersJson} 이 이 자리를 대신한다.</b> 이 두 칸은 그 이전
+     * 회차를 읽기 위해서만 남아 있다 — 지우면 그 회차가 무엇을 봤는지 알 방법이 없어진다.
      */
     @Column(length = 1000)
     private String leftWarehouses;
@@ -115,25 +116,44 @@ public class ReconcileRun extends BaseTimeEntity {
     @Column(length = 50)
     private String compareField;
 
-    /** 이 회차가 실제로 본 범위를 남긴다. 실행 직후 한 번만 부른다. */
+    /**
+     * 이 회차가 쓴 조건. 좌·우를 <b>사람이 읽는 식</b>으로 적는다.
+     *
+     * <p>구조화해 담지 않는 이유가 있다 — 그 글이 곧 다시 계산할 수 있는 기록이고, 카탈로그에서
+     * 사라진 칸도 그대로 남으며, 읽는 쪽이 JSON 매핑에 매이지 않는다.
+     */
+    @Column(length = 2000)
+    private String filtersLeft;
+
+    @Column(length = 2000)
+    private String filtersRight;
+
+    /**
+     * 이 회차가 실제로 본 조건을 남긴다. 실행 직후 한 번만 부른다.
+     *
+     * <p>상대 날짜는 <b>풀어서 담지 않는다.</b> 회차는 자기가 돈 시각을 이미 알므로 필요할 때
+     * 다시 풀면 똑같은 답이 나온다 — 파생값을 저장하면 저장한 것과 다시 푼 것이 어긋날 자리만
+     * 생긴다.
+     */
     public void recordScope(Pairing pairing) {
-        this.leftWarehouses = pairing.leftScope().toStored();
-        this.rightWarehouses = pairing.rightScope().toStored();
+        this.filtersLeft = pairing.leftFilter().describe();
+        this.filtersRight = pairing.rightFilter().describe();
         this.compareField = pairing.compareField();
     }
 
     /**
-     * 이 회차가 본 범위 그대로.
+     * 이 회차가 쓴 조건.
      *
-     * <p>상세 화면이 «오늘의 정의» 가 아니라 이 값으로 다시 계산해야 저장된 합계와 맞는다.
-     *
-     * @param leftSource  회차에는 원천 이름을 남기지 않으므로 정의에서 받는다.
-     *                    원천이 바뀌면 그것은 다른 대조다
+     * <p>V35 이전 회차는 이 칸이 비어 있다 — 그때의 기록인 옛 창고 칸을 읽는다. 기록이 사라지면
+     * 「그 회차는 무엇을 봤나」 에 답할 방법이 없어진다.
      */
-    public Pairing scopeOf(String leftSource, String rightSource) {
-        return new Pairing(leftSource, rightSource,
-                WarehouseScope.parse(leftWarehouses), WarehouseScope.parse(rightWarehouses),
-                compareField);
+    public FilterSnapshot getFilters() {
+        boolean recorded = filtersLeft != null || filtersRight != null;
+        return new FilterSnapshot(
+                recorded ? filtersLeft : FilterSnapshot.fromLegacyCsv(leftWarehouses),
+                recorded ? filtersRight : FilterSnapshot.fromLegacyCsv(rightWarehouses),
+                compareField,
+                startedAt);
     }
 
     public void recordSourceTimes(Instant leftBaseAt, Instant rightBaseAt) {

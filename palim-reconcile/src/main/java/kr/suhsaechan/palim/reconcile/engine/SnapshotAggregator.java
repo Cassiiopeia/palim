@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.CompareField;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
+import kr.suhsaechan.palim.reconcile.filter.FilterableField;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -38,17 +39,20 @@ public class SnapshotAggregator {
     @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> sumByUnit(UUID tenantId, String source, Instant baseAt,
                                            String compareField) {
-        return sumByUnit(tenantId, source, baseAt, compareField, WarehouseScope.all());
+        return sumByUnit(tenantId, source, baseAt, compareField, FilterSpec.all());
     }
 
     /**
-     * @param scope 볼 창고. 비어 있으면 전부 — 전부 더하면 위탁하지 않은 물량까지 섞인다
+     * @param filter 볼 조건. 비어 있으면 전부 — 전부 더하면 맡기지 않은 물량까지 섞인다
      */
     @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> sumByUnit(UUID tenantId, String source, Instant baseAt,
-                                           String compareField, WarehouseScope scope) {
+                                           String compareField, FilterSpec filter) {
         // 허용 목록은 define/CompareField 한 곳에만 둔다 — 두 벌이 되면 한쪽만 늘어난다.
         String column = CompareField.sanitize(compareField);
+        // 조각과 값을 한 번에 만든다. 따로 만들면 상대 날짜(「오늘+30」)가 두 시각으로 풀려
+        // 조각과 값이 어긋날 수 있다 — 그 어긋남은 자정을 넘길 때만 나타나 재현이 어렵다.
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, baseAt);
 
         List<Map.Entry<UUID, BigDecimal>> rows = jdbcClient.sql("""
                         SELECT m.unit_id AS unit_id, coalesce(sum(s.%s * m.factor), 0) AS qty
@@ -62,12 +66,12 @@ public class SnapshotAggregator {
                            AND s.source    = :source
                            AND s.base_at   = :baseAt%s
                          GROUP BY m.unit_id
-                        """.formatted(column, scope.sqlAnd("s")))
+                        """.formatted(column, where.sql()))
                 .param("tenantId", tenantId)
                 .param("source", source)
                 // JdbcClient 는 Instant 를 바인딩하지 못한다. timestamptz 에는 OffsetDateTime.
                 .param("baseAt", baseAt.atOffset(ZoneOffset.UTC))
-                .params(scope.params())
+                .params(where.params())
                 .query((rs, rowNum) -> Map.entry(
                         rs.getObject("unit_id", UUID.class),
                         rs.getBigDecimal("qty")))
@@ -87,18 +91,19 @@ public class SnapshotAggregator {
     @Transactional(readOnly = true)
     public List<UnmatchedItem> unmatched(UUID tenantId, String source, Instant baseAt,
                                          String compareField) {
-        return unmatched(tenantId, source, baseAt, compareField, WarehouseScope.all());
+        return unmatched(tenantId, source, baseAt, compareField, FilterSpec.all());
     }
 
     /**
-     * @param scope 볼 창고. 합계와 <b>같은 범위</b>여야 한다 — 한쪽만 걸러지면 「합계는 이런데
+     * @param filter 볼 조건. 합계와 <b>같은 범위</b>여야 한다 — 한쪽만 걸러지면 「합계는 이런데
      *              뜯어보면 다르다」 가 되어 어느 쪽을 믿어야 할지 알 수 없다
      */
     @Transactional(readOnly = true)
     public List<UnmatchedItem> unmatched(UUID tenantId, String source, Instant baseAt,
-                                         String compareField, WarehouseScope scope) {
+                                         String compareField, FilterSpec filter) {
         // 허용 목록은 define/CompareField 한 곳에만 둔다 — 두 벌이 되면 한쪽만 늘어난다.
         String column = CompareField.sanitize(compareField);
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, baseAt);
 
         return jdbcClient.sql("""
                         SELECT s.item_ref AS item_ref,
@@ -115,11 +120,11 @@ public class SnapshotAggregator {
                            AND s.base_at   = :baseAt
                            AND m.id IS NULL%s
                          GROUP BY s.item_ref
-                        """.formatted(column, scope.sqlAnd("s")))
+                        """.formatted(column, where.sql()))
                 .param("tenantId", tenantId)
                 .param("source", source)
                 .param("baseAt", baseAt.atOffset(ZoneOffset.UTC))
-                .params(scope.params())
+                .params(where.params())
                 .query((rs, rowNum) -> new UnmatchedItem(
                         rs.getString("item_ref"),
                         rs.getString("raw_name"),
@@ -138,59 +143,143 @@ public class SnapshotAggregator {
     }
 
     /**
-     * 이 원천에 <b>실제로 들어온</b> 창고.
+     * 이 원천에 <b>실제로 들어온</b> 값들.
      *
-     * <p>커넥터 설정이 아니라 담긴 자료에서 뽑는다 — 설정에만 있고 자료가 없는 창고를 고르면
+     * <p>커넥터 설정이 아니라 담긴 자료에서 뽑는다 — 설정에만 있고 자료가 없는 값을 고르면
      * 대조 대상이 통째로 비는데, 화면은 「고르긴 골랐다」 고 보이므로 원인을 찾기 어렵다.
      *
      * <p>수량을 함께 준다. 어느 창고가 맡긴 분인지는 <b>규모로 판단</b>하게 되기 때문이다 —
-     * 이름만으로는 「사무실 창고」 와 「정도로지스」 중 어느 쪽이 위탁인지 알 수 없다.
+     * 이름만으로는 알 수 없다.
      *
-     * <p>가장 최근 기준 시각의 자료만 본다. 옛 회차에만 있던 창고가 목록에 남으면 지금은 쓰지
-     * 않는 창고를 고르게 된다.
+     * <p>가장 최근 기준 시각의 자료만 본다. 옛 회차에만 있던 값이 목록에 남으면 지금은 쓰지
+     * 않는 것을 고르게 된다.
+     *
+     * <p>표현식은 <b>카탈로그를 거친 것만</b> 온다 — 부르는 쪽이 임의 문자열을 넘길 수 없다.
      */
     @Transactional(readOnly = true)
-    public List<Warehouse> warehouses(UUID tenantId, String source) {
+    public List<FieldValue> valuesOf(UUID tenantId, String source, FilterableField field) {
+        String column = field.sqlWith("s");
+        // 창고는 이름 칸이 따로 있다. 그 칸이 있으면 함께 보여 사람이 알아볼 수 있게 한다 —
+        // 「W-01」 만 보고 어느 창고인지 아는 사람은 없다.
+        String labelColumn = "warehouse_code".equals(field.key())
+                ? "max(coalesce(s.warehouse_name, ''))" : "''";
+
         return jdbcClient.sql("""
-                        SELECT coalesce(s.warehouse_code, '')                AS code,
-                               max(coalesce(s.warehouse_name, ''))           AS name,
-                               count(*)::int                                 AS items,
-                               sum(s.base_quantity)                          AS qty
+                        SELECT coalesce(%s, '')     AS value,
+                               %s                   AS label,
+                               count(*)::int        AS items,
+                               sum(s.base_quantity) AS qty
                           FROM std_stock_snapshot s
                          WHERE s.tenant_id = :tenantId
                            AND s.source    = :source
                            AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
-                                               WHERE x.tenant_id = :tenantId AND x.source = :source)
-                         GROUP BY coalesce(s.warehouse_code, '')
+                                               WHERE x.tenant_id = :tenantId
+                                                 AND x.source    = :source)
+                         GROUP BY coalesce(%s, '')
                          ORDER BY sum(s.base_quantity) DESC
-                        """)
+                         LIMIT %d
+                        """.formatted(column, labelColumn, column, VALUE_LIMIT + 1))
                 .param("tenantId", tenantId)
                 .param("source", source)
-                .query((rs, rowNum) -> new Warehouse(
-                        rs.getString("code"),
-                        rs.getString("name"),
-                        rs.getInt("items"),
-                        rs.getBigDecimal("qty")))
+                .query((rs, rowNum) -> new FieldValue(
+                        rs.getString("value"), rs.getString("label"),
+                        rs.getInt("items"), rs.getBigDecimal("qty")))
                 .list();
     }
 
     /**
-     * 담긴 자료에 있는 창고 하나.
+     * 값 후보를 몇 개까지 보여줄지.
      *
-     * @param code  창고 코드. 원천이 창고를 안 주면 빈 문자열이다
-     * @param name  창고 이름. 코드만 오는 원천도 있어 비어 있을 수 있다
-     * @param items 그 창고에 있는 품목 줄 수
-     * @param qty   그 창고의 수량 합계. 어느 창고가 맡긴 분인지 규모로 판단하게 된다
+     * <p>품목코드처럼 값이 수만 개인 칸을 고르면 화면이 그것을 전부 그린다. 상한을 하나 더 받아
+     * 와서 <b>「더 있다」 를 화면이 말할 수 있게</b> 한다 — 말없이 자르면 목록에 없는 값은 없는
+     * 값으로 읽힌다.
      */
-    public record Warehouse(String code, String name, int items, BigDecimal qty) {
+    public static final int VALUE_LIMIT = 200;
 
-        /** 화면에 쓸 이름. 이름이 없으면 코드로 대신한다 — 빈 칸은 고를 수 없다. */
-        public String label() {
-            if (name != null && !name.isBlank()) {
-                return code.isBlank() ? name : "%s (%s)".formatted(name, code);
+    /**
+     * 걸 수 있는 값 하나.
+     *
+     * @param value 저장될 값. 원천이 그 칸을 안 주면 빈 문자열이다
+     * @param label 곁들일 이름. 창고처럼 이름 칸이 따로 있는 경우에만 채워진다
+     * @param items 그 값을 가진 품목 줄 수
+     * @param qty   그 값의 수량 합계. <b>무엇을 골라야 하는지 규모로 판단하게 된다</b>
+     */
+    public record FieldValue(String value, String label, int items, BigDecimal qty) {
+
+        /** 화면에 쓸 이름. 이름이 없으면 값으로 대신한다 — 빈 칸은 고를 수 없다. */
+        public String display() {
+            if (label != null && !label.isBlank()) {
+                return value.isBlank() ? label : "%s (%s)".formatted(label, value);
             }
-            return code.isBlank() ? "창고 구분 없음" : code;
+            return value.isBlank() ? "값 없음" : value;
         }
+    }
+
+    /**
+     * 이 원천이 주는 <b>표준에 없는 칸</b>의 이름들.
+     *
+     * <p>매핑되지 않은 원천 컬럼을 {@code attributes} 에 통째로 살려 두므로, 그 키를 뽑으면
+     * <b>원천 계정이 바뀌어 칸 구성이 달라져도</b> 화면이 그대로 동작한다. 코드에 칸 이름을 박지
+     * 않는 이유가 이것이다.
+     */
+    @Transactional(readOnly = true)
+    public List<String> attributeKeys(UUID tenantId, String source) {
+        return jdbcClient.sql("""
+                        SELECT DISTINCT k AS key
+                          FROM std_stock_snapshot s,
+                               LATERAL jsonb_object_keys(s.attributes) AS k
+                         WHERE s.tenant_id = :tenantId
+                           AND s.source    = :source
+                           AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
+                                               WHERE x.tenant_id = :tenantId
+                                                 AND x.source    = :source)
+                         ORDER BY k
+                         LIMIT 200
+                        """)
+                .param("tenantId", tenantId)
+                .param("source", source)
+                .query((rs, rowNum) -> rs.getString("key"))
+                .list();
+    }
+
+    /**
+     * 이 조건이면 몇 줄이 남는가.
+     *
+     * <p><b>저장 전에 보여준다.</b> 이것이 없으면 저장하고 대조를 돌려 봐야 결과를 안다 —
+     * 그리고 그때는 이미 지난 회차의 숫자가 바뀐 뒤다.
+     */
+    @Transactional(readOnly = true)
+    public Preview preview(UUID tenantId, String source, FilterSpec filter, Instant asOf) {
+        // 조각을 두 자리에 쓰지만 바인딩은 한 벌이다. 이름을 순번으로 뽑는 덕에 성립한다.
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, asOf);
+
+        return jdbcClient.sql("""
+                        SELECT count(*)::int AS total,
+                               count(*) FILTER (WHERE true%s)::int AS kept,
+                               coalesce(sum(s.base_quantity) FILTER (WHERE true%s), 0) AS kept_qty
+                          FROM std_stock_snapshot s
+                         WHERE s.tenant_id = :tenantId
+                           AND s.source    = :source
+                           AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
+                                               WHERE x.tenant_id = :tenantId
+                                                 AND x.source    = :source)
+                        """.formatted(where.sql(), where.sql()))
+                .param("tenantId", tenantId)
+                .param("source", source)
+                .params(where.params())
+                .query((rs, rowNum) -> new Preview(
+                        rs.getInt("total"), rs.getInt("kept"), rs.getBigDecimal("kept_qty")))
+                .single();
+    }
+
+    /**
+     * 조건을 걸었을 때 남는 것.
+     *
+     * @param totalItems 조건 없이 담긴 줄 수
+     * @param keptItems  조건을 걸고 남는 줄 수
+     * @param keptQty    남는 줄의 수량 합계
+     */
+    public record Preview(int totalItems, int keptItems, BigDecimal keptQty) {
     }
 
     /** 이 원천에 스냅샷이 있는 가장 최근 기준 시각. 없으면 비어 있다. */
