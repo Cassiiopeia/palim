@@ -1,6 +1,10 @@
 package kr.suhsaechan.palim.web.reconcile;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
@@ -8,8 +12,14 @@ import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
 import kr.suhsaechan.palim.reconcile.engine.SnapshotAggregator;
+import kr.suhsaechan.palim.reconcile.filter.FieldCatalog;
+import kr.suhsaechan.palim.reconcile.filter.FieldType;
+import kr.suhsaechan.palim.reconcile.filter.FilterOperator;
+import kr.suhsaechan.palim.reconcile.filter.FilterRow;
+import kr.suhsaechan.palim.reconcile.filter.FilterService;
+import kr.suhsaechan.palim.reconcile.filter.FilterSide;
+import kr.suhsaechan.palim.reconcile.filter.FilterableField;
 import kr.suhsaechan.palim.reconcile.match.BreakdownAxis;
 import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
@@ -51,6 +61,7 @@ public class ReconcileController {
     private final ReconcileDiffRepository diffs;
     private final ErrorMessageResolver errorMessages;
     private final ConnectorQueryService connectorQueryService;
+    private final FilterService filters;
 
     @GetMapping("/reconcile")
     public String list(Model model) {
@@ -128,51 +139,50 @@ public class ReconcileController {
     @GetMapping("/reconcile/{id}")
     public String detail(@PathVariable UUID id, Model model) {
         ReconcileDefinition definition = definitions.findById(id).orElseThrow();
+        UUID tenantId = TenantContext.current();
+
         model.addAttribute("title", definition.getName() + " · 대조");
         model.addAttribute("definition", definition);
         model.addAttribute("runs", runs.findByDefinitionIdOrderByStartedAtDesc(id));
         model.addAttribute("granularities", BaseAtGranularity.values());
-        // 어느 창고끼리 견줄지 고르려면 «담긴 자료에 실제로 있는» 창고를 보여줘야 한다.
-        UUID tenantId = TenantContext.current();
-        model.addAttribute("leftWarehouses",
-                aggregator.warehouses(tenantId, definition.getLeftSource()));
-        model.addAttribute("rightWarehouses",
-                aggregator.warehouses(tenantId, definition.getRightSource()));
-        model.addAttribute("leftScope", definition.leftScope());
-        model.addAttribute("rightScope", definition.rightScope());
+        // 조건을 고르려면 «담긴 자료에 실제로 있는» 값을 보여줘야 한다. 설정에만 있고 자료가
+        // 없는 값을 고르면 대조 대상이 통째로 비는데, 화면은 「고르긴 골랐다」 고 보인다.
+        model.addAttribute("leftEdit",
+                editView(tenantId, id, FilterSide.LEFT, definition.getLeftSource()));
+        model.addAttribute("rightEdit",
+                editView(tenantId, id, FilterSide.RIGHT, definition.getRightSource()));
+        model.addAttribute("operators", FilterOperator.values());
         return "reconcile/detail";
     }
 
     /**
-     * <b>어느 창고끼리 견줄지</b> 정한다.
+     * 한쪽 조건 편집기에 필요한 것.
      *
-     * <p>재고를 맡긴 곳은 자기가 보관 중인 것만 안다. 그런데 전산 쪽에는 창고가 여럿이다 —
-     * 위탁 창고, 사무실, 매장. <b>전부 더해서 견주면 위탁하지 않은 물량만큼 무조건 어긋나고</b>,
-     * 그 어긋남은 맞던 품목까지 틀린 것으로 보이게 만든다.
-     *
-     * <p>비우면 전부 본다 — 지금까지의 동작이라 이미 만들어 둔 정의가 깨지지 않는다. 한쪽만
-     * 정하는 것도 허용한다. 맡긴 쪽은 창고가 하나뿐이라 고를 것이 없는 경우가 흔하다.
+     * <p>값 후보는 <b>글 칸만</b> 뽑는다. 숫자·날짜는 있을 수 있는 값이 사실상 무한이라 목록이
+     * 뜻이 없고, 뽑는 비용만 든다.
      */
-    @PostMapping("/reconcile/{id}/warehouses")
-    public String changeWarehouses(@PathVariable UUID id,
-                                   @RequestParam(name = "leftWarehouse", required = false)
-                                   List<String> left,
-                                   @RequestParam(name = "rightWarehouse", required = false)
-                                   List<String> right,
-                                   RedirectAttributes redirect) {
-        ReconcileDefinition definition = definitions.findById(id).orElseThrow();
+    private FilterEditView editView(UUID tenantId, UUID definitionId,
+                                    FilterSide side, String source) {
+        List<FilterableField> fields = new ArrayList<>(FieldCatalog.standard());
+        fields.addAll(FieldCatalog.attributeFields(
+                aggregator.attributeKeys(tenantId, source)));
 
-        WarehouseScope leftScope = new WarehouseScope(left == null ? List.of() : left);
-        WarehouseScope rightScope = new WarehouseScope(right == null ? List.of() : right);
-        definition.changeWarehouses(leftScope, rightScope);
-        definitions.save(definition);
+        Map<String, List<SnapshotAggregator.FieldValue>> values = new LinkedHashMap<>();
+        for (FilterableField field : fields) {
+            if (field.type() == FieldType.TEXT) {
+                values.put(field.key(), aggregator.valuesOf(tenantId, source, field));
+            }
+        }
 
-        log.info("대조 창고 범위 변경 — 정의={} 좌={} 우={}",
-                definition.getCode(), leftScope.describe(), rightScope.describe());
-        redirect.addFlashAttribute("flashSuccess",
-                "견줄 창고를 정했습니다. 좌 «%s» · 우 «%s». 다음 대조부터 적용됩니다."
-                        .formatted(leftScope.describe(), rightScope.describe()));
-        return "redirect:/reconcile/" + id;
+        List<FilterRow> saved = filters.rowsOf(definitionId, side);
+        String expression = saved.stream().filter(FilterRow::isExpression)
+                .map(FilterRow::getExpression).findFirst().orElse("");
+
+        return new FilterEditView(side, source,
+                saved.stream().filter(row -> !row.isExpression()).toList(),
+                expression, fields, values,
+                aggregator.preview(tenantId, source,
+                        filters.specOf(definitionId, side), Instant.now()));
     }
 
     /**
@@ -284,11 +294,12 @@ public class ReconcileController {
             model.addAttribute("expandUnitId", expand);
             model.addAttribute("axis", using);
             model.addAttribute("axes", breakdowns.axes(tenantId));
-            // «오늘의 정의» 가 아니라 «그 회차가 본 범위» 로 뜯어본다. 정의로 다시 계산하면
-            // 창고 설정을 바꾼 뒤 저장된 합계와 이 상세가 어긋나고, 회차마다 맞기도 하고
-            // 틀리기도 해서 원인을 찾기 어렵다.
+            // «오늘의 정의» 가 아니라 «그 회차가 본 조건» 으로 뜯어본다. 정의로 다시 계산하면
+            // 조건을 바꾼 뒤 저장된 합계와 이 상세가 어긋나고, 회차마다 맞기도 하고 틀리기도
+            // 해서 원인을 찾기 어렵다.
             model.addAttribute("breakdown", breakdowns.of(tenantId, expand,
-                    run.scopeOf(definition.getLeftSource(), definition.getRightSource()),
+                    run.getFilters().toPairing(
+                            definition.getLeftSource(), definition.getRightSource()),
                     UnitBreakdown.At.of(run.getLeftBaseAt(), run.getRightBaseAt(),
                             run.getStartedAt()), using));
         }

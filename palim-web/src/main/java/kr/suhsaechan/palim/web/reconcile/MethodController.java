@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.web.reconcile;
 import java.util.List;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.filter.FilterService;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
@@ -48,6 +49,7 @@ public class MethodController {
     private final NormalizationEngine normalizer;
     private final NormalizationPreview preview;
     private final JdbcClient jdbcClient;
+    private final FilterService filters;
 
     /**
      * 이 화면이 무슨 일을 하나.
@@ -73,7 +75,7 @@ public class MethodController {
      * 왜 필요한지는 <b>한쪽이 여러 줄로 쪼개져 있을 때</b> 비로소 드러난다.
      */
     private MatchBoard.Row sampleRow(ReconcileDefinition definition) {
-        List<MatchBoard.Row> rows = board.load(TenantContext.current(), Pairing.of(definition),
+        List<MatchBoard.Row> rows = board.load(TenantContext.current(), filters.pairingOf(definition),
                 MatchBoard.Tab.ALL, null, 0).rows();
         return rows.stream()
                 .filter(row -> row.left().size() > 1 || row.right().size() > 1)

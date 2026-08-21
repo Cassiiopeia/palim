@@ -91,19 +91,10 @@ public class ReconcileDefinition extends BaseTimeEntity {
     @Column(nullable = false, length = 30)
     private String unitNameRule = "COMMON";
 
-    /**
-     * 좌측 원천에서 볼 창고. 쉼표로 구분하고, 비면 전체.
-     *
-     * <p>재고를 맡긴 곳은 자기가 보관 중인 것만 안다. 전산 쪽 창고를 <b>전부 더해서 견주면
-     * 위탁하지 않은 물량만큼 무조건 어긋난다</b> — 그리고 그 어긋남은 맞던 품목까지 틀린 것으로
-     * 보이게 만든다.
-     */
-    @Column(length = 1000)
-    private String leftWarehouses;
-
-    /** 우측 원천에서 볼 창고. 쉼표로 구분하고, 비면 전체. */
-    @Column(length = 1000)
-    private String rightWarehouses;
+    // left_warehouses · right_warehouses 컬럼은 **매핑하지 않는다.** V34 에서 조건 줄
+    // (reconcile_filter) 로 옮겼고, 무엇을 볼지는 이제 그 표가 안다. 컬럼 자체는 DB 에 남겨
+    // 두었다 — 이관이 잘못됐을 때 원본을 볼 곳이 있어야 하고, 컬럼을 지우는 것은 되돌릴 수 없다.
+    // Hibernate 는 매핑되지 않은 컬럼을 무시하므로 읽지도 쓰지도 않는다.
 
     private ReconcileDefinition(UUID tenantId, String code, String name, String leftSource,
                                 String rightSource, String compareField, BigDecimal tolerance,
@@ -128,27 +119,6 @@ public class ReconcileDefinition extends BaseTimeEntity {
                                          BigDecimal alertThreshold) {
         return new ReconcileDefinition(tenantId, code, name, leftSource, rightSource,
                 compareField, tolerance, alertThreshold);
-    }
-
-    /** 좌측에서 볼 창고 범위. 비어 있으면 전부 본다. */
-    public WarehouseScope leftScope() {
-        return WarehouseScope.parse(leftWarehouses);
-    }
-
-    /** 우측에서 볼 창고 범위. 비어 있으면 전부 본다. */
-    public WarehouseScope rightScope() {
-        return WarehouseScope.parse(rightWarehouses);
-    }
-
-    /**
-     * 어느 창고끼리 견줄지 정한다.
-     *
-     * <p>비우면 전부 본다 — 지금까지의 동작이다. 한쪽만 정하는 것도 허용한다. 맡긴 쪽은 창고가
-     * 하나뿐이라 고를 것이 없는 경우가 흔하기 때문이다.
-     */
-    public void changeWarehouses(WarehouseScope left, WarehouseScope right) {
-        this.leftWarehouses = left == null ? null : left.toStored();
-        this.rightWarehouses = right == null ? null : right.toStored();
     }
 
     public void changeTolerance(BigDecimal tolerance) {

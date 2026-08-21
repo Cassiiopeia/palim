@@ -13,7 +13,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FieldCatalog;
+import kr.suhsaechan.palim.reconcile.filter.FilterNode;
+import kr.suhsaechan.palim.reconcile.filter.FilterOperator;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.support.IntegrationTest;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
@@ -588,7 +591,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
 
         Pairing all = Pairing.ofSources(erp, wms);
         Pairing consigned = new Pairing(erp, wms,
-                new WarehouseScope(List.of("W-CONSIGN")), WarehouseScope.all(), null);
+                onlyConsigned(), FilterSpec.all(), null);
 
         var whole = breakdowns.of(TENANT, unit.getId(), all,
                 UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
@@ -628,8 +631,7 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                 "U-OUT-" + UUID.randomUUID().toString().substring(0, 6), "제품B", "EA");
 
         var scoped = breakdowns.of(TENANT, unit.getId(),
-                new Pairing(erp, wms, new WarehouseScope(List.of("W-CONSIGN")),
-                        WarehouseScope.all(), null),
+                new Pairing(erp, wms, onlyConsigned(), FilterSpec.all(), null),
                 UnitBreakdown.At.of(baseAt, baseAt, baseAt), BreakdownAxis.byName());
 
         assertThat(scoped.lines())
@@ -643,5 +645,12 @@ class UnitBreakdownIntegrationTest extends IntegrationTest {
                             .as("이름은 「무엇」 이라 창고와 무관하다 — 품목코드가 나오면 안 된다")
                             .isEqualTo("제품B");
                 });
+    }
+
+    /** 위탁 창고만 보는 조건. 창고를 나누는 시험이 쓰는 값이다. */
+    private static FilterSpec onlyConsigned() {
+        return new FilterSpec(new FilterNode.Compare(
+                FieldCatalog.find("warehouse_code").orElseThrow(),
+                FilterOperator.IN, List.of("W-CONSIGN")));
     }
 }

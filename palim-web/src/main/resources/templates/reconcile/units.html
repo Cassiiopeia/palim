@@ -74,7 +74,7 @@
 
         <!--/* 지금 어느 두 곳을 보고 있는가. 예전에는 「…에서 찾았습니다」 라고만 적어, 시스템이
                스스로 찾아낸 것처럼 읽혔다. 사실은 대조 정의에 적힌 두 곳이다. */-->
-        <p class="text-sm text-base-content/70 mb-4">
+        <p class="text-sm text-base-content/70 mb-1">
             대조
             <b th:text="${definition.name}">대조</b>
             에 적힌 두 곳을 봅니다 —
@@ -83,6 +83,30 @@
             <span class="font-mono text-xs" th:text="${definition.rightSource}">우</span>
             <a th:if="${definitions != null and #lists.size(definitions) > 1}"
                th:href="@{/reconcile/units}" class="link ml-2">다른 대조 보기</a>
+        </p>
+
+        <!--/* 지금 어떤 조건으로 보고 있는가.
+
+               이것이 없어서 실제로 막혔다 — 조건은 뒤에서 제대로 걸리는데 화면이 말하지 않아,
+               보고 있는 수치가 전 창고 합인지 한 창고인지 알 수 없었다. 그리고 여기서 조건을
+               고치러 갈 링크가 없었다. 사이드바의 「재고 맞추기」 는 클릭되지 않는 제목이라
+               길을 더 못 찾는다.
+
+               조건이 «걸린» 것은 정상 상태라 색을 켜지 않는다(11-UI-RULES C7). 조건이 «없는»
+               것은 지금 확인이 필요한 상태이므로 경고색이 맞다. */-->
+        <p class="text-sm mb-4"
+           th:classappend="${filtersAreAll} ? 'text-warning' : 'text-base-content/70'">
+            <span th:if="${filtersAreAll}">
+                볼 조건 없음 — <b>전부 더해서</b> 봅니다.
+            </span>
+            <span th:unless="${filtersAreAll}">
+                볼 조건
+                <span class="badge badge-ghost" th:text="${leftFilterText}">좌 조건</span>
+                <span class="mx-1 text-base-content/40">↔</span>
+                <span class="badge badge-ghost" th:text="${rightFilterText}">우 조건</span>
+            </span>
+            <a th:href="@{/reconcile/{id}(id=${definition.id})} + '#filters'"
+               class="link ml-2">조건 고치기 →</a>
         </p>
 
         <!--/* 진척. 「남은 일」 이 0이 되면 대조를 돌릴 준비가 끝난 것이고, 그때만 다음 걸음이

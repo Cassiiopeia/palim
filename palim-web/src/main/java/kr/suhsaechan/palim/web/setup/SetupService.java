@@ -3,6 +3,7 @@ package kr.suhsaechan.palim.web.setup;
 import java.util.ArrayList;
 import java.util.List;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
+import kr.suhsaechan.palim.reconcile.filter.FilterService;
 import kr.suhsaechan.palim.connector.define.Connector;
 import kr.suhsaechan.palim.connector.define.ConnectorMappingRepository;
 import kr.suhsaechan.palim.connector.define.ConnectorRepository;
@@ -37,6 +38,7 @@ public class SetupService {
     private final ReconcileDefinitionRepository definitionRepository;
     private final ReconcileRunRepository runRepository;
     private final MatchBoard matchBoard;
+    private final FilterService filters;
 
     @Transactional(readOnly = true)
     public List<SetupStep> steps() {
@@ -129,7 +131,7 @@ public class SetupService {
         int todo = 0;
         int linked = 0;
         for (ReconcileDefinition definition : definitions) {
-            MatchBoard.Counts counts = matchBoard.load(TenantContext.current(), Pairing.of(definition),
+            MatchBoard.Counts counts = matchBoard.load(TenantContext.current(), filters.pairingOf(definition),
                     MatchBoard.Tab.TODO, null, 0).counts();
             todo += counts.todo();
             linked += counts.linked();

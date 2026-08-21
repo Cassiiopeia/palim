@@ -7,13 +7,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import kr.suhsaechan.palim.reconcile.define.Pairing;
-import kr.suhsaechan.palim.reconcile.define.WarehouseScope;
+import kr.suhsaechan.palim.reconcile.filter.FilterSpec;
 import kr.suhsaechan.palim.reconcile.rule.NormalizationEngine;
 import kr.suhsaechan.palim.reconcile.rule.RegexGuard;
 import lombok.RequiredArgsConstructor;
@@ -104,7 +105,10 @@ public class MatchBoard {
     /** 품목 하나를 지금 담긴 재고에서 찾는다. 편집 화면이 품명·수량을 붙이는 데 쓴다. */
     @Transactional(readOnly = true)
     public Optional<Item> findItem(UUID tenantId, String source, String itemRef,
-                                   WarehouseScope scope) {
+                                   FilterSpec filter) {
+        // 이 조회는 「가장 최근 자료」 를 본다. 회차 기준 시각이 없으므로 상대 날짜는 「지금」 을
+        // 기준으로 푼다 — 이 화면의 뜻과 맞는다.
+        FilterSpec.Compiled where = filter.compile("s", FilterSpec.PREFIX, Instant.now());
         return jdbcClient.sql("""
                         SELECT s.item_ref                          AS item_ref,
                                max(coalesce(s.raw_item_name, ''))  AS raw_name,
@@ -116,11 +120,11 @@ public class MatchBoard {
                            AND s.base_at   = (SELECT max(x.base_at) FROM std_stock_snapshot x
                                                WHERE x.tenant_id = :tenantId AND x.source = :source)%s
                          GROUP BY s.item_ref
-                        """.formatted(scope.sqlAnd("s")))
+                        """.formatted(where.sql()))
                 .param("tenantId", tenantId)
                 .param("source", source)
                 .param("itemRef", itemRef)
-                .params(scope.params())
+                .params(where.params())
                 .query((rs, rowNum) -> new Item(source, rs.getString("item_ref"),
                         rs.getString("raw_name"), rs.getBigDecimal("qty"),
                         BigDecimal.ONE, null, null, null, false))
@@ -292,8 +296,12 @@ public class MatchBoard {
      * 담도록 바꾸는 순간 반대쪽이 <b>0건</b>이 되면서 화면은 「짝이 없습니다」 라고만 말한다.
      */
     private List<StockLine> stockLines(UUID tenantId, Pairing pairing) {
-        // 원천마다 볼 창고가 다르다. 한 이름으로 걸면 뒤엣값이 앞을 덮어써 양쪽이 같은 창고로
-        // 걸리므로, 좌·우를 다른 이름으로 바인딩한다.
+        // 원천마다 볼 조건이 다르다. 한 이름으로 걸면 뒤엣값이 앞을 덮어써 양쪽이 같은 조건으로
+        // 걸리므로, 좌·우를 다른 접두어로 바인딩한다.
+        Instant asOf = Instant.now();
+        FilterSpec.Compiled left = pairing.leftFilter().compile("s", "lf", asOf);
+        FilterSpec.Compiled right = pairing.rightFilter().compile("s", "rf", asOf);
+
         return jdbcClient.sql("""
                         SELECT s.source                            AS source,
                                s.item_ref                          AS item_ref,
@@ -307,13 +315,12 @@ public class MatchBoard {
                                                WHERE x.tenant_id = s.tenant_id
                                                  AND x.source    = s.source)
                          GROUP BY s.source, s.item_ref
-                        """.formatted(pairing.leftScope().sqlAnd("s", "leftWarehouses"),
-                                      pairing.rightScope().sqlAnd("s", "rightWarehouses")))
+                        """.formatted(left.sql(), right.sql()))
                 .param("tenantId", tenantId)
                 .param("leftSource", pairing.leftSource())
                 .param("rightSource", pairing.rightSource())
-                .params(pairing.leftScope().params("leftWarehouses"))
-                .params(pairing.rightScope().params("rightWarehouses"))
+                .params(left.params())
+                .params(right.params())
                 .query((rs, rowNum) -> new StockLine(
                         rs.getString("source"), rs.getString("item_ref"),
                         rs.getString("raw_name"), rs.getBigDecimal("qty")))
