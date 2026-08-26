@@ -1,17 +1,22 @@
 package kr.suhsaechan.palim.reconcile.engine;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.common.config.ConfigReader;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiffRepository;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRun;
+import kr.suhsaechan.palim.reconcile.run.ReconcileTrigger;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRunRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,46 +69,121 @@ public class ReconcileScheduler {
     private final ReconcileEngine engine;
     private final ReconcileAlertPolicy alertPolicy;
     private final ReconcileNotifier notifier;
+    private final ReconcileDigestAssembler digestAssembler;
+    private final ConfigReader config;
 
     /**
-     * 매일 아침에 맞춰 본다.
+     * 짧게 자주 깨어나 <b>정한 시각이 지났는지</b> 본다.
      *
-     * <p>시각을 설정으로 뺀 이유는 수집이 언제 끝나는지가 원천마다 다르기 때문이다. 수집이
-     * 아직 도는 중에 대조가 시작되면 절반만 담긴 자료를 비교하게 된다.
+     * <h2>왜 시각을 직접 걸지 않는가</h2>
+     *
+     * <p>{@code @Scheduled(cron)} 의 시각 표현은 <b>기동할 때 한 번</b> 읽혀 등록된다. 그래서
+     * 화면에서 시각을 바꿔도 다음 재기동까지 먹지 않는다 — 원리적으로 불가능하다.
+     *
+     * <p>그런데 이 값은 화면에서 바뀌어야 한다. 수집이 언제 끝나는지가 원천마다 다르고,
+     * 그 사정은 쓰면서 바뀐다. 예전에는 그 설정 키가 <b>어떤 설정 파일에도 없어서</b> 바꾸려면
+     * 다시 배포해야 했다.
+     *
+     * <p>그래서 자주 깨어나 「지났나」 를 본다 — 일일 리포트가 같은 이유로 같은 방식을 쓴다.
+     *
+     * <h2>두 번 돌지 않게</h2>
+     *
+     * <p>시각이 지난 뒤로는 깨어날 때마다 조건이 참이다. 「오늘 저절로 돈 회차가 있는가」 를
+     * 이력으로 확인해 막는다. 사람이 누른 회차는 <b>세지 않는다</b> — 한 번 눌렀다는 이유로
+     * 그날 자동 대조가 건너뛰어지면 안 된다.
      */
-    @Scheduled(cron = "${palim.reconcile.cron:0 30 6 * * *}", zone = "Asia/Seoul")
+    @Scheduled(fixedDelayString = "${palim.reconcile.poll-delay:60000}")
+    public void tick() {
+        LocalTime now = LocalTime.now(BUSINESS_ZONE);
+        LocalTime scheduled = LocalTime.of(
+                config.getInt(ReconcileScheduleKeys.HOUR),
+                config.getInt(ReconcileScheduleKeys.MINUTE));
+        if (now.isBefore(scheduled)) {
+            return;
+        }
+        Instant startOfDay = LocalDate.now(BUSINESS_ZONE)
+                .atStartOfDay(BUSINESS_ZONE).toInstant();
+        if (runs.existsByTriggerTypeAndStartedAtAfter(ReconcileTrigger.SCHEDULED, startOfDay)) {
+            return;
+        }
+        log.info("정기 대조 시작 — 정한 시각 {}", scheduled);
+        runAll();
+    }
+
+    /** 지금 곧바로 전부 맞춰 본다. 시각 판정 없이 도는 경로다. */
     public void runAll() {
+        runAll(LocalDate.now(BUSINESS_ZONE).minusDays(1));
+    }
+
+    /**
+     * 그 날짜 자료로 전부 맞춰 본다.
+     *
+     * <p>정기 실행은 <b>어제</b>를 본다. 출고 입력이 하루 늦게 마감되므로 오늘 것을 보면
+     * 아직 안 들어온 분만큼 어긋난다.
+     */
+    public void runAll(LocalDate targetDate) {
         List<ReconcileDefinition> targets = definitions.findByIsActiveTrueOrderByCode();
+        List<DefinitionOutcome> outcomes = new ArrayList<>();
         for (ReconcileDefinition definition : targets) {
             try {
-                runOne(definition);
+                outcomes.add(runOne(definition, targetDate));
             } catch (RuntimeException e) {
                 // 하나가 실패해도 나머지는 돌아야 한다. 한 대조가 막혔다고 다른 대조까지
                 // 멈추면 볼 수 있었을 문제도 못 본다.
                 log.error("자동 대조 실패 — definition={}", definition.getCode(), e);
+                outcomes.add(DefinitionOutcome.failed(definition, null, 0));
             }
+        }
+        sendDigest(targetDate, targets, outcomes);
+    }
+
+    /**
+     * 하루 한 통을 <b>루프가 끝난 뒤</b> 보낸다.
+     *
+     * <p>루프 «안» 에서 보내면 통이 대조 수만큼 갈린다. 그리고 이상이 하나도 없어도 보낸다 —
+     * 안 오는 것이 「깨끗함」 인지 「멈춤」 인지 구분되지 않으면 「열지 않고 판단」 이 성립하지
+     * 않는다.
+     */
+    private void sendDigest(LocalDate targetDate, List<ReconcileDefinition> targets,
+                            List<DefinitionOutcome> outcomes) {
+        if (targets.isEmpty()) {
+            // 볼 대조가 하나도 없으면 보낼 것도 없다. 이때 「이상 없음」 을 보내면 «설정을
+            // 안 한 것» 이 «정상» 으로 읽힌다.
+            log.info("자동 대조 — 활성 대조가 없다");
+            return;
+        }
+        TenantContext.set(targets.getFirst().getTenantId());
+        try {
+            notifier.notifyDigest(targetDate, digestAssembler.assemble(targetDate, outcomes));
+        } catch (RuntimeException e) {
+            // 요약을 못 보내도 대조 자체는 이미 끝났다. 여기서 터뜨리면 그 사실까지 잃는다.
+            log.error("대조 요약을 보내지 못했다", e);
+        } finally {
+            TenantContext.clear();
         }
     }
 
-    private void runOne(ReconcileDefinition definition) {
+    private DefinitionOutcome runOne(ReconcileDefinition definition, LocalDate targetDate) {
         TenantContext.set(definition.getTenantId());
         try {
-            ReconcileRun run = engine.run(definition.getId());
+            // 어제 자료를 본다. 안 좁히면 아침에 도는 대조가 «오늘 새벽에 들어온 것» 을
+            // 견주는데, 그것은 틀린 값이 아니라 «기준이 다른 값» 이라 눈치채지 못한다.
+            ReconcileRun run = engine.run(definition.getId(), ReconcileTrigger.SCHEDULED,
+                    targetDate);
 
             if (!run.isSuccess()) {
-                handleFailure(definition, run);
-                return;
+                return handleFailure(definition, run);
             }
 
             List<ReconcileDiff> found =
                     diffs.findByRunIdOrderByStateAscUnitCodeAsc(run.getId());
             List<ReconcileDiff> alertable = alertPolicy.selectAlertable(definition, found);
 
-            if (!alertable.isEmpty()) {
-                notifier.notifyMismatch(definition, run, alertable);
-            }
+            // 건별 알림은 보내지 않는다. 하루 한 통으로 접어 루프 밖에서 한 번만 보낸다 —
+            // 여기서 보내면 통이 대조 수만큼 갈린다.
             log.info("자동 대조 완료 — definition={} 차이 {}건 중 알릴 것 {}건",
                     definition.getCode(), run.getDiffCount(), alertable.size());
+            return DefinitionOutcome.succeeded(definition, run, alertable.size());
         } finally {
             TenantContext.clear();
         }
@@ -132,17 +212,19 @@ public class ReconcileScheduler {
      * 않고, 그 기간이 지나도록 안 고쳐졌으면 한 번 더 부른다 — 안 고쳐진 문제를 영영
      * 침묵시키는 것도 옳지 않다. 성공하면 셈이 리셋된다.
      */
-    private void handleFailure(ReconcileDefinition definition, ReconcileRun run) {
+    private DefinitionOutcome handleFailure(ReconcileDefinition definition, ReconcileRun run) {
         int failedDays = consecutiveFailedDays(definition.getId());
 
         if (failedDays >= FAILURE_DAYS_TO_ALERT) {
             log.error("자동 대조가 {}일째 막혔다 — definition={} 사유={}",
                     failedDays, definition.getCode(), run.getMessage());
-            notifier.notifyBlocked(definition, run, failedDays);
-            return;
+        } else {
+            log.warn("자동 대조를 건너뛴다 — definition={} {}일째 사유={}",
+                    definition.getCode(), failedDays, run.getMessage());
         }
-        log.warn("자동 대조를 건너뛴다 — definition={} {}일째 사유={}",
-                definition.getCode(), failedDays, run.getMessage());
+        // 며칠째든 요약에는 담는다. 문턱 아래라고 «없는 일» 로 두면 그날 아침 요약이 아무 말도
+        // 하지 않는데, 실제로는 대조가 안 돈 것이다.
+        return DefinitionOutcome.failed(definition, run, failedDays);
     }
 
     /**

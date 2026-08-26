@@ -22,6 +22,7 @@ import kr.suhsaechan.palim.reconcile.run.DiffType;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiffRepository;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRun;
+import kr.suhsaechan.palim.reconcile.run.ReconcileTrigger;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRunRepository;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnit;
 import kr.suhsaechan.palim.reconcile.unit.ReconcileUnitRepository;
@@ -62,7 +63,29 @@ public class ReconcileEngine {
      * 안 되고 있다는 사실을 아무도 모른다.
      */
     @Transactional
+    /** 사람이 부르는 경로. 화면의 「지금 맞춰 보기」 가 여기로 온다. */
     public ReconcileRun run(UUID definitionId) {
+        return run(definitionId, ReconcileTrigger.MANUAL);
+    }
+
+    /**
+     * 무엇이 시작했는지 남기며 돈다.
+     *
+     * <p>정해진 시각에 도는 쪽이 「오늘 이미 돌았나」 를 이력으로 판단하므로, 사람이 누른
+     * 회차와 섞이면 <b>한 번 눌렀다는 이유로 그날 자동 대조를 건너뛴다.</b>
+     */
+    public ReconcileRun run(UUID definitionId, ReconcileTrigger trigger) {
+        return run(definitionId, trigger, null);
+    }
+
+    /**
+     * 어느 날짜의 자료를 볼지 정해서 돈다.
+     *
+     * <p>{@code targetDate} 가 있으면 <b>그날 안에서</b> 가장 나중 자료를 견준다. 없으면 언제나
+     * 가장 최신을 본다.
+     */
+    public ReconcileRun run(UUID definitionId, ReconcileTrigger trigger,
+                            java.time.LocalDate targetDate) {
         ReconcileDefinition definition = definitions.findById(definitionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT,
                         "없는 대조 정의입니다."));
@@ -77,7 +100,7 @@ public class ReconcileEngine {
         try {
             aligned = baseAtResolver.resolve(tenantId,
                     definition.getLeftSource(), definition.getRightSource(),
-                    definition.granularityOrDay());
+                    definition.granularityOrDay(), targetDate);
         } catch (BusinessException e) {
             // 거부 사유는 «양쪽 시각» 이 함께 있어야 읽힌다. 한쪽만 남기면 왜 어긋났는지 모른다.
             log.error("기준 시각 확인 실패 — 대조를 거부한다. 정의={}({}) 좌원천={} 우원천={} "
@@ -92,7 +115,7 @@ public class ReconcileEngine {
             // 무엇을 해야 하는지 알 수 없다 — 실제로 그 화면을 보고 원인을 못 찾아 서버
             // 로그를 뒤져야 했다. 연동 화면은 이 규칙을 지키고 있었는데 대조 화면만 빠져 있었다.
             ReconcileRun failed = runs.save(
-                    ReconcileRun.start(tenantId, definitionId, Instant.EPOCH));
+                    ReconcileRun.start(tenantId, definitionId, Instant.EPOCH, trigger));
             failed.fail(errorMessages.resolve(e.getErrorCode(), e.messageArgs()));
             return runs.save(failed);
         }
@@ -101,7 +124,7 @@ public class ReconcileEngine {
         // 이력이 한 줄로 이어진다. 합산은 각 원천이 실제로 가진 시각으로 한다 — 칸 시작
         // 시각에는 자료가 없을 수 있다.
         Instant baseAt = aligned.bucket();
-        ReconcileRun run = ReconcileRun.start(tenantId, definitionId, baseAt);
+        ReconcileRun run = ReconcileRun.start(tenantId, definitionId, baseAt, trigger);
         // 어느 시각의 자료를 봤는지 남긴다. 이것이 없으면 나중에 「이 차이가 어느 품목에서
         // 나왔나」 를 되짚을 때 그 회차가 본 자료를 다시 불러올 수 없다.
         run.recordSourceTimes(aligned.left(), aligned.right());

@@ -1,10 +1,12 @@
 package kr.suhsaechan.palim.reconcile.engine;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
 import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileDigestPayload;
 import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
@@ -115,5 +117,24 @@ public class ReconcileNotifier {
                         sent -> log.warn("대조가 막혀 있다고 알린다 — definition={} {}일째",
                                 definition.getCode(), failedDays),
                         () -> log.debug("이미 알린 건이라 건너뛴다 — {}", dedupeKey));
+    }
+
+    /**
+     * 하루 한 통.
+     *
+     * <p><b>이상이 없어도 보낸다.</b> 그래야 「열지 않아도 오늘 볼 일이 있는지 판단」 이
+     * 성립한다 — 안 오는 것이 「깨끗함」 인지 「멈춤」 인지 구분되지 않으면 그 판단이 안 선다.
+     *
+     * <p>억제 키를 <b>기준 시각이 아니라 날짜</b>로 잡는다. 시각으로 잡으면 자료가 들어온
+     * 시점이 조금만 달라도 다른 키가 되어 하루에 여러 통이 나간다.
+     */
+    @Transactional
+    public void notifyDigest(LocalDate targetDate, ReconcileDigestPayload payload) {
+        String dedupeKey = "reconcile-digest:" + targetDate;
+        outbox.enqueueIfNotRecent(NotificationType.RECONCILE_DIGEST, dedupeKey,
+                        SUPPRESS_WITHIN, payload)
+                .ifPresentOrElse(
+                        saved -> log.info("대조 요약 등록 — {} {}", targetDate, payload.subject()),
+                        () -> log.debug("대조 요약 억제 — 오늘 이미 보냈다 {}", targetDate));
     }
 }

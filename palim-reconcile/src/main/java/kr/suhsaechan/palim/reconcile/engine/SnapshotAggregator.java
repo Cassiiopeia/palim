@@ -298,4 +298,35 @@ public class SnapshotAggregator {
                 .optional()
                 .flatMap(java.util.Optional::ofNullable);
     }
+
+    /**
+     * <b>그 날짜 안에서</b> 가장 나중 시각.
+     *
+     * <p>「전일 기준」 이 이것이다. 날짜를 안 좁히면 언제나 «가장 최신» 을 보는데, 아침에 도는
+     * 대조가 그러면 <b>오늘 새벽에 들어온 자료</b>를 견준다 — 어제치를 보려던 것과 다른 답이
+     * 나오고, 그것은 <b>틀린 값이 아니라 기준이 다른 값</b>이라 아무도 눈치채지 못한다.
+     *
+     * @param date 지역 날짜. 그날 0시부터 다음 날 0시 직전까지를 본다
+     */
+    public java.util.Optional<Instant> latestBaseAtOn(UUID tenantId, String source,
+                                                      java.time.LocalDate date,
+                                                      java.time.ZoneId zone) {
+        java.time.OffsetDateTime from = date.atStartOfDay(zone).toOffsetDateTime();
+        java.time.OffsetDateTime to = date.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
+        return jdbcClient.sql("""
+                        SELECT max(base_at) FROM std_stock_snapshot
+                         WHERE tenant_id = :tenantId AND source = :source
+                           AND base_at >= :from AND base_at < :to
+                        """)
+                .param("tenantId", tenantId)
+                .param("source", source)
+                .param("from", from)
+                .param("to", to)
+                .query((rs, rowNum) -> {
+                    var value = rs.getObject(1, java.time.OffsetDateTime.class);
+                    return value == null ? null : value.toInstant();
+                })
+                .optional()
+                .flatMap(java.util.Optional::ofNullable);
+    }
 }
