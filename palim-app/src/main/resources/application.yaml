@@ -169,6 +169,16 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    # 메일 상태 점검을 끈다.
+    #
+    # 켜 두면 점검할 때마다 «실제 메일 서버에 접속»한다. 그런데 배포가 상태 점검이 UP 이
+    # 되기를 기다렸다가 진행하므로, 메일 서버가 잠깐 안 되면 앱은 멀쩡한데 배포가 실패한다.
+    #
+    # 게다가 우리는 메일 서버 정보를 설정 파일이 아니라 DB 에 두므로, 점검이 볼 값 자체가
+    # 여기 없다. 메일이 나가는지는 발송 이력 화면이 말한다.
+    mail:
+      enabled: false
 
 logging:
   level:

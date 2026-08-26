@@ -6,6 +6,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import kr.suhsaechan.palim.notification.NotificationChannel;
 import kr.suhsaechan.palim.notification.NotificationOutbox;
 import kr.suhsaechan.palim.notification.NotificationSetting;
 import kr.suhsaechan.palim.notification.NotificationSettingService;
@@ -74,7 +75,9 @@ public class NotificationRelay implements ApplicationRunner {
 
     @Scheduled(fixedDelayString = "${palim.notification.relay-delay:30000}")
     public void relay() {
-        List<NotificationOutbox> pending = outboxService.findPending();
+        // 자기 곳으로 갈 것만 가져간다. 한쪽이 준비되지 않았다고 다른 쪽까지 멈추면 안 된다.
+        List<NotificationOutbox> pending =
+                outboxService.findPending(NotificationChannel.TELEGRAM);
         if (pending.isEmpty()) {
             return;
         }

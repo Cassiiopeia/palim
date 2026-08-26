@@ -16,6 +16,7 @@ import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
 import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
 import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileDigestPayload;
 import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
@@ -66,6 +67,8 @@ public class TelegramMessageFactory {
             case RISING_INFLUENCER ->
                     risingInfluencer(
                             outboxService.readPayload(outbox, RisingInfluencerPayload.class));
+            case RECONCILE_DIGEST -> reconcileDigest(
+                    outboxService.readPayload(outbox, ReconcileDigestPayload.class));
         };
     }
 
@@ -384,5 +387,41 @@ public class TelegramMessageFactory {
 
     private static String timestamp(Instant instant) {
         return TIMESTAMP.format(instant.atZone(DISPLAY_ZONE));
+    }
+
+    /**
+     * 하루 요약.
+     *
+     * <p>첫 줄이 <b>메일 제목과 같은 문자열</b>이다. 메신저는 미리보기에서 첫 줄만 보이므로,
+     * 그 줄만으로 오늘 볼 일이 있는지 판단돼야 한다 — 두 곳이 갈리면 어느 쪽을 보느냐에 따라
+     * 판단이 달라진다.
+     */
+    private String reconcileDigest(ReconcileDigestPayload payload) {
+        StringBuilder message = new StringBuilder(payload.subject())
+                .append("\n\n")
+                .append(payload.targetDate()).append(" 자료 기준\n")
+                .append("대조 %d개 중 %d개 정상"
+                        .formatted(payload.definitions(), payload.succeeded()));
+
+        if (payload.diffCount() > 0) {
+            message.append("\n차이 %d건 (대조 %d개)"
+                    .formatted(payload.diffCount(), payload.withDiff()));
+        }
+        // 아래 둘은 지금까지 «영영 알림으로 나가지 않던» 것들이다. 조용하다고 없는 일이 아니다.
+        if (payload.unmatched() > 0) {
+            message.append("\n짝 없는 품목 %d개 — 견주지 못하고 빠졌습니다"
+                    .formatted(payload.unmatched()));
+        }
+        if (payload.withoutThreshold() > 0) {
+            message.append("\n알릴 기준을 정하지 않은 대조 %d개 — 차이가 나도 조용합니다"
+                    .formatted(payload.withoutThreshold()));
+        }
+        for (ReconcileDigestPayload.Blocked blocked : payload.blocked()) {
+            message.append("\n막힘: %s (%d일째)".formatted(blocked.definition(), blocked.days()));
+        }
+        for (String line : payload.lines()) {
+            message.append("\n· ").append(line);
+        }
+        return message.toString();
     }
 }

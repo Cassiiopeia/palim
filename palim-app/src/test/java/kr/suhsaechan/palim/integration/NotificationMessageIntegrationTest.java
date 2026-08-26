@@ -20,6 +20,7 @@ import kr.suhsaechan.palim.notification.payload.OutOfStockPayload;
 import kr.suhsaechan.palim.notification.payload.OverSellPayload;
 import kr.suhsaechan.palim.notification.payload.RisingInfluencerPayload;
 import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileDigestPayload;
 import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockMismatchPayload;
 import kr.suhsaechan.palim.notification.payload.StockPushFailurePayload;
@@ -80,6 +81,11 @@ class NotificationMessageIntegrationTest extends IntegrationTest {
                     List.of(new RisingInfluencerPayload.RisingChannel(
                             "합성 캠핑 채널", 42_000, 180_000, 87.0, 3.2, 3)),
                     Instant.parse("2026-08-04T00:00:00Z"));
+            // 요약은 «이상이 없어도» 나가는 유일한 알림이다. 그래서 0 건짜리 표본을 쓴다 —
+            // 건수가 있을 때만 문구가 만들어지면 정작 평온한 날에 빈 메일이 간다.
+            case RECONCILE_DIGEST -> new ReconcileDigestPayload(
+                    LocalDate.of(2026, 8, 25), 1, 1, 0, 0, 0, 0,
+                    List.of(), List.of("전산 대 물류 · 차이 없음"));
         };
     }
 
