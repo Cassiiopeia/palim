@@ -83,6 +83,18 @@ public enum FilterOperator {
         return symbol;
     }
 
+    /**
+     * 값을 받아야 뜻이 서는 연산자인가.
+     *
+     * <p>화면은 조건 줄을 <b>언제나 한 줄은</b> 그린다 — 코드가 죽어도 조건을 걸 수 있어야
+     * 하기 때문이다. 그래서 아무것도 안 고른 빈 줄이 그대로 올라온다. 그 줄을 조건으로 만들면
+     * 값 없는 {@code IN} 이 되어 <b>저장이 통째로 거부된다.</b> 무엇을 버려도 되는지 여기서
+     * 한 번만 정한다.
+     */
+    public boolean needsValue() {
+        return arity != Arity.NONE;
+    }
+
     public Arity arity() {
         return arity;
     }

@@ -94,6 +94,135 @@ class FilterScreenIntegrationTest extends IntegrationTest {
                 .andExpect(content().string(containsString("유통기한")));
     }
 
+    /**
+     * 이 화면의 조건 편집이 <b>실제로 눌리는가</b>.
+     *
+     * <p>줄을 더하고 지우는 코드가 화면 안에 박혀 있었다. CSP 가 {@code script-src 'self'} 라
+     * 브라우저가 그 코드를 한 줄도 실행하지 않는데, 화면은 200 으로 멀쩡히 열리고 버튼도
+     * 보인다 — 눌러도 아무 일이 없을 뿐이다. 그동안 운영 대조는 조건을 걸지 못해 전 창고를
+     * 더해 견뎠고, 맞는 품목까지 틀린 것으로 보였다.
+     *
+     * <p>{@code noInlineCode()} 가 정확히 이것을 잡으라고 있는데 이 화면 시험이 부르지 않아
+     * 통과했다. 이제 부른다.
+     */
+    @Test
+    @DisplayName("화면에 박힌 코드가 없다 — 있으면 조건을 걸 수 없다")
+    void hasNoInlineCode() throws Exception {
+        ReconcileDefinition definition = definition();
+        snapshot(left, "A", "10", "01");
+
+        mockMvc.perform(get("/reconcile/" + definition.getId()))
+                .andExpect(status().isOk())
+                .andExpect(RenderAssertions.noInlineCode())
+                .andExpect(RenderAssertions.fullyRendered());
+    }
+
+    /**
+     * 코드가 죽어도 조건 하나는 걸 수 있어야 한다.
+     *
+     * <p>줄을 더하는 것은 코드가 하는 일이고, 코드는 죽을 수 있다. 실제로 죽어 있었는데 그때
+     * 걸린 조건이 없으면 줄이 <b>하나도</b> 없어 조건을 걸 방법 자체가 없었다.
+     */
+    @Test
+    @DisplayName("걸린 조건이 없어도 빈 줄이 하나 떠 있다")
+    void showsOneRowWhenEmpty() throws Exception {
+        ReconcileDefinition definition = definition();
+        snapshot(left, "A", "10", "01");
+
+        mockMvc.perform(get("/reconcile/" + definition.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-row")))
+                .andExpect(content().string(containsString("name=\"values\"")));
+    }
+
+    /**
+     * 담긴 값을 <b>골라서</b> 걸 수 있어야 한다.
+     *
+     * <p>목록만 보여주면 창고 코드를 조건 칸에 손으로 옮겨 적어야 한다. 옮겨 적는 동안 틀리고,
+     * 틀리면 조건이 아무것도 거르지 않는데 화면은 「걸려 있다」 고 말한다.
+     */
+    @Test
+    @DisplayName("담긴 값을 체크로 고를 수 있다")
+    void valuesArePickable() throws Exception {
+        ReconcileDefinition definition = definition();
+        snapshot(left, "A", "9426", "01");
+        snapshot(left, "B", "312", "02");
+
+        mockMvc.perform(get("/reconcile/" + definition.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-pick-field=\"warehouse_code\"")))
+                .andExpect(content().string(containsString("data-pick-value=\"01\"")));
+    }
+
+    /**
+     * 아무것도 안 적은 줄이 저장을 막지 않는다.
+     *
+     * <p>화면이 빈 줄을 늘 띄우므로 조건을 하나도 안 걸고 저장하는 일이 흔하다. 그것을 조건으로
+     * 만들면 값 없는 {@code IN} 이 되어 저장 전체가 거부된다 — <b>지우려던 사람이 지우지도
+     * 못한다.</b>
+     */
+    @Test
+    @DisplayName("빈 줄만 보내면 조건이 지워진다 — 저장이 막히지 않는다")
+    void emptyRowClearsInsteadOfFailing() throws Exception {
+        ReconcileDefinition definition = definition();
+        snapshot(left, "A", "10", "01");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/reconcile/" + definition.getId() + "/filters")
+                        .param("side", "LEFT")
+                        .param("fieldKey", "warehouse_code")
+                        .param("operator", "IN")
+                        .param("values", "")
+                        .param("expression", "")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().is3xxRedirection())
+                // 「거부돼서 안 남은 것」 과 「지워져서 안 남은 것」 은 결과가 같다. 어느 쪽인지
+                // 가르지 않으면 저장이 막혀도 이 시험은 통과한다.
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .flash().attributeExists("flashSuccess"));
+
+        assertThat(filterRows.findByDefinitionIdOrderBySideAscOrdinalAsc(definition.getId()))
+                .as("빈 줄은 조건이 아니라 빈 자리다")
+                .isEmpty();
+
+        mockMvc.perform(get("/reconcile/" + definition.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("전부 더해서")));
+    }
+
+    /**
+     * 값 안의 콤마가 값을 쪼개지 않는다.
+     *
+     * <p>{@code @RequestParam List<String>} 으로 받으면 Spring 이 값을 <b>콤마로 나눈다.</b>
+     * 창고명·품질상태처럼 사람이 붙인 이름에는 콤마가 들어갈 수 있고, 그러면 조건이 조용히 두
+     * 값이 되어 <b>다른 뜻</b>이 된다 — 걸어 둔 사람은 그 사실을 알 길이 없다.
+     *
+     * <p>값을 잇는 글자는 세로줄 하나뿐이다({@code FilterValues.DELIMITER}).
+     */
+    @Test
+    @DisplayName("값에 콤마가 있어도 쪼개지지 않는다")
+    void commaInValueSurvives() throws Exception {
+        ReconcileDefinition definition = definition();
+        snapshot(left, "A", "10", "01");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/reconcile/" + definition.getId() + "/filters")
+                        .param("side", "LEFT")
+                        .param("fieldKey", "warehouse_name")
+                        .param("operator", "IN")
+                        .param("values", "사무실, 창고")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        var saved = filterRows.findByDefinitionIdOrderBySideAscOrdinalAsc(definition.getId());
+        assertThat(saved).hasSize(1);
+        assertThat(saved.getFirst().getValues())
+                .as("콤마로 쪼개지면 조건이 다른 뜻이 된다")
+                .containsExactly("사무실, 창고");
+    }
+
     @Test
     @DisplayName("조건을 안 걸었는데 창고가 여럿이면 경고가 뜬다")
     void warnsWhenNothingChosen() throws Exception {
