@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.notification;
 
+import kr.suhsaechan.palim.notification.delivery.DeliverySettingService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +41,7 @@ public class OutboxService {
 
     private final NotificationOutboxRepository notificationOutboxRepository;
     private final ObjectMapper objectMapper;
+    private final DeliverySettingService deliverySettingService;
 
     /**
      * 알림을 등록한다. 호출자의 트랜잭션에 참여한다.
@@ -98,7 +100,11 @@ public class OutboxService {
      * <p>지금은 한 곳뿐이다. 메일이 붙으면 설정을 보고 늘어난다.
      */
     private List<NotificationChannel> channels() {
-        return List.of(NotificationChannel.TELEGRAM);
+        // 메일 서버를 아직 안 넣었으면 메일 행을 만들지 않는다. 만들어 두면 설정이 들어올 때까지
+        // 쌓이는데, 그 사이 지난 알림이 뒤늦게 한꺼번에 나가면 «오늘 일» 로 읽힌다.
+        return deliverySettingService.canSendMail()
+                ? List.of(NotificationChannel.TELEGRAM, NotificationChannel.EMAIL)
+                : List.of(NotificationChannel.TELEGRAM);
     }
 
     /**
