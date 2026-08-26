@@ -22,6 +22,10 @@
                   th:text="${#temporals.format(run.baseAt, 'yyyy-MM-dd HH:mm:ss')}">시각</span>
         </p>
         <div class="flex flex-wrap gap-2 ml-auto">
+            <!--/* 화면은 고치는 동안 계속 볼 수 없다. 다른 창에서 재고를 만지는 사이 화면을
+                   떠나면 어디까지 봤는지 잃는다 — 옆에 띄워 두라고 파일로 준다. */-->
+            <a th:href="@{/reconcile/{id}/runs/{runId}/excel(id=${definition.id},runId=${run.id})}"
+               class="btn btn-sm">엑셀로 받기</a>
             <a th:href="@{/reconcile/guide}" class="btn btn-ghost btn-sm">이 화면이 무슨 일을 하나</a>
             <a th:href="@{/reconcile/{id}(id=${definition.id})}" class="btn btn-ghost btn-sm">
                 ← 맞춰 본 기록
