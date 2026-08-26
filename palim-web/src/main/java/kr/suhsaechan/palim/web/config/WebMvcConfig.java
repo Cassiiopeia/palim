@@ -1,8 +1,10 @@
 package kr.suhsaechan.palim.web.config;
 
 import kr.suhsaechan.palim.auth.AdminAccountService;
+import kr.suhsaechan.palim.automation.influencer.InfluencerFeature;
 import kr.suhsaechan.palim.web.audit.ViewAuditInterceptor;
 import kr.suhsaechan.palim.web.audit.WebAuditRecorder;
+import kr.suhsaechan.palim.web.influencer.InfluencerAccessInterceptor;
 import kr.suhsaechan.palim.web.session.PasswordChangeRequiredInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     private final WebAuditRecorder webAuditRecorder;
     private final AdminAccountService adminAccountService;
+    private final InfluencerFeature influencerFeature;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -29,6 +32,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(new PasswordChangeRequiredInterceptor(adminAccountService))
                 .excludePathPatterns("/css/**", "/js/**", "/favicon.ico",
                         "/actuator/**", "/api/**", "/login", "/login/**");
+
+        // 꺼 둔 기능은 주소로도 못 들어가야 한다. 메뉴만 감추면 로그인한 사람은 주소만 알면
+        // 그대로 다 쓴다 — 특히 누르면 돈이 나가는 것들이 열려 있다.
+        registry.addInterceptor(new InfluencerAccessInterceptor(influencerFeature))
+                .addPathPatterns("/influencer/**");
 
         registry.addInterceptor(new ViewAuditInterceptor(webAuditRecorder))
                 // 정적 자원과 SSE 를 걸러낸다. 화면 판정은 ScreenNames 가 한 번 더 하지만,

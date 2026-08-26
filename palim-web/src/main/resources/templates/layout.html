@@ -121,11 +121,17 @@
                 <li><a th:href="@{/reconcile/units}"><svg th:replace="~{fragments/icons :: link-2}"></svg>품목 맞추기</a></li>
                 <li><a th:href="@{/reconcile}"><svg th:replace="~{fragments/icons :: scale}"></svg>대조 결과</a></li>
 
+                <!--/* 준비 중인 기능은 메뉴에 두지 않는다. 이 제품은 재고 대조 전용이고,
+                       인플루언서는 설정에서 켜야 나타난다(기본은 꺼짐).
+
+                       th:block 은 렌더 결과에 남지 않아 ul 의 자식 구조가 그대로다. */-->
+                <th:block th:if="${influencerEnabled}">
                 <li class="menu-title">인플루언서</li>
                 <li><a th:href="@{/influencer/grades}"><svg th:replace="~{fragments/icons :: award}"></svg>등급표</a></li>
                 <li><a th:href="@{/influencer/rising}"><svg th:replace="~{fragments/icons :: trending-up}"></svg>라이징 레이더</a></li>
                 <li><a th:href="@{/influencer/trends}"><svg th:replace="~{fragments/icons :: chart-line}"></svg>트렌드 보드</a></li>
                 <li><a th:href="@{/influencer/campaigns}"><svg th:replace="~{fragments/icons :: megaphone}"></svg>캠페인 관리</a></li>
+                </th:block>
 
                 <li class="menu-title">설정</li>
                 <li><a th:href="@{/settings/notification}"><svg th:replace="~{fragments/icons :: bell-cog}"></svg>알림 설정</a></li>

@@ -18,6 +18,7 @@ import kr.suhsaechan.palim.automation.influencer.domain.InfluencerChannelReposit
 import kr.suhsaechan.palim.automation.influencer.domain.RefreshTier;
 import kr.suhsaechan.palim.automation.influencer.score.ScoringService;
 import kr.suhsaechan.palim.automation.influencer.youtube.YoutubeQuotaService;
+import kr.suhsaechan.palim.automation.influencer.InfluencerFeature;
 import kr.suhsaechan.palim.common.config.ConfigReader;
 import kr.suhsaechan.palim.common.error.BusinessException;
 import kr.suhsaechan.palim.common.error.ErrorCode;
@@ -55,11 +56,19 @@ public class InfluencerNightlyBatch {
     private final CampaignRepository campaignRepository;
     private final YoutubeQuotaService quotaService;
     private final ConfigReader config;
+    private final InfluencerFeature influencerFeature;
     private final Clock clock;
 
     /** 새벽 3시. 할당량이 태평양 표준시 자정에 초기화되므로 그 이후에 돈다. */
     @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Seoul")
     public void run() {
+        // 마스터 스위치가 꺼져 있으면 아무것도 하지 않는다. 아래 세부 설정보다 «앞» 에 두는
+        // 이유는, 세부만 켜 두고 기능 전체를 껐을 때 이 하나가 살아 도는 일을 막기 위해서다.
+        if (!influencerFeature.isEnabled()) {
+            log.debug("인플루언서 기능 꺼짐 — {} 건너뜀", "야간 배치");
+            return;
+        }
+
         if (!config.getBoolean(ENABLED)) {
             log.debug("인플루언서 야간 배치 — 사용 안 함");
             return;
