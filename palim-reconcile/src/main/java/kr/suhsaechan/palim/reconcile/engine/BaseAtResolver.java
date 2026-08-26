@@ -35,6 +35,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BaseAtResolver {
 
+    /** 「그날」 을 가르는 지역. 코드베이스 다른 곳과 같은 값이어야 한다. */
+    private static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("Asia/Seoul");
+
     private final SnapshotAggregator aggregator;
 
     /**
@@ -55,10 +58,26 @@ public class BaseAtResolver {
      */
     public Aligned resolve(UUID tenantId, String leftSource, String rightSource,
                            BaseAtGranularity granularity) {
-        Instant left = aggregator.latestBaseAt(tenantId, leftSource)
+        return resolve(tenantId, leftSource, rightSource, granularity, null);
+    }
+
+    /**
+     * 날짜를 좁혀 견줄 시각을 고른다.
+     *
+     * <p>{@code targetDate} 가 있으면 <b>그날 안에서</b> 가장 나중 시각을 본다. 없으면 언제나
+     * 가장 최신을 본다 — 사람이 「지금 맞춰 보기」 를 누를 때는 방금 가져온 것을 확인하려는
+     * 것이므로 그쪽이 맞다.
+     *
+     * <p>정해진 시각에 도는 쪽은 날짜를 준다. 안 주면 아침에 도는 대조가 <b>오늘 새벽에 들어온
+     * 자료</b>를 견주게 되는데, 어제치를 보려던 것과 다른 답이면서 <b>틀린 값이 아니라 기준이
+     * 다른 값</b>이라 아무도 눈치채지 못한다.
+     */
+    public Aligned resolve(UUID tenantId, String leftSource, String rightSource,
+                           BaseAtGranularity granularity, java.time.LocalDate targetDate) {
+        Instant left = latestOf(tenantId, leftSource, targetDate)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RECONCILE_SNAPSHOT_MISSING, leftSource));
-        Instant right = aggregator.latestBaseAt(tenantId, rightSource)
+        Instant right = latestOf(tenantId, rightSource, targetDate)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.RECONCILE_SNAPSHOT_MISSING, rightSource));
 
@@ -73,5 +92,24 @@ public class BaseAtResolver {
         log.debug("기준 시각 정렬 — 눈금={} 칸={} 좌={} 우={}",
                 granularity, leftBucket, left, right);
         return new Aligned(leftBucket, left, right);
+    }
+
+    /**
+     * 「그날 안에서」, 없으면 「가장 최신으로 물러선다」.
+     *
+     * <p><b>물러서는 이유.</b> 「어제 것을 본다」 를 곧이곧대로 지키면 어제 자료가 없는 날은
+     * 대조가 통째로 막힌다 — 수집을 하루 쉬었거나, 이제 막 쓰기 시작해 어제치가 아예 없거나,
+     * 연휴가 끼면 그렇게 된다. 그때 <b>볼 수 있는 것이 있는데도 안 보는 것</b>은 손해다.
+     *
+     * <p>대신 <b>물러섰다는 사실을 숨기지 않는다.</b> 부르는 쪽이 견준 시각을 실행 기록에
+     * 남기고 요약이 그것을 말하므로, 「어제치인 줄 알았는데 오늘치였다」 가 생기지 않는다.
+     */
+    private java.util.Optional<Instant> latestOf(UUID tenantId, String source,
+                                                 java.time.LocalDate targetDate) {
+        if (targetDate == null) {
+            return aggregator.latestBaseAt(tenantId, source);
+        }
+        return aggregator.latestBaseAtOn(tenantId, source, targetDate, BUSINESS_ZONE)
+                .or(() -> aggregator.latestBaseAt(tenantId, source));
     }
 }

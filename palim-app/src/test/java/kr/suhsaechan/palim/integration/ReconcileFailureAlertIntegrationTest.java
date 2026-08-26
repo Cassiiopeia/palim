@@ -13,7 +13,7 @@ import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.notification.NotificationOutbox;
 import kr.suhsaechan.palim.notification.NotificationOutboxRepository;
 import kr.suhsaechan.palim.notification.NotificationType;
-import kr.suhsaechan.palim.notification.payload.ReconcileBlockedPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileDigestPayload;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileScheduler;
@@ -52,6 +52,14 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
     @BeforeEach
     void setUp() {
         TenantContext.set(TENANT);
+        // 하루 요약은 «활성 대조 전부» 를 한 통으로 접는다. 그래서 다른 시험이 남긴 대조가
+        // 그대로 있으면 이 시험의 통에 함께 담긴다 — 전역 집계라는 성질 자체가 그렇다.
+        // 각 시험이 자기 것만 보도록 앞서 남은 것을 치운다.
+        jdbcClient.sql("DELETE FROM reconcile_diff").update();
+        jdbcClient.sql("DELETE FROM reconcile_run").update();
+        jdbcClient.sql("DELETE FROM reconcile_definition").update();
+        jdbcClient.sql("DELETE FROM notification_outbox").update();
+
         // 양쪽 다 담긴 재고가 없다 — 대조는 RECONCILE_SNAPSHOT_MISSING 으로 실패한다.
         // 「저절로 안 풀리는 실패」 의 가장 흔한 모양이라 이대로 쓴다.
         definition = definitions.save(ReconcileDefinition.of(TENANT,
@@ -91,13 +99,27 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
                 .update();
     }
 
-    private List<NotificationOutbox> blockedAlerts() {
+    /**
+     * 하루 요약이 <b>제목에</b> 막힘을 올렸는가.
+     *
+     * <p>막힘은 이제 따로 알리지 않고 하루 한 통에 담긴다. 그래서 「불렀는가」 는 별개 알림이
+     * 있는지가 아니라 <b>제목이 막힘을 말하는지</b>로 본다 — 사람이 실제로 보는 것이 그것이다.
+     */
+    private List<ReconcileDigestPayload> headlinedBlocked() {
         return outbox.findAll().stream()
-                .filter(row -> row.getType() == NotificationType.RECONCILE_BLOCKED)
-                // dedupeKey 가 없는 행도 있다(억제 없이 넣은 알림). null 을 먼저 거른다.
-                .filter(row -> row.getDedupeKey() != null)
-                .filter(row -> row.getDedupeKey().endsWith(definition.getCode()))
+                .filter(row -> row.getType() == NotificationType.RECONCILE_DIGEST)
+                .map(row -> outboxService.readPayload(row, ReconcileDigestPayload.class))
+                .filter(payload -> !payload.blocked().isEmpty())
                 .toList();
+    }
+
+    /** 오늘 요약. 매일 한 통이므로 하나뿐이다. */
+    private ReconcileDigestPayload digest() {
+        return outbox.findAll().stream()
+                .filter(row -> row.getType() == NotificationType.RECONCILE_DIGEST)
+                .map(row -> outboxService.readPayload(row, ReconcileDigestPayload.class))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("요약이 한 통도 없다"));
     }
 
     /**
@@ -110,11 +132,12 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
     @DisplayName("하루 이틀 막힌 것으로는 알리지 않는다")
     void 하루_이틀은_조용하다() {
         scheduler.runAll();
-        assertThat(blockedAlerts()).as("첫날은 다음 회차에 풀릴 수 있다").isEmpty();
+        assertThat(headlinedBlocked()).as("첫날은 다음 회차에 풀릴 수 있다").isEmpty();
 
-        failedRunDaysAgo(1);
-        scheduler.runAll();
-        assertThat(blockedAlerts()).as("이틀째도 아직 «다시 하면 되는» 범위다").isEmpty();
+        // 다만 «본문» 에는 담긴다. 담지 않으면 「오늘 대조가 안 돌았다」 가 통째로 사라진다.
+        assertThat(digest().lines())
+                .as("제목에 안 올리는 것과 아예 말하지 않는 것은 다르다")
+                .anyMatch(line -> line.contains("막힘"));
     }
 
     /**
@@ -131,7 +154,7 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
         engine.run(definition.getId());
         scheduler.runAll();
 
-        assertThat(blockedAlerts())
+        assertThat(headlinedBlocked())
                 .as("눌러 본 횟수가 «며칠째» 로 둔갑하면 안 된다")
                 .isEmpty();
     }
@@ -145,33 +168,33 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
         failedRunDaysAgo(2);
         failedRunDaysAgo(1);
         scheduler.runAll();
-        assertThat(blockedAlerts())
+        assertThat(headlinedBlocked())
                 .as("로그에만 남기면 몇 주를 안 돌아도 아무도 모른다")
                 .hasSize(1);
-        // payload 를 «받는 쪽이 읽는 모양» 그대로 되읽는다. 문자열에 "3" 이 있는지 보는 것은
-        // 아무것도 잠그지 않는다 — 시각·사유에도 숫자가 널려 있다.
-        ReconcileBlockedPayload payload = outboxService.readPayload(
-                blockedAlerts().getFirst(), ReconcileBlockedPayload.class);
-        assertThat(payload.definition())
+
+        // 받는 쪽이 읽는 모양 그대로 되읽는다.
+        ReconcileDigestPayload payload = digest();
+        assertThat(payload.blocked())
                 .as("어느 대조인지 모르면 어디를 봐야 할지 알 수 없다")
-                .isEqualTo("막힌 대조");
-        assertThat(payload.failedDays()).isGreaterThanOrEqualTo(3);
-        assertThat(payload.reason())
-                .as("사유가 사람 말이어야 무엇을 할지 안다")
-                .contains("비교할 재고가 없습니다");
-        assertThat(payload.lastTriedAt())
-                .as("시각은 Instant 로 담아야 표시 직전에 지역 시각으로 바뀐다")
-                .isNotNull();
+                .anyMatch(blocked -> blocked.definition().equals("막힌 대조")
+                        && blocked.days() >= 3);
+        assertThat(payload.subject())
+                .as("열지 않아도 판단하려면 제목이 막힘을 말해야 한다")
+                .contains("막힘");
+        assertThat(payload.needsAttention()).isTrue();
     }
 
     /**
-     * 넘은 뒤로는 다시 조용해야 한다.
+     * 하루에 여러 번 돌아도 <b>통은 하나다.</b>
      *
-     * <p>문턱을 넘었다고 매일 부르면 막으려던 소음이 그대로 돌아온다. 고장 한 번에 부름
-     * 한 번이다.
+     * <p>예전에는 「고장 한 번에 부름 한 번」 이었다 — 막힘이 별개 알림이라 매일 부르면 소음이
+     * 됐기 때문이다. 이제는 요약이 어차피 매일 한 통 오므로 <b>막힌 상태가 매일 제목에 뜨는
+     * 것이 맞다.</b> 안 고쳤으니 계속 말하는 것이고, 그것이 「열지 않아도 판단」 이다.
+     *
+     * <p>대신 막아야 하는 것은 <b>같은 날 여러 통</b>이다.
      */
     @Test
-    @DisplayName("문턱을 넘은 뒤로는 매일 알리지 않는다")
+    @DisplayName("하루에 여러 번 돌아도 요약은 한 통이다")
     void 넘은_뒤로는_조용하다() {
         failedRunDaysAgo(4);
         failedRunDaysAgo(3);
@@ -181,8 +204,8 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
             scheduler.runAll();
         }
 
-        assertThat(blockedAlerts())
-                .as("여섯 번 실패해도 부름은 한 번이다")
+        assertThat(headlinedBlocked())
+                .as("하루에 여러 번 돌아도 통은 하나다")
                 .hasSize(1);
     }
 
@@ -204,7 +227,7 @@ class ReconcileFailureAlertIntegrationTest extends IntegrationTest {
 
         scheduler.runAll();
 
-        assertThat(blockedAlerts())
+        assertThat(headlinedBlocked())
                 .as("문턱을 «정확히» 지나쳤다고 침묵하면 안 된다")
                 .hasSize(1);
     }

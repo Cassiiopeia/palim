@@ -82,17 +82,30 @@ public class ReconcileRun extends BaseTimeEntity {
     @Column(length = 1000)
     private String message;
 
-    private ReconcileRun(UUID tenantId, UUID definitionId, Instant baseAt) {
+    /**
+     * 무엇이 이 회차를 시작했나.
+     *
+     * <p>정해진 시각에 도는 쪽이 「오늘 이미 돌았나」 를 이력으로 판단하므로, 사람이 누른
+     * 회차와 섞이면 <b>한 번 눌렀다는 이유로 그날 자동 대조를 건너뛴다.</b>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ReconcileTrigger triggerType;
+
+    private ReconcileRun(UUID tenantId, UUID definitionId, Instant baseAt,
+                         ReconcileTrigger triggerType) {
         this.id = UuidV7.generate();
         this.tenantId = tenantId;
         this.definitionId = definitionId;
         this.baseAt = baseAt;
+        this.triggerType = triggerType;
         this.status = RunStatus.RUNNING;
         this.startedAt = Instant.now();
     }
 
-    public static ReconcileRun start(UUID tenantId, UUID definitionId, Instant baseAt) {
-        return new ReconcileRun(tenantId, definitionId, baseAt);
+    public static ReconcileRun start(UUID tenantId, UUID definitionId, Instant baseAt,
+                                     ReconcileTrigger triggerType) {
+        return new ReconcileRun(tenantId, definitionId, baseAt, triggerType);
     }
 
     /** 어느 시각의 자료를 봤는지 남긴다. 합산 직후 부른다. */

@@ -60,6 +60,11 @@ public record ReconcileDigestPayload(
         if (withoutThreshold > 0) {
             return "[대조] 설정 필요 — 알릴 기준이 없습니다";
         }
+        if (succeeded < definitions) {
+            // 며칠째인지가 문턱 아래라 제목의 「막힘」 에는 안 걸렸지만, 오늘 안 돈 것은 사실이다.
+            // 「이상 없음」 이라고 하면 그 사실이 통째로 사라진다.
+            return "[대조] 대조 %d개 중 %d개만 돎".formatted(definitions, succeeded);
+        }
         if (unmatched > 0) {
             return "[대조] 이상 없음 · 짝 없는 품목 %d개".formatted(unmatched);
         }
@@ -68,6 +73,7 @@ public record ReconcileDigestPayload(
 
     /** 볼 일이 있는가. 화면과 로그가 같은 기준으로 말하게 한다. */
     public boolean needsAttention() {
-        return !blocked.isEmpty() || diffCount > 0 || withoutThreshold > 0;
+        return !blocked.isEmpty() || diffCount > 0 || withoutThreshold > 0
+                || succeeded < definitions;
     }
 }

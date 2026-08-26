@@ -1,5 +1,6 @@
 package kr.suhsaechan.palim.reconcile.run;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +11,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ReconcileRunRepository extends JpaRepository<ReconcileRun, UUID> {
 
     List<ReconcileRun> findByDefinitionIdOrderByStartedAtDesc(UUID definitionId);
+
+    /**
+     * 그 시각 이후에 <b>저절로</b> 돈 회차가 있는가.
+     *
+     * <p>사람이 누른 회차를 빼고 세는 것이 핵심이다. 섞어 세면 아침에 한 번 「지금 맞춰 보기」
+     * 를 누른 것 때문에 그날 자동 대조가 통째로 건너뛰어진다.
+     *
+     * <p>판정을 DB 로 하는 이유 — 배포할 때마다 새로 뜨므로 기억해 둔 표시는 사라진다.
+     */
+    boolean existsByTriggerTypeAndStartedAtAfter(ReconcileTrigger triggerType, Instant startedAt);
 
     /**
      * 최근 회차 몇 개만.
