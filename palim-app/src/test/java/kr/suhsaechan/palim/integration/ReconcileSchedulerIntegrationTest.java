@@ -14,7 +14,7 @@ import kr.suhsaechan.palim.notification.NotificationOutbox;
 import kr.suhsaechan.palim.notification.NotificationOutboxRepository;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
-import kr.suhsaechan.palim.notification.payload.ReconcileMismatchPayload;
+import kr.suhsaechan.palim.notification.payload.ReconcileDigestPayload;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
 import kr.suhsaechan.palim.reconcile.engine.ReconcileScheduler;
@@ -55,6 +55,12 @@ class ReconcileSchedulerIntegrationTest extends IntegrationTest {
     @BeforeEach
     void setUp() {
         TenantContext.set(TENANT);
+        // 하루 요약은 «활성 대조 전부» 를 한 통으로 접는다. 다른 시험이 남긴 대조가 그대로
+        // 있으면 이 시험의 통에 함께 담긴다 — 전역 집계라는 성질 자체가 그렇다.
+        jdbcClient.sql("DELETE FROM reconcile_diff").update();
+        jdbcClient.sql("DELETE FROM reconcile_run").update();
+        jdbcClient.sql("DELETE FROM reconcile_definition").update();
+        jdbcClient.sql("DELETE FROM notification_outbox").update();
         baseAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         erp = "erp-" + UUID.randomUUID().toString().substring(0, 6);
         wms = "wms-" + UUID.randomUUID().toString().substring(0, 6);
@@ -183,33 +189,75 @@ class ReconcileSchedulerIntegrationTest extends IntegrationTest {
      * 두 회차 연속 나와야 확정되고, 확정된 것만 알린다.
      */
     @Test
-    @DisplayName("찾은 차이가 알림 대기열에 실제로 들어간다")
-    void 차이가_알림으로_나간다() {
+    @DisplayName("찾은 차이가 하루 요약에 실제로 담긴다")
+    void 차이가_요약으로_나간다() {
         ReconcileDefinition definition = linkedDefinition("100", "80", baseAt);
 
         scheduler.runAll();
         scheduler.runAll();
 
         List<NotificationOutbox> sent = outbox.findAll().stream()
-                .filter(row -> row.getType() == NotificationType.RECONCILE_MISMATCH)
-                .filter(row -> row.getDedupeKey() != null)
-                .filter(row -> row.getDedupeKey().contains(definition.getCode()))
+                .filter(row -> row.getType() == NotificationType.RECONCILE_DIGEST)
                 .toList();
 
         assertThat(sent)
                 .as("차이를 찾아 놓고 못 알리면 대조가 있으나 마나다")
-                .hasSize(1);
+                .isNotEmpty();
 
         // 받는 쪽이 읽는 모양 그대로 되읽는다. 한때 다른 종류의 형식으로 넣어 빈 값이 나갔다.
-        ReconcileMismatchPayload payload =
-                outboxService.readPayload(sent.getFirst(), ReconcileMismatchPayload.class);
-        assertThat(payload.definition()).isEqualTo(definition.getName());
-        assertThat(payload.leftSource()).isEqualTo(erp);
-        assertThat(payload.rightSource()).isEqualTo(wms);
-        assertThat(payload.count()).isPositive();
-        assertThat(payload.samples()).isNotEmpty();
-        assertThat(payload.baseAt())
-                .as("시각은 Instant 로 담아야 표시 직전에 지역 시각으로 바뀐다")
-                .isNotNull();
+        ReconcileDigestPayload payload =
+                outboxService.readPayload(sent.getFirst(), ReconcileDigestPayload.class);
+        assertThat(payload.definitions()).isPositive();
+        assertThat(payload.lines())
+                .as("어느 대조 이야기인지 본문이 말해야 한다")
+                .anyMatch(line -> line.contains(definition.getName()));
+        assertThat(payload.subject())
+                .as("열지 않아도 판단하려면 제목이 상태를 말해야 한다")
+                .startsWith("[대조]");
+    }
+
+    /**
+     * <b>이상이 없어도 온다.</b>
+     *
+     * <p>지금까지 무음은 「오늘 깨끗함」·「전부 첫 관찰이라 보류」·「알릴 기준을 안 정함」·
+     * 「며칠째 막힘」·「보낼 곳이 연결 안 돼 쌓이는 중」 을 동시에 뜻했다. 그 다섯을 가르지
+     * 못하면 「열지 않아도 판단」 이 성립하지 않는다.
+     */
+    @Test
+    @DisplayName("차이가 없어도 하루 요약은 온다")
+    void 이상이_없어도_요약은_온다() {
+        linkedDefinition("100", "100", baseAt);
+
+        scheduler.runAll();
+
+        List<NotificationOutbox> sent = outbox.findAll().stream()
+                .filter(row -> row.getType() == NotificationType.RECONCILE_DIGEST)
+                .toList();
+
+        assertThat(sent)
+                .as("안 오는 것이 「깨끗함」 인지 「멈춤」 인지 구분되지 않으면 판단이 안 선다")
+                .hasSize(1);
+
+        ReconcileDigestPayload payload =
+                outboxService.readPayload(sent.getFirst(), ReconcileDigestPayload.class);
+        assertThat(payload.subject()).contains("이상 없음");
+        assertThat(payload.needsAttention()).isFalse();
+    }
+
+    /** 하루에 여러 번 돌아도 통은 하나다 — 「하루 한 통」 이 요구사항이다. */
+    @Test
+    @DisplayName("하루에 여러 번 돌아도 요약은 한 통이다")
+    void 요약은_하루에_한_통이다() {
+        linkedDefinition("100", "80", baseAt);
+
+        scheduler.runAll();
+        scheduler.runAll();
+        scheduler.runAll();
+
+        assertThat(outbox.findAll().stream()
+                .filter(row -> row.getType() == NotificationType.RECONCILE_DIGEST)
+                .toList())
+                .as("여러 통이 오면 그때부터 아무도 안 읽는다")
+                .hasSize(1);
     }
 }

@@ -38,6 +38,8 @@ public class SystemConfigController {
         // 이 맵이 카테고리의 이름과 «보이는 순서» 를 정한다. 등록하지 않은 카테고리는 목록 끝에
         // 영문 코드로 밀리는데, 그 자리에 있으면 다시 켜려는 사람이 찾지 못한다. 마스터 스위치를
         // 맨 앞에 두는 이유는 그것이 아래 인플루언서 설정 전부를 지배하기 때문이다.
+        // 이 제품의 본업이다. 첫 자리에 둔다.
+        CATEGORY_NAMES.put("RECONCILE", "정기 실행");
         CATEGORY_NAMES.put("INFLUENCER", "인플루언서 기능");
         CATEGORY_NAMES.put("INFLUENCER_SCORING", "인플루언서 점수 기준");
         CATEGORY_NAMES.put("INFLUENCER_TAXONOMY", "카테고리 체계");
