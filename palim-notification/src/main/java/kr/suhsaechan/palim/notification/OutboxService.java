@@ -48,8 +48,13 @@ public class OutboxService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public NotificationOutbox enqueue(NotificationType type, Object payload) {
-        return notificationOutboxRepository.save(
-                NotificationOutbox.enqueue(type, serialize(payload)));
+        String json = serialize(payload);
+        List<NotificationOutbox> saved = channels().stream()
+                .map(channel -> notificationOutboxRepository.save(
+                        NotificationOutbox.enqueue(type, channel, json)))
+                .toList();
+        // 부르는 쪽은 「등록됐는가」 만 본다. 여러 곳으로 나뉘어도 그 답은 하나다.
+        return saved.getFirst();
     }
 
     /**
@@ -70,11 +75,30 @@ public class OutboxService {
             throw new IllegalArgumentException("억제 키가 없으면 enqueue 를 쓴다");
         }
         Instant threshold = Instant.now().minus(within);
+        // 억제는 «사건» 단위로 한 번만 판정한다. 보낼 곳마다 따로 보면 같은 사건이 여러 번
+        // 등록되고, 한 곳을 껐다 켜는 것만으로 억제가 풀린다.
         if (notificationOutboxRepository.existsByDedupeKeyAndCreatedAtAfter(dedupeKey, threshold)) {
             return Optional.empty();
         }
-        return Optional.of(notificationOutboxRepository.save(
-                NotificationOutbox.enqueue(type, serialize(payload), dedupeKey)));
+        String json = serialize(payload);
+        List<NotificationOutbox> saved = channels().stream()
+                .map(channel -> notificationOutboxRepository.save(
+                        NotificationOutbox.enqueue(type, channel, json, dedupeKey)))
+                .toList();
+        return Optional.of(saved.getFirst());
+    }
+
+    /**
+     * 지금 <b>어디로</b> 보내는가.
+     *
+     * <p>나누는 자리가 여기인 이유 — 부르는 쪽의 트랜잭션 안에서 나뉘므로 「커밋되면 반드시
+     * 발송되고 롤백되면 둘 다 사라진다」 가 보낼 곳마다 그대로 성립한다. 그리고 부르는 쪽을
+     * 한 줄도 건드리지 않는다(적재 호출자 일부는 동결 도메인이라 이것이 결정적이다).
+     *
+     * <p>지금은 한 곳뿐이다. 메일이 붙으면 설정을 보고 늘어난다.
+     */
+    private List<NotificationChannel> channels() {
+        return List.of(NotificationChannel.TELEGRAM);
     }
 
     /**
@@ -83,6 +107,12 @@ public class OutboxService {
      * <p>relay 가 주기적으로 호출한다. 애플리케이션 기동 직후에도 호출해 재기동 전에 남은
      * 알림을 이어서 발송한다(A-14).
      */
+    @Transactional(readOnly = true)
+    public List<NotificationOutbox> findPending(NotificationChannel channel) {
+        return notificationOutboxRepository.findByChannelAndStatusOrderByCreatedAtAsc(
+                channel, OutboxStatus.PENDING, Limit.of(DEFAULT_FETCH_SIZE));
+    }
+
     @Transactional(readOnly = true)
     public List<NotificationOutbox> findPending() {
         return notificationOutboxRepository.findByStatusOrderByCreatedAtAsc(

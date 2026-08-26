@@ -28,6 +28,9 @@
                     <tr>
                         <th>등록 시각</th>
                         <th>유형</th>
+                        <!--/* 보낼 곳이 둘이면 «안 보낸 것» 과 «못 간 것» 을 가르는 데
+                               어디로 가려던 건인지가 필요하다. */-->
+                        <th>보낼 곳</th>
                         <th>상태</th>
                         <th class="text-right">시도</th>
                         <th>발송 시각</th>
@@ -42,6 +45,7 @@
                             <span th:text="${row.typeName}">유형</span>
                             <span th:if="${row.urgent}" class="badge badge-error badge-xs ml-1">긴급</span>
                         </td>
+                        <td class="whitespace-nowrap" th:text="${row.channelName}">보낼 곳</td>
                         <td>
                             <span class="badge badge-sm" th:classappend="${row.badgeClass}"
                                   th:text="${row.statusName}">상태</span>
