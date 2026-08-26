@@ -190,6 +190,15 @@ public enum ErrorCode {
     /** 실패 상태가 아닌 알림에 재발송을 요청했다. */
     NOTIFICATION_NOT_RETRYABLE("N009", HttpStatus.CONFLICT, LogLevel.WARN),
 
+    /** 메일 발송 실패. Outbox 에 남아 재시도된다. */
+    MAIL_SEND_FAILED("N010", HttpStatus.BAD_GATEWAY, LogLevel.ERROR),
+
+    /** 받는 사람 주소가 형식에 맞지 않는다. 하나가 틀리면 발송 전체가 실패한다. */
+    INVALID_MAIL_RECIPIENT("N011", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
+    /** 발송·실행 시각이나 포트가 범위를 벗어났다. */
+    INVALID_DELIVERY_SCHEDULE("N012", HttpStatus.BAD_REQUEST, LogLevel.DEBUG),
+
     // ==================================================================
     // 인증 (A)
     // ==================================================================

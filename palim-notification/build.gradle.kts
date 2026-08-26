@@ -18,5 +18,14 @@ dependencies {
     // Outbox payload JSON 직렬화
     implementation("org.springframework.boot:spring-boot-starter-json")
 
+    // 메일 발송.
+    //
+    // spring-context-support 만 넣으면 타입은 컴파일되지만 실제 발송 시점에 구현이 없어
+    // 죽는다. starter 를 써야 한다. 버전은 BOM 이 관리하므로 적지 않는다.
+    //
+    // 자동 구성이 만드는 발송기 빈은 «쓰지 않는다» — 서버 정보가 설정 파일이 아니라 DB 에
+    // 있고, 그 빈을 주입받는 순간 설정이 없는 환경(테스트 전부)에서 앱이 아예 뜨지 않는다.
+    implementation("org.springframework.boot:spring-boot-starter-mail")
+
     testImplementation(testFixtures(project(":palim-common")))
 }

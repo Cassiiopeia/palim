@@ -18,7 +18,7 @@ class NotificationOutboxTest {
     private static final int MAX_ATTEMPTS = 5;
 
     private static NotificationOutbox failed() {
-        NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, "{}");
+        NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, NotificationChannel.TELEGRAM, "{}");
         for (int i = 0; i < MAX_ATTEMPTS; i++) {
             outbox.markAttemptFailed("타임아웃", MAX_ATTEMPTS);
         }
@@ -52,7 +52,7 @@ class NotificationOutboxTest {
 
         @Test
         void 대기_상태는_거부한다() {
-            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, "{}");
+            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, NotificationChannel.TELEGRAM, "{}");
 
             assertThatThrownBy(outbox::retryManually)
                     .isInstanceOf(BusinessException.class)
@@ -62,7 +62,7 @@ class NotificationOutboxTest {
         @Test
         @DisplayName("발송된 알림은 거부한다 — 되돌리면 같은 알림이 중복 발송된다")
         void 발송_상태_거부() {
-            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, "{}");
+            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, NotificationChannel.TELEGRAM, "{}");
             outbox.markSent(Instant.now());
 
             assertThatThrownBy(outbox::retryManually)
@@ -77,7 +77,7 @@ class NotificationOutboxTest {
 
         @Test
         void 한도_미만은_대기로_남아_재시도된다() {
-            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, "{}");
+            NotificationOutbox outbox = NotificationOutbox.enqueue(NotificationType.NEW_ORDER, NotificationChannel.TELEGRAM, "{}");
 
             outbox.markAttemptFailed("타임아웃", MAX_ATTEMPTS);
 

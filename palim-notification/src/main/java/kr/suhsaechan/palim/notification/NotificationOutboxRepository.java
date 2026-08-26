@@ -18,6 +18,15 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
      */
     List<NotificationOutbox> findByStatusOrderByCreatedAtAsc(OutboxStatus status, Limit limit);
 
+    /**
+     * 그 곳으로 보낼 대기분.
+     *
+     * <p>보낼 곳별로 읽는 이유 — 한쪽이 막혀 쌓이는 동안 다른 쪽 조회까지 그 행들을 매 주기마다
+     * 훑게 된다. 그리고 한쪽이 준비되지 않았다고 <b>다른 쪽까지 멈추면 안 된다.</b>
+     */
+    List<NotificationOutbox> findByChannelAndStatusOrderByCreatedAtAsc(
+            NotificationChannel channel, OutboxStatus status, Limit limit);
+
     /** 적체 감시용. 임계치를 넘으면 텔레그램으로 경고한다(설계서 9.3). */
     long countByStatus(OutboxStatus status);
 

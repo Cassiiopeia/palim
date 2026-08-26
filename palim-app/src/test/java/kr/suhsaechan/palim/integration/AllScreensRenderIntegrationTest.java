@@ -56,6 +56,7 @@ class AllScreensRenderIntegrationTest extends IntegrationTest {
             "/settings/account",
             "/settings/channels",
             "/settings/notification",
+            "/settings/delivery",
             "/settings/system",
             "/reconcile",
             "/reconcile/units",

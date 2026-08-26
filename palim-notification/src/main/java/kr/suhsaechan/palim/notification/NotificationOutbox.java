@@ -48,6 +48,17 @@ public class NotificationOutbox extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private OutboxStatus status;
 
+    /**
+     * 보낼 곳.
+     *
+     * <p>한 사건을 여러 곳으로 보낼 때는 <b>행을 나눈다.</b> 한 행으로 여러 곳을 다루면
+     * 「한 곳은 갔고 한 곳은 실패한」 상태를 담을 자리가 없어, 재시도가 이미 간 곳으로 다시
+     * 가거나 못 간 곳을 영영 못 간 채로 둔다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private NotificationChannel channel;
+
     @Column(nullable = false)
     private int attemptCount;
 
@@ -70,22 +81,26 @@ public class NotificationOutbox extends BaseTimeEntity {
     @Version
     private Long version;
 
-    private NotificationOutbox(NotificationType type, String payload, String dedupeKey) {
+    private NotificationOutbox(NotificationType type, NotificationChannel channel,
+                               String payload, String dedupeKey) {
         this.id = UuidV7.generate();
         this.type = type;
+        this.channel = channel;
         this.payload = payload;
         this.dedupeKey = dedupeKey;
         this.status = OutboxStatus.PENDING;
         this.attemptCount = 0;
     }
 
-    public static NotificationOutbox enqueue(NotificationType type, String payload) {
-        return new NotificationOutbox(type, payload, null);
+    public static NotificationOutbox enqueue(NotificationType type, NotificationChannel channel,
+                                             String payload) {
+        return new NotificationOutbox(type, channel, payload, null);
     }
 
     /** 재발송 억제 키를 갖는 알림. 감시 배치가 쓴다. */
-    public static NotificationOutbox enqueue(NotificationType type, String payload, String dedupeKey) {
-        return new NotificationOutbox(type, payload, dedupeKey);
+    public static NotificationOutbox enqueue(NotificationType type, NotificationChannel channel,
+                                             String payload, String dedupeKey) {
+        return new NotificationOutbox(type, channel, payload, dedupeKey);
     }
 
     public void markSent(Instant sentAt) {
