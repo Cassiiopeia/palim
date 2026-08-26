@@ -4,6 +4,7 @@ import java.util.List;
 import kr.suhsaechan.palim.automation.influencer.discover.DiscoveryCursor;
 import kr.suhsaechan.palim.automation.influencer.discover.DiscoveryCursorRepository;
 import kr.suhsaechan.palim.automation.influencer.domain.DiscoverySource;
+import kr.suhsaechan.palim.automation.influencer.InfluencerFeature;
 import kr.suhsaechan.palim.common.config.ConfigReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,10 +36,18 @@ public class TrendWeeklyBatch {
     private final TrendAggregationService trendAggregationService;
     private final DiscoveryCursorRepository cursorRepository;
     private final ConfigReader config;
+    private final InfluencerFeature influencerFeature;
 
     @Scheduled(cron = "0 0 4 * * MON", zone = "Asia/Seoul")
     @Transactional
     public void run() {
+        // 마스터 스위치가 꺼져 있으면 아무것도 하지 않는다. 아래 세부 설정보다 «앞» 에 두는
+        // 이유는, 세부만 켜 두고 기능 전체를 껐을 때 이 하나가 살아 도는 일을 막기 위해서다.
+        if (!influencerFeature.isEnabled()) {
+            log.debug("인플루언서 기능 꺼짐 — {} 건너뜀", "트렌드 주간 집계");
+            return;
+        }
+
         if (!config.getBoolean(TrendConfigKeys.ENABLED)) {
             log.debug("트렌드 주간 집계 — 사용 안 함");
             return;

@@ -37,6 +37,9 @@ class AllScreensRenderIntegrationTest extends IntegrationTest {
      * 주소를 받는 화면은 여기 넣지 않는다. 그 화면들은 실제 자료가 있어야 의미가 있어
      * 각 도메인 테스트가 맡는다. 로그인 화면도 뺀다 — 사이드바가 없는 다른 레이아웃이다.
      */
+    // 인플루언서 화면은 여기 없다. 기본으로 꺼져 있어 여기서는 홈으로 되돌려지기 때문이다.
+    // 「끝까지 그려진다」 보장은 InfluencerToggleIntegrationTest 가 켠 상태로 이어받는다 —
+    // 없앤 것이 아니라 옮긴 것이다.
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {
             "/",
@@ -54,10 +57,6 @@ class AllScreensRenderIntegrationTest extends IntegrationTest {
             "/settings/channels",
             "/settings/notification",
             "/settings/system",
-            "/influencer/grades",
-            "/influencer/rising",
-            "/influencer/trends",
-            "/influencer/campaigns",
             "/reconcile",
             "/reconcile/units",
     })
