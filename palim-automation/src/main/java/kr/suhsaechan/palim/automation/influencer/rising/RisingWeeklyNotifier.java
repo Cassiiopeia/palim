@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import kr.suhsaechan.palim.automation.influencer.InfluencerFeature;
 import kr.suhsaechan.palim.common.config.ConfigReader;
 import kr.suhsaechan.palim.notification.NotificationType;
 import kr.suhsaechan.palim.notification.OutboxService;
@@ -37,12 +38,20 @@ public class RisingWeeklyNotifier {
     private final RisingSignalService risingSignalService;
     private final OutboxService outboxService;
     private final ConfigReader config;
+    private final InfluencerFeature influencerFeature;
     private final Clock clock;
 
     /** 월요일 아침 9시. 한 주 광고 계획을 세우는 시점에 도달하게 한다. */
     @Scheduled(cron = "0 0 9 * * MON", zone = "Asia/Seoul")
     @Transactional
     public void notifyWeekly() {
+        // 마스터 스위치가 꺼져 있으면 아무것도 하지 않는다. 아래 세부 설정보다 «앞» 에 두는
+        // 이유는, 세부만 켜 두고 기능 전체를 껐을 때 이 하나가 살아 도는 일을 막기 위해서다.
+        if (!influencerFeature.isEnabled()) {
+            log.debug("인플루언서 기능 꺼짐 — {} 건너뜀", "라이징 주간 알림");
+            return;
+        }
+
         if (!config.getBoolean(RisingConfigKeys.WEEKLY_NOTIFICATION_ENABLED)) {
             log.debug("라이징 주간 알림 — 사용 안 함");
             return;
