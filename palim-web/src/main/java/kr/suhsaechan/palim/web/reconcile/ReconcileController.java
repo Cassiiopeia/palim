@@ -1,17 +1,24 @@
 package kr.suhsaechan.palim.web.reconcile;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.common.BaseAtGranularity;
 import kr.suhsaechan.palim.common.error.BusinessException;
+import kr.suhsaechan.palim.common.error.ErrorCode;
 import kr.suhsaechan.palim.common.error.ErrorMessageResolver;
+import kr.suhsaechan.palim.common.tenant.TenantContext;
+import kr.suhsaechan.palim.reconcile.define.Pairing;
 import kr.suhsaechan.palim.reconcile.define.ReconcileDefinition;
+import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
+import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
 import kr.suhsaechan.palim.reconcile.engine.SnapshotAggregator;
 import kr.suhsaechan.palim.reconcile.filter.FieldCatalog;
 import kr.suhsaechan.palim.reconcile.filter.FieldType;
@@ -22,18 +29,19 @@ import kr.suhsaechan.palim.reconcile.filter.FilterSide;
 import kr.suhsaechan.palim.reconcile.filter.FilterableField;
 import kr.suhsaechan.palim.reconcile.match.BreakdownAxis;
 import kr.suhsaechan.palim.reconcile.match.UnitBreakdown;
-import kr.suhsaechan.palim.reconcile.define.ReconcileDefinitionRepository;
-import kr.suhsaechan.palim.reconcile.engine.ReconcileEngine;
 import kr.suhsaechan.palim.reconcile.run.DiffState;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiff;
 import kr.suhsaechan.palim.reconcile.run.ReconcileDiffRepository;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRun;
 import kr.suhsaechan.palim.reconcile.run.ReconcileRunRepository;
-import kr.suhsaechan.palim.common.tenant.TenantContext;
 import kr.suhsaechan.palim.web.connector.ConnectorAdminService;
 import kr.suhsaechan.palim.web.connector.ConnectorQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,6 +63,15 @@ public class ReconcileController {
 
     private final UnitBreakdown breakdowns;
     private final ReconcileEngine engine;
+    private final ReconcileXlsxWriter xlsxWriter;
+    /** 파일 이름에 넣을 날짜. 같은 대조를 여러 번 받아도 어느 회차인지 알 수 있어야 한다. */
+    private static final DateTimeFormatter DOWNLOAD_DATE =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmm").withZone(ZoneId.of("Asia/Seoul"));
+
+    /** 파일 안에 적을 시각. 사람이 읽는 자리이므로 지역 시각으로 바꾼다. */
+    private static final DateTimeFormatter DISPLAY_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.of("Asia/Seoul"));
+
     private final ReconcileDefinitionRepository definitions;
     private final SnapshotAggregator aggregator;
     private final ReconcileRunRepository runs;
@@ -268,23 +285,7 @@ public class ReconcileController {
         ReconcileDefinition definition = definitions.findById(run.getDefinitionId()).orElseThrow();
         UUID tenantId = TenantContext.current();
 
-        List<ReconcileDiff> all = diffs.findByRunIdOrderByStateAscUnitCodeAsc(runId);
-        // 묶음 이름과 «든 품목 수» 를 한 번에 받아 붙인다. 줄마다 조회하면 줄 수만큼 늘어난다.
-        var headers = breakdowns.headers(tenantId,
-                all.stream().map(ReconcileDiff::getUnitId).filter(java.util.Objects::nonNull)
-                        .distinct().toList(),
-                definition.getLeftSource(), definition.getRightSource());
-
-        List<DiffRowView> rows = all.stream()
-                .map(diff -> {
-                    var header = diff.getUnitId() == null ? null : headers.get(diff.getUnitId());
-                    return DiffRowView.of(diff,
-                            definition.getLeftSource(), definition.getRightSource(),
-                            header == null ? null : header.name(),
-                            header == null ? 0 : header.leftParts(),
-                            header == null ? 0 : header.rightParts());
-                })
-                .toList();
+        List<DiffRowView> rows = diffRows(definition, run);
 
         if (expand != null) {
             // 주소로 온 기준이 있으면 그것, 없으면 이 대조에 정해 둔 기준. 자료 구조가 회사마다
@@ -370,5 +371,122 @@ public class ReconcileController {
         diffs.save(diff);
         redirect.addFlashAttribute("flashSuccess", "이 차이는 앞으로 알리지 않습니다.");
         return "redirect:/reconcile/runs/" + diff.getRunId();
+    }
+
+    /**
+     * 결과 줄을 만든다.
+     *
+     * <p>화면과 내려받기가 <b>같은 자리에서</b> 만든다. 따로 만들면 화면에는 있는데 파일에는
+     * 없는 줄이 생기고, 그때 어느 쪽을 믿을지 알 수 없다.
+     */
+    private List<DiffRowView> diffRows(ReconcileDefinition definition, ReconcileRun run) {
+        UUID tenantId = TenantContext.current();
+        List<ReconcileDiff> all = diffs.findByRunIdOrderByStateAscUnitCodeAsc(run.getId());
+        // 묶음 이름과 «든 품목 수» 를 한 번에 받아 붙인다. 줄마다 조회하면 줄 수만큼 늘어난다.
+        var headers = breakdowns.headers(tenantId,
+                all.stream().map(ReconcileDiff::getUnitId).filter(java.util.Objects::nonNull)
+                        .distinct().toList(),
+                definition.getLeftSource(), definition.getRightSource());
+
+        return all.stream()
+                .map(diff -> {
+                    var header = diff.getUnitId() == null ? null : headers.get(diff.getUnitId());
+                    return DiffRowView.of(diff,
+                            definition.getLeftSource(), definition.getRightSource(),
+                            header == null ? null : header.name(),
+                            header == null ? 0 : header.leftParts(),
+                            header == null ? 0 : header.rightParts());
+                })
+                .toList();
+    }
+
+    /**
+     * 결과를 <b>엑셀로</b> 내려받는다.
+     *
+     * <p>화면은 고치는 동안 계속 볼 수 없다. 다른 창에서 재고를 만지는 사이 화면을 떠나면
+     * 어디까지 봤는지 잃는다 — 「옆에 띄워 두고 보는」 것이 이 파일의 목적이다.
+     *
+     * <p>파일이 <b>스스로 무엇인지 말해야 한다.</b> 며칠 뒤에 열면 어느 회차였는지 화면과
+     * 짝지을 수 없으므로, 언제 것을 무슨 조건으로 견줬는지 첫 장에 적는다.
+     */
+    @GetMapping("/reconcile/{id}/runs/{runId}/excel")
+    public ResponseEntity<byte[]> downloadExcel(@PathVariable UUID id, @PathVariable UUID runId) {
+        ReconcileDefinition definition = definitions.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT,
+                        "없는 대조 정의입니다."));
+        ReconcileRun run = runs.findById(runId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT,
+                        "없는 회차입니다."));
+
+        List<DiffRowView> rows = diffRows(definition, run);
+        byte[] excel = xlsxWriter.write(
+                summaryLines(definition, run),
+                List.of(
+                        sheet("지금 손댈 것", definition,
+                                rows.stream().filter(DiffRowView::confirmed).toList()),
+                        sheet("지켜볼 것", definition, rows.stream()
+                                .filter(row -> !row.confirmed() && !row.unmatched()).toList()),
+                        // 짝이 없는 것은 화면에서 잘 안 보이던 갈래다. 견주지 못하고 빠진
+                        // 품목이 쌓이면 대조 범위가 조용히 줄어든다.
+                        sheet("짝이 없는 것", definition,
+                                rows.stream().filter(DiffRowView::unmatched).toList())));
+
+        String fileName = "대조_%s_%s.xlsx".formatted(definition.getCode(),
+                DOWNLOAD_DATE.format(run.getStartedAt()));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                // 파일명에 한글이 들어가므로 filename* 로 준다. filename 만 주면 브라우저가
+                // 깨진 이름으로 저장하고, 사람은 그 파일이 무엇인지 알 수 없다.
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(fileName, StandardCharsets.UTF_8).build().toString())
+                .body(excel);
+    }
+
+    /** 파일이 스스로 「무엇을 견줬나」 를 말한다. */
+    private List<ReconcileXlsxWriter.Line> summaryLines(ReconcileDefinition definition,
+                                                        ReconcileRun run) {
+        List<ReconcileXlsxWriter.Line> lines = new ArrayList<>();
+        lines.add(new ReconcileXlsxWriter.Line("대조", definition.getName()));
+        lines.add(new ReconcileXlsxWriter.Line("이쪽", definition.getLeftSource()));
+        lines.add(new ReconcileXlsxWriter.Line("저쪽", definition.getRightSource()));
+        lines.add(new ReconcileXlsxWriter.Line("견준 시점",
+                DISPLAY_TIME.format(run.getBaseAt())));
+        lines.add(new ReconcileXlsxWriter.Line("맞춰 본 때",
+                DISPLAY_TIME.format(run.getStartedAt())));
+        // 조건을 안 적으면 「왜 이 숫자지」 에 답할 수 없다. 전 창고를 더한 것과 한 창고만
+        // 본 것은 완전히 다른 표다.
+        lines.add(new ReconcileXlsxWriter.Line("이쪽 볼 조건",
+                run.getFilters().leftExpression()));
+        lines.add(new ReconcileXlsxWriter.Line("저쪽 볼 조건",
+                run.getFilters().rightExpression()));
+        lines.add(new ReconcileXlsxWriter.Line("차이", run.getDiffCount() + "건"));
+        lines.add(new ReconcileXlsxWriter.Line("짝 없는 품목", run.getUnmatchedCount() + "개"));
+        return lines;
+    }
+
+    private ReconcileXlsxWriter.Sheet sheet(String title, ReconcileDefinition definition,
+                                            List<DiffRowView> rows) {
+        List<String> columns = List.of("묶음 코드", "품목", definition.getLeftSource(),
+                definition.getRightSource(), "차이", "상태");
+        List<Map<String, String>> data = rows.stream()
+                .map(row -> {
+                    Map<String, String> cells = new LinkedHashMap<>();
+                    cells.put("묶음 코드", nullToEmpty(row.unitCode()));
+                    cells.put("품목", nullToEmpty(row.unitName()));
+                    cells.put(definition.getLeftSource(), nullToEmpty(row.leftText()));
+                    cells.put(definition.getRightSource(), nullToEmpty(row.rightText()));
+                    cells.put("차이", nullToEmpty(row.deltaText()));
+                    cells.put("상태", nullToEmpty(row.summary()));
+                    return cells;
+                })
+                .toList();
+        // 앞 두 칸(코드·품목)을 글자로 고정한다. 품목코드 00094 가 94 로 바뀌면 그 파일로는
+        // 아무것도 못 맞춘다.
+        return new ReconcileXlsxWriter.Sheet(title, columns, 2, data);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 }

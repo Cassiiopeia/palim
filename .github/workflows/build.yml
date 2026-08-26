@@ -73,6 +73,13 @@ jobs:
       - name: Gradle 설정
         uses: gradle/actions/setup-gradle@v4
 
+      # 대조 결과를 엑셀로 내보내는 시험이 스크립트를 «실제로 실행» 한다.
+      # 없으면 그 시험이 조용히 건너뛰어지는데, 건너뛰는 시험은 없는 시험이다 —
+      # 「내려받았는데 안 열린다」 를 사람이 먼저 찾게 된다.
+      # 배포 이미지에도 같은 꾸러미가 들어 있다(Dockerfile).
+      - name: 엑셀 꾸러미 설치
+        run: python3 -m pip install --break-system-packages openpyxl
+
       - name: 빌드 및 테스트
         run: ./gradlew build
 
