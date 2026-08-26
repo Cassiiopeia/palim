@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<!--/* 발송 관리.
+
+       «어디로, 무엇을, 언제» 를 한 자리에서 정한다.
+
+       대조 시각과 발송 시각을 같은 화면에 두는 이유 — 둘은 순서가 있어야 한다. 대조가 먼저,
+       발송이 나중이다. 두 화면에 흩어 두면 그 순서가 깨져도 아무도 못 본다. 발송이 먼저면
+       매일 «어제 결과» 를 보내게 되는데, 그것은 틀린 값이 아니라 하루 낡은 값이라 이상하다고
+       느끼지 못한다.
+
+       daisyUI 컴포넌트만 쓴다(07-DECISIONS 009). 화면에 박힌 코드·스타일은 두지 않는다 —
+       CSP 가 막아 «조용히» 동작하지 않는다. */-->
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(${title}, ~{::content})}">
+<body>
+<th:block th:fragment="content">
+
+    <!--/* 지금 어떤 상태인가. 이 화면의 색 박스는 여기 하나뿐이다(11-UI-RULES B5). */-->
+    <div th:unless="${delivery.mailReady()}" class="alert alert-warning mb-6" role="alert">
+        <div class="text-sm">
+            <p class="font-medium">메일이 나가지 않고 대기 중입니다.</p>
+            <p class="mt-1">
+                아래에서 메일 서버·비밀번호·받는 사람을 채우면 그때부터 발송됩니다.
+                채우기 전까지 쌓이기만 하고 사라지지 않습니다.
+            </p>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap gap-6 mb-8">
+        <div>
+            <div class="text-xs text-base-content/60">메일</div>
+            <div class="text-xl font-semibold"
+                 th:text="${delivery.mailReady()} ? '보낼 수 있음' : '아직'">아직</div>
+        </div>
+        <div>
+            <div class="text-xs text-base-content/60">비밀번호</div>
+            <div class="text-xl font-semibold"
+                 th:text="${delivery.passwordRegistered()} ? '등록됨' : '없음'">없음</div>
+        </div>
+        <div>
+            <div class="text-xs text-base-content/60">보내지 못하고 기다리는 것</div>
+            <div class="text-xl font-semibold tabular-nums"
+                 th:text="${delivery.pendingCount()}">0</div>
+        </div>
+        <div>
+            <div class="text-xs text-base-content/60">보내다 실패한 것</div>
+            <div class="text-xl font-semibold tabular-nums"
+                 th:classappend="${delivery.failedCount() > 0} ? 'text-error'"
+                 th:text="${delivery.failedCount()}">0</div>
+        </div>
+        <div class="flex items-end">
+            <a th:href="@{/monitor/notifications}" class="btn btn-ghost btn-sm">발송 이력 →</a>
+        </div>
+    </div>
+
+    <!--/* 메일 서버 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-3">
+            <h2 class="text-base font-semibold">메일 서버</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+
+        <form th:action="@{/settings/delivery/smtp}" method="post" class="max-w-xl space-y-3">
+            <div class="grid gap-3 sm:grid-cols-3">
+                <fieldset class="fieldset sm:col-span-2">
+                    <label class="label text-xs" for="smtpHost">서버 주소</label>
+                    <input id="smtpHost" name="smtpHost" type="text"
+                           class="input input-bordered input-sm w-full"
+                           placeholder="smtp.example.com"
+                           th:value="${delivery.smtpHost()}">
+                </fieldset>
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="smtpPort">포트</label>
+                    <input id="smtpPort" name="smtpPort" type="number" min="1" max="65535"
+                           class="input input-bordered input-sm w-full"
+                           th:value="${delivery.smtpPort()}">
+                </fieldset>
+            </div>
+
+            <fieldset class="fieldset">
+                <label class="label text-xs" for="smtpUsername">계정</label>
+                <input id="smtpUsername" name="smtpUsername" type="text"
+                       class="input input-bordered input-sm w-full"
+                       th:value="${delivery.smtpUsername()}">
+            </fieldset>
+
+            <!--/* 저장된 값을 되보여주지 않는다. 확인용으로 한 번만 보여주는 자리가 있으면
+                   그 자리가 곧 유출 경로가 된다. 비우면 «바꾸지 않겠다» 는 뜻이다. */-->
+            <fieldset class="fieldset">
+                <label class="label text-xs" for="smtpPassword">
+                    비밀번호
+                    <span th:if="${delivery.passwordRegistered()}"
+                          class="badge badge-ghost badge-sm ml-2">등록됨 — 비우면 그대로</span>
+                </label>
+                <input id="smtpPassword" name="smtpPassword" type="password"
+                       autocomplete="new-password"
+                       class="input input-bordered input-sm w-full"
+                       th:placeholder="${delivery.passwordRegistered()}
+                                       ? '바꿀 때만 입력' : '비밀번호'">
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <label class="label text-xs" for="fromAddress">보내는 주소</label>
+                <input id="fromAddress" name="fromAddress" type="email"
+                       class="input input-bordered input-sm w-full"
+                       placeholder="palim@example.com"
+                       th:value="${delivery.fromAddress()}">
+            </fieldset>
+
+            <label class="label cursor-pointer justify-start gap-2">
+                <input type="checkbox" name="useStartTls" value="true"
+                       class="checkbox checkbox-sm" th:checked="${delivery.useStartTls()}">
+                <span class="text-sm">STARTTLS 사용 (대개 587 포트)</span>
+            </label>
+
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">저장</button>
+            </div>
+        </form>
+
+        <!--/* 테스트는 저장과 다른 동작이라 폼을 나눈다. 한 폼에 두면 저장하려다 메일이 나간다. */-->
+        <form th:action="@{/settings/delivery/test-mail}" method="post" class="mt-3">
+            <button type="submit" class="btn btn-sm">테스트 메일 보내기</button>
+            <span class="text-xs text-base-content/60 ml-2">
+                저장한 값으로 한 통 보내 봅니다. 이것은 기록에 남지 않습니다.
+            </span>
+        </form>
+    </section>
+
+    <!--/* 누구에게, 무엇을 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-3">
+            <h2 class="text-base font-semibold">누구에게, 무엇을</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+
+        <form th:action="@{/settings/delivery/recipients}" method="post" class="max-w-xl space-y-3">
+            <fieldset class="fieldset">
+                <label class="label text-xs" for="recipients">받는 사람</label>
+                <input id="recipients" name="recipients" type="text"
+                       class="input input-bordered input-sm w-full"
+                       placeholder="a@example.com, b@example.com"
+                       th:value="${delivery.recipients()}">
+                <p class="text-xs text-base-content/60 mt-1">
+                    쉼표로 나눕니다. 주소 하나가 잘못되면 발송 전체가 실패하므로 저장할 때 확인합니다.
+                </p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <label class="label text-xs" for="mailScope">메일로 받을 것</label>
+                <select id="mailScope" name="mailScope" class="select select-bordered select-sm">
+                    <option th:each="scope : ${delivery.scopes()}"
+                            th:value="${scope}" th:text="${scope.displayName}"
+                            th:selected="${scope == delivery.mailScope()}">범위</option>
+                </select>
+                <p class="text-xs text-base-content/60 mt-1">
+                    전부 받으면 메일함이 잡음이 되고, 잡음이 되는 순간 그 알림은 없는 것과 같아집니다.
+                </p>
+            </fieldset>
+
+            <button type="submit" class="btn btn-sm btn-primary">저장</button>
+        </form>
+    </section>
+
+    <!--/* 정기 실행 */-->
+    <section class="mb-8">
+        <div class="flex items-center gap-3 mb-3">
+            <h2 class="text-base font-semibold">정기 실행</h2>
+            <div class="flex-1 h-px bg-base-300"></div>
+        </div>
+
+        <form th:action="@{/settings/delivery/schedule}" method="post" class="max-w-xl">
+            <div class="flex flex-wrap items-end gap-2">
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="digestHour">요약 보내는 시각</label>
+                    <select id="digestHour" name="digestHour"
+                            class="select select-bordered select-sm w-24">
+                        <option th:each="h : ${#numbers.sequence(0, 23)}"
+                                th:value="${h}"
+                                th:text="${#numbers.formatInteger(h, 2)} + '시'"
+                                th:selected="${h == delivery.digestHour()}">0시</option>
+                    </select>
+                </fieldset>
+                <fieldset class="fieldset">
+                    <label class="label text-xs" for="digestMinute">&nbsp;</label>
+                    <select id="digestMinute" name="digestMinute"
+                            class="select select-bordered select-sm w-24">
+                        <option th:each="m : ${ {0, 10, 20, 30, 40, 50} }"
+                                th:value="${m}"
+                                th:text="${#numbers.formatInteger(m, 2)} + '분'"
+                                th:selected="${m == delivery.digestMinute()}">0분</option>
+                    </select>
+                </fieldset>
+                <button type="submit" class="btn btn-sm btn-primary mb-1">저장</button>
+            </div>
+            <p class="text-sm text-base-content/60 mt-2"
+               th:text="'매일 ' + ${delivery.digestTimeText()} + ' 에 한 통 보냅니다. '
+                        + '이상이 없는 날에도 보냅니다 — 안 오는 것이 「깨끗함」 인지 「멈춤」 인지 '
+                        + '구분되지 않기 때문입니다.'">안내</p>
+        </form>
+    </section>
+
+</th:block>
+</body>
+</html>
