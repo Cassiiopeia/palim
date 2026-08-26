@@ -94,10 +94,11 @@ public class ReconcileScheduler {
      */
     @Scheduled(fixedDelayString = "${palim.reconcile.poll-delay:60000}")
     public void tick() {
+        LocalTime scheduled = scheduledTime();
+        if (scheduled == null) {
+            return;
+        }
         LocalTime now = LocalTime.now(BUSINESS_ZONE);
-        LocalTime scheduled = LocalTime.of(
-                config.getInt(ReconcileScheduleKeys.HOUR),
-                config.getInt(ReconcileScheduleKeys.MINUTE));
         if (now.isBefore(scheduled)) {
             return;
         }
@@ -108,6 +109,27 @@ public class ReconcileScheduler {
         }
         log.info("정기 대조 시작 — 정한 시각 {}", scheduled);
         runAll();
+    }
+
+    /**
+     * 정한 시각. 아직 읽을 수 없으면 {@code null}.
+     *
+     * <p><b>기동 직후에는 설정이 아직 없다.</b> 설정을 DB 에 심는 초기화는 애플리케이션이 뜬
+     * 뒤에 돌고 그 트랜잭션이 커밋되기까지 잠깐 틈이 있는데, 이 확인은 <b>뜨자마자</b> 시작한다.
+     * 그 사이에 읽으면 「없는 설정」 으로 터진다.
+     *
+     * <p>터뜨리지 않고 넘긴다. 다음 주기(1분)면 이미 심겨 있고, 정기 대조는 아침 한 번 도는
+     * 일이라 1분 늦어도 아무 일이 없다. 반대로 여기서 터뜨리면 <b>기동할 때마다 오류가 찍혀</b>
+     * 진짜 문제와 구분되지 않는다.
+     */
+    private LocalTime scheduledTime() {
+        try {
+            return LocalTime.of(config.getInt(ReconcileScheduleKeys.HOUR),
+                    config.getInt(ReconcileScheduleKeys.MINUTE));
+        } catch (RuntimeException e) {
+            log.debug("정기 대조 시각을 아직 읽을 수 없다 — 다음 주기에 다시 본다");
+            return null;
+        }
     }
 
     /** 지금 곧바로 전부 맞춰 본다. 시각 판정 없이 도는 경로다. */
