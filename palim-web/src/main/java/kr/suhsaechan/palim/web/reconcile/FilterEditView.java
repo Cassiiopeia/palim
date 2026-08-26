@@ -49,6 +49,43 @@ public record FilterEditView(FilterSide side, String source,
     }
 
     /**
+     * 칸의 사람 이름. 없으면 칸 키를 그대로 쓴다.
+     *
+     * <p>값 목록의 제목이 {@code warehouse_code} 이면, 고르는 사람이 조건 칸의 「창고」 와
+     * 같은 것인지 확신하지 못한다. 같은 것은 같은 이름으로 부른다.
+     */
+    public String labelOf(String fieldKey) {
+        return fields.stream()
+                .filter(field -> field.key().equals(fieldKey))
+                .map(FilterableField::label)
+                .findFirst()
+                .orElse(fieldKey);
+    }
+
+    /**
+     * 그 값이 지금 조건에 들어 있는가. 체크 상태를 되살린다.
+     *
+     * <p>저장하고 돌아왔을 때 체크가 풀려 있으면 <b>저장이 안 된 줄 안다.</b> 그러면 같은 것을
+     * 다시 고르고, 이미 걸린 조건에 같은 값이 한 번 더 붙는다.
+     */
+    public boolean picked(String fieldKey, String value) {
+        return rows.stream()
+                .filter(row -> !row.isExpression())
+                .filter(row -> fieldKey.equals(row.getFieldKey()))
+                .anyMatch(row -> row.getValues() != null && row.getValues().contains(value));
+    }
+
+    /**
+     * 골라서 걸 수 있는 값인가.
+     *
+     * <p>빈 값은 고를 수 없다. 조건에 넣어도 <b>아무것도 거르지 않는데</b> 화면은 「걸렸다」 고
+     * 보인다 — 창고를 안 주는 원천이 여기 해당한다(그쪽은 전부가 곧 한 창고다).
+     */
+    public boolean pickable(SnapshotAggregator.FieldValue value) {
+        return !value.value().isBlank();
+    }
+
+    /**
      * 값 후보를 다 못 보여주는 칸인가.
      *
      * <p>품목코드처럼 값이 수만 개인 칸이 있다. <b>말없이 자르지 않는다</b> — 목록에 없는 값은

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -47,12 +48,19 @@ public class FilterController {
     @Transactional
     public String save(@PathVariable UUID id,
                        @RequestParam FilterSide side,
-                       @RequestParam(name = "fieldKey", required = false) List<String> fieldKeys,
-                       @RequestParam(name = "operator", required = false)
-                       List<FilterOperator> operators,
-                       @RequestParam(name = "values", required = false) List<String> values,
                        @RequestParam(required = false, defaultValue = "") String expression,
+                       HttpServletRequest request,
                        RedirectAttributes redirect) {
+
+        // 세 목록을 «온 그대로» 읽는다. {@code @RequestParam List<String>} 으로 받으면 Spring 이
+        // 두 가지를 손댄다 — 값을 콤마로 쪼개고, 빈 문자열을 지운다.
+        //
+        // 둘 다 여기서는 사고다. 값이 빈 줄이 사라지면 세 목록의 길이가 어긋나 「줄 수가 맞지
+        // 않습니다」 로 저장이 통째로 거부되고, 창고명처럼 콤마가 들어갈 수 있는 값은 조용히
+        // 두 값으로 쪼개져 조건이 다른 뜻이 된다.
+        List<String> fieldKeys = params(request, "fieldKey");
+        List<String> operators = params(request, "operator");
+        List<String> values = params(request, "values");
 
         List<FilterRow> next;
         try {
@@ -83,23 +91,49 @@ public class FilterController {
      * <p>길이가 어긋나면 <b>저장하지 않는다.</b> 짧은 쪽에 맞춰 자르면 사람이 적은 조건 일부가
      * 조용히 사라지고, 화면은 「저장했습니다」 라고 말한다.
      */
+    /**
+     * 화면이 보낸 연산자 이름을 값으로.
+     *
+     * <p>모르는 이름이면 여기서 끊는다. 그대로 흘려보내면 조건이 <b>아무것도 거르지 않는 채로</b>
+     * 저장되고, 화면은 「걸려 있다」 고 말한다.
+     */
+    private FilterOperator operator(String name) {
+        try {
+            return FilterOperator.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.FILTER_VALUE_COUNT, "연산자", 0);
+        }
+    }
+
+    /** 그 이름으로 온 값 전부. 없으면 빈 목록 — 손대지 않은 원문이다. */
+    private static List<String> params(HttpServletRequest request, String name) {
+        String[] raw = request.getParameterValues(name);
+        return raw == null ? List.of() : List.of(raw);
+    }
+
     private List<FilterRow> buildRows(UUID definitionId, FilterSide side,
-                                      List<String> fieldKeys, List<FilterOperator> operators,
+                                      List<String> fieldKeys, List<String> operators,
                                       List<String> values, String expression) {
         UUID tenantId = TenantContext.current();
         List<FilterRow> built = new ArrayList<>();
 
-        if (fieldKeys != null && !fieldKeys.isEmpty()) {
-            if (operators == null || values == null
-                    || fieldKeys.size() != operators.size()
+        if (!fieldKeys.isEmpty()) {
+            if (fieldKeys.size() != operators.size()
                     || fieldKeys.size() != values.size()) {
                 throw new BusinessException(ErrorCode.FILTER_VALUE_COUNT,
                         "조건 줄", fieldKeys.size());
             }
             for (int i = 0; i < fieldKeys.size(); i++) {
-                built.add(FilterRow.field(tenantId, definitionId, side, i,
-                        fieldKeys.get(i), operators.get(i),
-                        FilterValues.split(values.get(i))));
+                FilterOperator operator = operator(operators.get(i));
+                List<String> parsed = FilterValues.split(values.get(i));
+                // 아무것도 안 적은 줄은 조건이 아니라 «빈 자리» 다. 화면이 늘 한 줄을 띄워 두므로
+                // 조건을 하나도 안 걸고 저장하는 일이 흔한데, 그것을 조건으로 만들면 값 없는
+                // IN 이 되어 저장 전체가 거부된다 — 지우려던 사람이 지우지도 못한다.
+                if (parsed.isEmpty() && operator.needsValue()) {
+                    continue;
+                }
+                built.add(FilterRow.field(tenantId, definitionId, side, built.size(),
+                        fieldKeys.get(i), operator, parsed));
             }
         }
 

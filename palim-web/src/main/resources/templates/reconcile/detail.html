@@ -85,7 +85,8 @@
                         <!--/* 조건 줄. 지금 걸린 것을 그리고, 「+ 조건 추가」 가 같은 모양을
                                하나 더 붙인다. */-->
                         <div th:id="'rows-' + ${edit.side}">
-                            <div th:each="row : ${edit.rows}" class="flex flex-wrap gap-2 mb-2">
+                            <div th:each="row : ${edit.rows}" data-row
+                                 class="flex flex-wrap gap-2 mb-2">
                                 <select name="fieldKey"
                                         class="select select-bordered select-sm w-40">
                                     <option th:each="f : ${edit.fields}"
@@ -104,12 +105,39 @@
                                 <button type="button" class="btn btn-ghost btn-sm"
                                         data-remove>지우기</button>
                             </div>
+
+                            <!--/* 걸린 조건이 없으면 빈 줄 하나를 띄운다.
+
+                                   줄을 더하는 것은 코드가 하는 일이고, 코드는 죽을 수 있다.
+                                   실제로 이 화면의 코드가 CSP 에 막혀 죽어 있었는데, 그때
+                                   줄이 하나도 없어 «조건을 걸 방법이 아예 없었다.» 한 줄이
+                                   늘 있으면 그 상태에서도 조건 하나는 걸린다. 아무것도 안
+                                   적으면 저장할 때 버려지므로 빈 줄이 남지 않는다. */-->
+                            <div th:if="${#lists.isEmpty(edit.rows)}" data-row
+                                 class="flex flex-wrap gap-2 mb-2">
+                                <select name="fieldKey"
+                                        class="select select-bordered select-sm w-40">
+                                    <option th:each="f : ${edit.fields}"
+                                            th:value="${f.key}" th:text="${f.label}"
+                                            th:selected="${f.key == 'warehouse_code'}">칸</option>
+                                </select>
+                                <select name="operator"
+                                        class="select select-bordered select-sm w-32">
+                                    <option th:each="op : ${operators}"
+                                            th:value="${op}" th:text="${op.label}"
+                                            th:selected="${op.name() == 'IN'}">연산자</option>
+                                </select>
+                                <input type="text" name="values"
+                                       class="input input-bordered input-sm grow">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                        data-remove>지우기</button>
+                            </div>
                         </div>
 
                         <!--/* 줄을 더할 때 쓰는 틀. 서버 왕복을 두면 줄 하나 더할 때마다 화면이
                                깜빡이고 적던 값이 날아간다. */-->
                         <template th:id="'row-template-' + ${edit.side}">
-                            <div class="flex flex-wrap gap-2 mb-2">
+                            <div data-row class="flex flex-wrap gap-2 mb-2">
                                 <select name="fieldKey"
                                         class="select select-bordered select-sm w-40">
                                     <option th:each="f : ${edit.fields}"
@@ -130,24 +158,40 @@
                         <button type="button" class="btn btn-sm mb-2"
                                 data-add th:data-side="${edit.side}">+ 조건 추가</button>
 
-                        <!--/* 값 후보. 어느 것이 맡긴 분인지 «규모로» 판단하게 되므로 수량을
-                               함께 보인다 — 이름만으로는 알 수 없다. */-->
-                        <details class="mb-2">
-                            <summary class="text-sm cursor-pointer">담긴 값 보기</summary>
-                            <div class="text-sm mt-2 space-y-1">
+                        <!--/* 담긴 값 — 보여주기만 하지 않고 «고르게» 한다.
+
+                               어느 것이 맡긴 분인지 판단하는 근거가 규모라서 수량을 함께
+                               보인다 — 이름만으로는 알 수 없다.
+
+                               예전에는 목록을 펴 보고 창고 코드를 조건 칸에 손으로 옮겨
+                               적어야 했다. 옮겨 적는 동안 틀리고, 틀리면 조건이 아무것도
+                               거르지 않는데 화면은 「걸려 있다」 고 말한다. 창고가 여럿이면
+                               펴 둔다 — 접어 두면 골라야 한다는 사실 자체를 모른다. */-->
+                        <details class="mb-2" th:open="${edit.needsChoice()}">
+                            <summary class="text-sm cursor-pointer">담긴 값 골라 걸기</summary>
+                            <div class="text-sm mt-2 space-y-2">
                                 <div th:each="entry : ${edit.valuesByField}"
                                      th:if="${!#lists.isEmpty(entry.value)}">
-                                    <span class="text-base-content/60"
-                                          th:text="${entry.key}">칸</span>
-                                    <span th:each="v : ${entry.value}" class="ml-2">
-                                        <span th:text="${v.display()}">값</span>
-                                        <span class="text-base-content/60 tabular-nums"
-                                              th:text="${#numbers.formatInteger(v.qty, 1, 'COMMA')}">0</span>
-                                    </span>
-                                    <span th:if="${edit.truncated(entry.key)}"
-                                          class="text-base-content/60">
+                                    <div class="text-base-content/60"
+                                         th:text="${edit.labelOf(entry.key)}">칸</div>
+                                    <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                        <label th:each="v : ${entry.value}"
+                                               class="label cursor-pointer gap-2 py-0">
+                                            <input type="checkbox" class="checkbox checkbox-sm"
+                                                   th:data-pick-side="${edit.side}"
+                                                   th:data-pick-field="${entry.key}"
+                                                   th:data-pick-value="${v.value}"
+                                                   th:disabled="${!edit.pickable(v)}"
+                                                   th:checked="${edit.picked(entry.key, v.value)}">
+                                            <span th:text="${v.display()}">값</span>
+                                            <span class="text-base-content/60 tabular-nums"
+                                                  th:text="${#numbers.formatInteger(v.qty, 1, 'COMMA')}">0</span>
+                                        </label>
+                                    </div>
+                                    <div th:if="${edit.truncated(entry.key)}"
+                                         class="text-base-content/60">
                                         … 더 있습니다. 식으로 걸어 주세요
-                                    </span>
+                                    </div>
                                 </div>
                             </div>
                         </details>
@@ -249,23 +293,6 @@
 
 </div>
 
-<!--/* 줄을 더하고 지운다. 서버 왕복을 두면 줄 하나 더할 때마다 화면이 깜빡이고 적던 값이
-       날아간다 — 그 왕복이 이 화면의 쓸모를 떨어뜨린다. */-->
-<script th:inline="none">
-    document.querySelectorAll('[data-add]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            var side = button.dataset.side;
-            var template = document.getElementById('row-template-' + side);
-            document.getElementById('rows-' + side)
-                    .appendChild(template.content.cloneNode(true));
-        });
-    });
-    document.addEventListener('click', function (event) {
-        if (event.target.matches('[data-remove]')) {
-            event.target.closest('div').remove();
-        }
-    });
-</script>
 
 </body>
 </html>
