@@ -97,16 +97,16 @@
         <p class="text-sm mb-4"
            th:classappend="${filtersAreAll} ? 'text-warning' : 'text-base-content/70'">
             <span th:if="${filtersAreAll}">
-                볼 조건 없음 — <b>전부 더해서</b> 봅니다.
+                창고를 고르지 않아 <b>전 창고를 더해서</b> 봅니다.
             </span>
             <span th:unless="${filtersAreAll}">
-                볼 조건
+                견주는 범위
                 <span class="badge badge-ghost" th:text="${leftFilterText}">좌 조건</span>
                 <span class="mx-1 text-base-content/40">↔</span>
                 <span class="badge badge-ghost" th:text="${rightFilterText}">우 조건</span>
             </span>
             <a th:href="@{/reconcile/{id}(id=${definition.id})} + '#filters'"
-               class="link ml-2">조건 고치기 →</a>
+               class="link ml-2">창고 고르기 →</a>
         </p>
 
         <!--/* 진척. 「남은 일」 이 0이 되면 대조를 돌릴 준비가 끝난 것이고, 그때만 다음 걸음이
