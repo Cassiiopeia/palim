@@ -69,7 +69,7 @@ class FilterScreenIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("대조 정의 화면이 담긴 값을 수량과 함께 그린다")
+    @DisplayName("고를 수 있는 창고를 수량과 함께 그린다")
     void rendersValueOptions() throws Exception {
         ReconcileDefinition definition = definition();
         snapshot(left, "A", "9426", "01");
@@ -77,7 +77,10 @@ class FilterScreenIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile/" + definition.getId()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("볼 조건")))
+                // 이름이 하는 일을 말해야 한다 — 「볼 조건」 이라고만 했더니 창고를 고르러 온
+                // 사람이 여기가 그 자리인 줄 몰랐다.
+                .andExpect(content().string(containsString("어느 창고를 견줄까")))
+                .andExpect(content().string(containsString("창고 고르기")))
                 .andExpect(content().string(containsString("9,426")))
                 .andExpect(content().string(containsString("창고")));
     }
@@ -142,7 +145,7 @@ class FilterScreenIntegrationTest extends IntegrationTest {
      * 틀리면 조건이 아무것도 거르지 않는데 화면은 「걸려 있다」 고 말한다.
      */
     @Test
-    @DisplayName("담긴 값을 체크로 고를 수 있다")
+    @DisplayName("창고를 체크로 고를 수 있다")
     void valuesArePickable() throws Exception {
         ReconcileDefinition definition = definition();
         snapshot(left, "A", "9426", "01");
@@ -188,7 +191,7 @@ class FilterScreenIntegrationTest extends IntegrationTest {
 
         mockMvc.perform(get("/reconcile/" + definition.getId()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("전부 더해서")));
+                .andExpect(content().string(containsString("전 창고를 더해서")));
     }
 
     /**
@@ -231,7 +234,7 @@ class FilterScreenIntegrationTest extends IntegrationTest {
         snapshot(left, "B", "20", "02");
 
         mockMvc.perform(get("/reconcile/" + definition.getId()))
-                .andExpect(content().string(containsString("전부 더해서")));
+                .andExpect(content().string(containsString("전 창고를 더해서")));
     }
 
     @Test
@@ -246,7 +249,9 @@ class FilterScreenIntegrationTest extends IntegrationTest {
         mockMvc.perform(get("/reconcile/units")
                         .param("definitionId", definition.getId().toString()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("볼 조건")))
+                .andExpect(content().string(containsString("견주는 범위")))
+                // 고치러 갈 길의 이름도 «하는 일» 이어야 한다.
+                .andExpect(content().string(containsString("창고 고르기 →")))
                 .andExpect(content().string(containsString("01")))
                 .andExpect(content().string(containsString(
                         "/reconcile/" + definition.getId() + "#filters")));
@@ -262,7 +267,7 @@ class FilterScreenIntegrationTest extends IntegrationTest {
         mockMvc.perform(get("/reconcile/units")
                         .param("definitionId", definition.getId().toString()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("전부 더해서")));
+                .andExpect(content().string(containsString("전 창고를 더해서")));
     }
 
     @Test
