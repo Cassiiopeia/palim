@@ -85,7 +85,7 @@ jobs:
 
       - name: 테스트 리포트 업로드
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: "**/build/reports/tests/"
@@ -134,7 +134,7 @@ jobs:
         run: ./gradlew cyclonedxBom
 
       - name: SBOM 업로드
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: build/reports/bom.json
